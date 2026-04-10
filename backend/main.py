@@ -45,9 +45,12 @@ webhook_module.ws_manager = ws_manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    create_db_and_tables()
-    seed_default_agent()
-    logger.info("Database initialized")
+    try:
+        create_db_and_tables()
+        seed_default_agent()
+        logger.info("Database initialized")
+    except Exception as e:
+        logger.error(f"Database initialization error: {e}")
     yield
 
 

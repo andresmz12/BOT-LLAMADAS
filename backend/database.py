@@ -1,7 +1,8 @@
-from sqlmodel import SQLModel, create_engine, Session
+import os
+from sqlmodel import SQLModel, create_engine, Session, select
 from models import AgentConfig
 
-DATABASE_URL = "sqlite:///./calls.db"
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./calls.db")
 engine = create_engine(DATABASE_URL, echo=False, connect_args={"check_same_thread": False})
 
 
@@ -16,7 +17,7 @@ def get_session():
 
 def seed_default_agent():
     with Session(engine) as session:
-        existing = session.query(AgentConfig).first()
+        existing = session.exec(select(AgentConfig)).first()
         if existing:
             return
         agent = AgentConfig(
