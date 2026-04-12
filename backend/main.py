@@ -59,10 +59,9 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Voice Agent API", lifespan=lifespan)
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL, "http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
