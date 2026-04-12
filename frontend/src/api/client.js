@@ -17,6 +17,7 @@ export const pauseCampaign = (id) => api.post(`/campaigns/${id}/pause`).then(r =
 export const deleteCampaign = (id) => api.delete(`/campaigns/${id}`).then(r => r.data)
 
 export const getProspects = (params) => api.get('/prospects', { params }).then(r => r.data)
+export const createProspect = (data) => api.post('/prospects', data).then(r => r.data)
 export const importProspects = (campaignId, file) => {
   const form = new FormData()
   form.append('campaign_id', campaignId)

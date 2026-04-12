@@ -1,7 +1,19 @@
 import { useState, useRef } from 'react'
 import Papa from 'papaparse'
+import * as XLSX from 'xlsx'
 import { XMarkIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline'
 import { importProspects } from '../api/client'
+
+function parseExcelPreview(file, onDone) {
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const wb = XLSX.read(e.target.result, { type: 'array' })
+    const ws = wb.Sheets[wb.SheetNames[0]]
+    const data = XLSX.utils.sheet_to_json(ws, { defval: '' })
+    onDone(data.slice(0, 5))
+  }
+  reader.readAsArrayBuffer(file)
+}
 
 export default function ImportCSVModal({ campaigns, onClose, onImported }) {
   const [file, setFile] = useState(null)
@@ -13,7 +25,12 @@ export default function ImportCSVModal({ campaigns, onClose, onImported }) {
 
   const handleFile = (f) => {
     setFile(f)
-    Papa.parse(f, { header: true, preview: 5, skipEmptyLines: true, complete: ({ data }) => setPreview(data) })
+    const name = f.name.toLowerCase()
+    if (name.endsWith('.xlsx') || name.endsWith('.xls')) {
+      parseExcelPreview(f, setPreview)
+    } else {
+      Papa.parse(f, { header: true, preview: 5, skipEmptyLines: true, complete: ({ data }) => setPreview(data) })
+    }
   }
 
   const submit = async () => {
@@ -34,7 +51,7 @@ export default function ImportCSVModal({ campaigns, onClose, onImported }) {
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl w-full max-w-2xl">
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-lg font-bold">Importar CSV</h2>
+          <h2 className="text-lg font-bold">Importar prospectos</h2>
           <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-gray-400" /></button>
         </div>
         <div className="p-6 space-y-4">
@@ -53,9 +70,9 @@ export default function ImportCSVModal({ campaigns, onClose, onImported }) {
             className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer ${dragging ? 'border-gold bg-gold/5' : 'border-gray-200 hover:border-gold'}`}
           >
             <CloudArrowUpIcon className="w-10 h-10 mx-auto text-gray-400 mb-2" />
-            <p className="text-sm text-gray-600">{file ? file.name : 'Arrastra tu CSV aquí o haz clic'}</p>
-            <p className="text-xs text-gray-400 mt-1">Columnas: name, phone, company</p>
-            <input ref={inputRef} type="file" accept=".csv" className="hidden" onChange={e => handleFile(e.target.files[0])} />
+            <p className="text-sm text-gray-600">{file ? file.name : 'Arrastra tu archivo aquí o haz clic'}</p>
+            <p className="text-xs text-gray-400 mt-1">Soporta Excel (.xlsx) y CSV — columnas: name, phone, company</p>
+            <input ref={inputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={e => handleFile(e.target.files[0])} />
           </div>
           {preview.length > 0 && (
             <div className="overflow-x-auto">

@@ -1,10 +1,75 @@
 import { useState, useEffect } from 'react'
-import { ArrowUpTrayIcon, TrashIcon } from '@heroicons/react/24/outline'
+import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
-import { getProspects, deleteProspect, getCampaigns } from '../api/client'
+import { getProspects, deleteProspect, getCampaigns, createProspect } from '../api/client'
 
 const STATUSES = ['', 'pending', 'calling', 'answered', 'voicemail', 'failed', 'do_not_call']
+
+function NewProspectModal({ campaigns, onClose, onSaved }) {
+  const [form, setForm] = useState({ name: '', phone: '', company: '', campaign_id: campaigns[0]?.id || '' })
+  const [loading, setLoading] = useState(false)
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      await createProspect({ ...form, campaign_id: Number(form.campaign_id) })
+      onSaved()
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b">
+          <h2 className="text-lg font-bold">Nuevo Prospecto</h2>
+          <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-gray-400" /></button>
+        </div>
+        <form onSubmit={submit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+            <input required value={form.name} onChange={e => set('name', e.target.value)}
+              placeholder="Juan Pérez"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono *</label>
+            <input required value={form.phone} onChange={e => set('phone', e.target.value)}
+              placeholder="+521234567890"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold font-mono" />
+            <p className="text-xs text-gray-400 mt-1">Formato E.164 con código de país</p>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
+            <input value={form.company} onChange={e => set('company', e.target.value)}
+              placeholder="Empresa S.A."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Campaña *</label>
+            <select required value={form.campaign_id} onChange={e => set('campaign_id', e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold">
+              {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
+            <button type="submit" disabled={loading}
+              className="px-6 py-2 bg-gold hover:bg-gold-dark text-white font-semibold rounded-lg text-sm disabled:opacity-50">
+              {loading ? 'Guardando...' : 'Agregar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
 
 export default function Prospects() {
   const [prospects, setProspects] = useState([])
@@ -12,6 +77,7 @@ export default function Prospects() {
   const [filterCampaign, setFilterCampaign] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
   const [showImport, setShowImport] = useState(false)
+  const [showNew, setShowNew] = useState(false)
 
   const load = () => {
     const params = {}
@@ -31,16 +97,26 @@ export default function Prospects() {
 
   const campaignName = (id) => campaigns.find(c => c.id === id)?.name || `#${id}`
 
+  const noCampaigns = campaigns.length === 0
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Prospectos</h1>
-        <button
-          onClick={() => setShowImport(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gold hover:bg-gold-dark text-white font-semibold rounded-lg text-sm"
-        >
-          <ArrowUpTrayIcon className="w-4 h-4" /> Importar CSV
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => setShowNew(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-gold text-gold hover:bg-gold/5 font-semibold rounded-lg text-sm"
+          >
+            <PlusIcon className="w-4 h-4" /> Nuevo prospecto
+          </button>
+          <button
+            onClick={() => setShowImport(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-gold hover:bg-gold-dark text-white font-semibold rounded-lg text-sm"
+          >
+            <ArrowUpTrayIcon className="w-4 h-4" /> Importar Excel / CSV
+          </button>
+        </div>
       </div>
 
       <div className="flex gap-3">
@@ -84,10 +160,7 @@ export default function Prospects() {
                   {p.last_called_at ? new Date(p.last_called_at).toLocaleString() : '—'}
                 </td>
                 <td className="px-6 py-3">
-                  <button
-                    onClick={() => handleDelete(p)}
-                    className="text-gray-300 hover:text-red-500 transition-colors"
-                  >
+                  <button onClick={() => handleDelete(p)} className="text-gray-300 hover:text-red-500 transition-colors">
                     <TrashIcon className="w-4 h-4" />
                   </button>
                 </td>
@@ -100,20 +173,26 @@ export default function Prospects() {
         </table>
       </div>
 
-      {showImport && campaigns.length > 0 && (
-        <ImportCSVModal
-          campaigns={campaigns}
-          onClose={() => setShowImport(false)}
-          onImported={() => { setShowImport(false); load() }}
-        />
+      {showNew && (
+        noCampaigns
+          ? <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl p-8 text-center max-w-sm">
+                <p className="text-gray-700 mb-4">Debes crear una campaña antes de agregar prospectos.</p>
+                <button onClick={() => setShowNew(false)} className="px-4 py-2 bg-gold text-white rounded-lg text-sm font-semibold">Cerrar</button>
+              </div>
+            </div>
+          : <NewProspectModal campaigns={campaigns} onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); load() }} />
       )}
-      {showImport && campaigns.length === 0 && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-8 text-center max-w-sm">
-            <p className="text-gray-700 mb-4">Debes crear una campaña antes de importar prospectos.</p>
-            <button onClick={() => setShowImport(false)} className="px-4 py-2 bg-gold text-white rounded-lg text-sm font-semibold">Cerrar</button>
-          </div>
-        </div>
+
+      {showImport && (
+        noCampaigns
+          ? <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+              <div className="bg-white rounded-2xl p-8 text-center max-w-sm">
+                <p className="text-gray-700 mb-4">Debes crear una campaña antes de importar prospectos.</p>
+                <button onClick={() => setShowImport(false)} className="px-4 py-2 bg-gold text-white rounded-lg text-sm font-semibold">Cerrar</button>
+              </div>
+            </div>
+          : <ImportCSVModal campaigns={campaigns} onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); load() }} />
       )}
     </div>
   )
