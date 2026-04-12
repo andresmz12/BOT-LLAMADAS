@@ -33,7 +33,7 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
         "assistant": {
             "model": {
                 "provider": "anthropic",
-                "model": "claude-sonnet-4-20250514",
+                "model": "claude-3-5-sonnet-20241022",
                 "systemPrompt": system_prompt,
             },
             "maxDurationSeconds": agent_config.max_call_duration,
@@ -45,7 +45,12 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
     headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(f"{VAPI_API_URL}/call", json=payload, headers=headers)
-        resp.raise_for_status()
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
+            raise ValueError(f"VAPI {resp.status_code}: {detail}")
         return resp.json()
 
 
