@@ -8,9 +8,10 @@ export default function CallDetailModal({ call, onClose }) {
   const [transcriptOpen, setTranscriptOpen] = useState(false)
   if (!call) return null
 
-  const clientSaid = JSON.parse(call.client_said || '[]')
-  const agentSaid = JSON.parse(call.agent_said || '[]')
-  const servicesMentioned = JSON.parse(call.services_mentioned || '[]')
+  let clientSaid = [], agentSaid = [], servicesMentioned = []
+  try { clientSaid = JSON.parse(call.client_said || '[]') } catch {}
+  try { agentSaid = JSON.parse(call.agent_said || '[]') } catch {}
+  try { servicesMentioned = JSON.parse(call.services_mentioned || '[]') } catch {}
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

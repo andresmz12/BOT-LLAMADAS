@@ -26,7 +26,10 @@ class WebSocketManager:
 
     def disconnect(self, campaign_id: int, ws: WebSocket):
         if campaign_id in self.connections:
-            self.connections[campaign_id].discard(ws)
+            try:
+                self.connections[campaign_id].remove(ws)
+            except ValueError:
+                pass
 
     async def broadcast(self, campaign_id: int, data: dict):
         dead = []
