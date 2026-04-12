@@ -74,6 +74,7 @@ class Call(SQLModel, table=True):
     appointment_scheduled: bool = Field(default=False)
     appointment_date: Optional[datetime] = None
     notes: Optional[str] = None
+    is_demo: bool = Field(default=False)
 
     prospect: Optional[Prospect] = Relationship(back_populates="calls")
     campaign: Optional[Campaign] = Relationship(back_populates="calls")

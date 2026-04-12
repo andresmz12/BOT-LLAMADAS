@@ -9,17 +9,18 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 
 @router.get("")
 def global_stats(session: Session = Depends(get_session)):
-    total_calls = session.exec(select(func.count(Call.id))).one()
+    real = Call.is_demo == False  # noqa: E712
+    total_calls = session.exec(select(func.count(Call.id)).where(real)).one()
     answered = session.exec(
         select(func.count(Call.id)).where(
-            (Call.outcome != "voicemail") & (Call.outcome.is_not(None))
+            real & (Call.outcome != "voicemail") & (Call.outcome.is_not(None))
         )
     ).one()
     interested = session.exec(
-        select(func.count(Call.id)).where(Call.outcome == "interested")
+        select(func.count(Call.id)).where(real & (Call.outcome == "interested"))
     ).one()
     appointments = session.exec(
-        select(func.count(Call.id)).where(Call.appointment_scheduled == True)
+        select(func.count(Call.id)).where(real & (Call.appointment_scheduled == True))
     ).one()
     answer_rate = round(answered / total_calls * 100, 1) if total_calls else 0
 
@@ -28,13 +29,13 @@ def global_stats(session: Session = Depends(get_session)):
         day = datetime.utcnow().date() - timedelta(days=i)
         count = session.exec(
             select(func.count(Call.id)).where(
-                func.date(Call.started_at) == str(day)
+                real & (func.date(Call.started_at) == str(day))
             )
         ).one()
         days.append({"date": str(day), "calls": count})
 
     outcomes = {}
-    for call in session.exec(select(Call)).all():
+    for call in session.exec(select(Call).where(real)).all():
         if call.outcome:
             outcomes[call.outcome] = outcomes.get(call.outcome, 0) + 1
 

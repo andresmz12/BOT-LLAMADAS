@@ -28,6 +28,8 @@ export const deleteProspect = (id) => api.delete(`/prospects/${id}`).then(r => r
 
 export const getCalls = (params) => api.get('/calls', { params }).then(r => r.data)
 export const getCallDetail = (id) => api.get(`/calls/${id}`).then(r => r.data)
+export const makeDemoCall = (phone, agentId) =>
+  api.post('/calls/demo', { phone, agent_id: agentId }).then(r => r.data)
 
 export const getStats = () => api.get('/stats').then(r => r.data)
 export const getCampaignStats = (id) => api.get(`/stats/${id}`).then(r => r.data)
