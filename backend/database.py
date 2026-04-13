@@ -46,6 +46,7 @@ def seed_default_agent():
                 "agendar una cita de seguimiento con un asesor humano."
             ),
             is_default=True,
+            vapi_assistant_id=os.getenv("VAPI_ASSISTANT_ID") or None,
         )
         session.add(agent)
         session.commit()
