@@ -48,9 +48,15 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
       if (syncOnSave) {
         setSyncStatus('syncing')
         try {
-          await syncAgent(saved.id)
-          setSyncStatus('ok')
-          setTimeout(() => onSaved(), 800)
+          const syncResp = await syncAgent(saved.id)
+          if (syncResp.vapi_error) {
+            setSyncStatus('error')
+            setSyncError('Agente guardado, pero error al sincronizar con VAPI: ' + syncResp.vapi_error)
+            setLoading(false)
+          } else {
+            setSyncStatus('ok')
+            setTimeout(() => onSaved(), 800)
+          }
         } catch (syncErr) {
           setSyncStatus('error')
           setSyncError(syncErr.response?.data?.detail || syncErr.message)
