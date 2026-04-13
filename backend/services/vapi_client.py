@@ -27,20 +27,29 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
     if not api_key or not phone_number_id:
         raise ValueError("Credenciales VAPI no configuradas. Ve a Configuración.")
 
+    first_message = (
+        f"Hola, ¿cómo está? Mi nombre es {agent_config.agent_name}, "
+        f"le llamo de parte de {agent_config.company_name}. "
+        f"¿Tiene un momento para hablar?"
+    )
+
     payload = {
         "phoneNumberId": phone_number_id,
         "customer": {"number": phone},
         "assistant": {
+            "firstMessage": first_message,
             "model": {
                 "provider": "anthropic",
                 "model": "claude-3-5-sonnet-20241022",
                 "systemPrompt": system_prompt,
             },
+            "voice": {
+                "provider": "openai",
+                "voiceId": agent_config.voice_id or "shimmer",
+            },
             "maxDurationSeconds": agent_config.max_call_duration,
         },
     }
-    if agent_config.voice_id:
-        payload["assistant"]["voice"] = {"voiceId": agent_config.voice_id}
 
     headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=30) as client:
