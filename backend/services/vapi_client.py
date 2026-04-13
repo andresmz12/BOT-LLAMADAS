@@ -54,8 +54,6 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
         },
     }
 
-    if anthropic_key:
-        payload["credentials"] = [{"provider": "anthropic", "apiKey": anthropic_key}]
 
     headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=30) as client:

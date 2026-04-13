@@ -111,13 +111,16 @@ export default function Settings() {
           </div>
         </div>
 
-        <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-700">
-          <p className="font-semibold mb-1">Nota sobre variables de entorno</p>
-          <p>Para producción en Railway, configura también <code className="bg-blue-100 px-1 rounded">VAPI_API_KEY</code>,{' '}
-            <code className="bg-blue-100 px-1 rounded">VAPI_PHONE_NUMBER_ID</code> y{' '}
-            <code className="bg-blue-100 px-1 rounded">ANTHROPIC_API_KEY</code> como variables de entorno en el servicio backend.
-            Los valores guardados aquí se usan como respaldo desde la base de datos.
-          </p>
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 space-y-2">
+          <p className="font-semibold">Paso obligatorio para que el agente hable</p>
+          <p>VAPI necesita tu Anthropic API Key configurada en su propio dashboard para poder usar Claude durante las llamadas. Sigue estos pasos:</p>
+          <ol className="list-decimal list-inside space-y-1 mt-1">
+            <li>Ve a <span className="font-mono font-medium">dashboard.vapi.ai</span></li>
+            <li>Menú lateral → <strong>Provider Keys</strong></li>
+            <li>Click en <strong>+ Add Key</strong> → selecciona <strong>Anthropic</strong></li>
+            <li>Pega tu key <code className="bg-amber-100 px-1 rounded">sk-ant-...</code> y guarda</li>
+          </ol>
+          <p className="text-xs mt-2 text-amber-600">Sin este paso el agente saluda pero no puede responder.</p>
         </div>
 
         <div className="flex items-center gap-3">
