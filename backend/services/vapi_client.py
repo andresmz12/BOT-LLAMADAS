@@ -24,40 +24,19 @@ def _get_credentials() -> tuple[str, str]:
     return api_key, phone_number_id
 
 
+VAPI_ASSISTANT_ID = "45962a9a-8975-4dd1-92c7-b7bf5f85e3c3"
+
+
 async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig) -> dict:
     api_key, phone_number_id = _get_credentials()
 
     if not api_key or not phone_number_id:
         raise ValueError("Credenciales VAPI no configuradas. Ve a Configuración.")
 
-    first_message = (
-        f"Hola, ¿cómo está? Mi nombre es {agent_config.agent_name}, "
-        f"le llamo de parte de {agent_config.company_name}. "
-        f"¿Tiene un momento para hablar?"
-    )
-
     payload = {
+        "assistantId": VAPI_ASSISTANT_ID,
         "phoneNumberId": phone_number_id,
         "customer": {"number": phone},
-        "assistant": {
-            "language": "es",
-            "transcriber": {
-                "provider": "deepgram",
-                "model": "nova-2",
-                "language": "es",
-            },
-            "firstMessage": first_message,
-            "model": {
-                "provider": "anthropic",
-                "model": "claude-3-5-sonnet-20241022",
-                "systemPrompt": system_prompt,
-            },
-            "voice": {
-                "provider": "azure",
-                "voiceId": agent_config.voice_id or "es-MX-DaliaNeural",
-            },
-            "maxDurationSeconds": agent_config.max_call_duration,
-        },
     }
 
     headers = {"Authorization": f"Bearer {api_key}"}
