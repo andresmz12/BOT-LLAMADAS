@@ -12,7 +12,9 @@ running_tasks: dict[int, asyncio.Task] = {}
 
 
 def build_system_prompt(agent_config: AgentConfig) -> str:
-    return f"""Eres {agent_config.agent_name}, asesora virtual de {agent_config.company_name}.
+    return f"""IDIOMA: Habla SIEMPRE en español. Never respond in English under any circumstances.
+
+Eres {agent_config.agent_name}, asesora virtual de {agent_config.company_name}.
 
 SOBRE LA EMPRESA:
 {agent_config.company_info}

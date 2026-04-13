@@ -40,6 +40,11 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
         "phoneNumberId": phone_number_id,
         "customer": {"number": phone},
         "assistant": {
+            "transcriber": {
+                "provider": "deepgram",
+                "model": "nova-2",
+                "language": "es",
+            },
             "firstMessage": first_message,
             "model": {
                 "provider": "anthropic",
@@ -47,8 +52,8 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
                 "systemPrompt": system_prompt,
             },
             "voice": {
-                "provider": "deepgram",
-                "voiceId": agent_config.voice_id or "luna",
+                "provider": "azure",
+                "voiceId": agent_config.voice_id or "es-MX-DaliaNeural",
             },
             "maxDurationSeconds": agent_config.max_call_duration,
         },
