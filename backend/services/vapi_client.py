@@ -47,8 +47,8 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
                 "systemPrompt": system_prompt,
             },
             "voice": {
-                "provider": "openai",
-                "voiceId": agent_config.voice_id or "shimmer",
+                "provider": "deepgram",
+                "voiceId": agent_config.voice_id or "luna",
             },
             "maxDurationSeconds": agent_config.max_call_duration,
         },
