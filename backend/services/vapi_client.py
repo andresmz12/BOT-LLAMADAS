@@ -5,16 +5,12 @@ from models import AgentConfig
 VAPI_API_URL = "https://api.vapi.ai"
 
 
-def _headers() -> dict:
-    return {"Authorization": f"Bearer {os.getenv('VAPI_API_KEY', '')}"}
-
-
-async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig) -> dict:
+def _get_credentials() -> tuple[str, str]:
+    """Returns (api_key, phone_number_id), falling back to DB if env vars are missing."""
     api_key = os.getenv("VAPI_API_KEY", "")
     phone_number_id = os.getenv("VAPI_PHONE_NUMBER_ID", "")
-    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
 
-    if not api_key or not phone_number_id or not anthropic_key:
+    if not api_key or not phone_number_id:
         from sqlmodel import Session, select
         from database import engine
         from models import Settings
@@ -24,8 +20,12 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
                     api_key = row.value
                 if row.key == "vapi_phone_number_id" and not phone_number_id:
                     phone_number_id = row.value
-                if row.key == "anthropic_api_key" and not anthropic_key:
-                    anthropic_key = row.value
+
+    return api_key, phone_number_id
+
+
+async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig) -> dict:
+    api_key, phone_number_id = _get_credentials()
 
     if not api_key or not phone_number_id:
         raise ValueError("Credenciales VAPI no configuradas. Ve a Configuración.")
@@ -40,6 +40,7 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
         "phoneNumberId": phone_number_id,
         "customer": {"number": phone},
         "assistant": {
+            "language": "es-MX",
             "transcriber": {
                 "provider": "deepgram",
                 "model": "nova-2",
@@ -59,7 +60,6 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
         },
     }
 
-
     headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.post(f"{VAPI_API_URL}/call", json=payload, headers=headers)
@@ -73,7 +73,9 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
 
 
 async def get_call(vapi_call_id: str) -> dict:
+    api_key, _ = _get_credentials()
+    headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=30) as client:
-        resp = await client.get(f"{VAPI_API_URL}/call/{vapi_call_id}", headers=_headers())
+        resp = await client.get(f"{VAPI_API_URL}/call/{vapi_call_id}", headers=headers)
         resp.raise_for_status()
         return resp.json()
