@@ -53,7 +53,13 @@ def update_agent(agent_id: int, data: AgentUpdate, session: Session = Depends(ge
     agent = session.get(AgentConfig, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+    # Skip null for non-nullable DB fields to avoid commit errors
+    NON_NULLABLE = {'temperature', 'max_call_duration', 'is_default', 'language', 'name',
+                    'agent_name', 'company_name', 'company_info', 'services', 'instructions'}
     for field, value in data.dict(exclude_unset=True).items():
+        if value is None and field in NON_NULLABLE:
+            logger.info(f"  skipping null for non-nullable {field}")
+            continue
         logger.info(f"  setting {field} = {repr(value)}")
         setattr(agent, field, value)
     session.add(agent)
@@ -83,7 +89,7 @@ async def sync_agent(agent_id: int, session: Session = Depends(get_session)):
         vapi_error = str(e)
         logger.error(f"POST /agents/{agent_id}/sync — VAPI error: {vapi_error}")
 
-    return {"agent": agent, "vapi_error": vapi_error}
+    return {"agent": agent.dict(), "vapi_error": vapi_error}
 
 
 @router.delete("/{agent_id}")

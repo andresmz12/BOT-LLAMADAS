@@ -25,7 +25,8 @@ const EMPTY = {
 }
 
 export default function AgentFormModal({ agent, onClose, onSaved }) {
-  const [form, setForm] = useState(agent ? { ...agent } : { ...EMPTY })
+  // Merge with EMPTY so existing agents always have defaults for new fields
+  const [form, setForm] = useState(agent ? { ...EMPTY, ...agent } : { ...EMPTY })
   const [syncOnSave, setSyncOnSave] = useState(true)
   const [loading, setLoading] = useState(false)
   const [syncStatus, setSyncStatus] = useState(null) // null | 'syncing' | 'ok' | 'error'

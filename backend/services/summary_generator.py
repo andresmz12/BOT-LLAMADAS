@@ -24,7 +24,20 @@ async def analyze_transcript(transcript: str) -> dict:
     if not transcript or not transcript.strip():
         return _empty_result()
 
-    client = AsyncAnthropic(api_key=os.getenv("ANTHROPIC_API_KEY", ""))
+    api_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        try:
+            from sqlmodel import Session, select
+            from database import engine
+            from models import Settings
+            with Session(engine) as s:
+                row = s.exec(select(Settings).where(Settings.key == "anthropic_api_key")).first()
+                if row:
+                    api_key = row.value
+        except Exception:
+            pass
+
+    client = AsyncAnthropic(api_key=api_key)
     try:
         message = await client.messages.create(
             model="claude-sonnet-4-20250514",
