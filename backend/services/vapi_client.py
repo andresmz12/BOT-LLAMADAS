@@ -12,8 +12,9 @@ def _headers() -> dict:
 async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig) -> dict:
     api_key = os.getenv("VAPI_API_KEY", "")
     phone_number_id = os.getenv("VAPI_PHONE_NUMBER_ID", "")
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
 
-    if not api_key or not phone_number_id:
+    if not api_key or not phone_number_id or not anthropic_key:
         from sqlmodel import Session, select
         from database import engine
         from models import Settings
@@ -23,6 +24,8 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
                     api_key = row.value
                 if row.key == "vapi_phone_number_id" and not phone_number_id:
                     phone_number_id = row.value
+                if row.key == "anthropic_api_key" and not anthropic_key:
+                    anthropic_key = row.value
 
     if not api_key or not phone_number_id:
         raise ValueError("Credenciales VAPI no configuradas. Ve a Configuración.")
@@ -50,6 +53,9 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
             "maxDurationSeconds": agent_config.max_call_duration,
         },
     }
+
+    if anthropic_key:
+        payload["credentials"] = [{"provider": "anthropic", "apiKey": anthropic_key}]
 
     headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=30) as client:

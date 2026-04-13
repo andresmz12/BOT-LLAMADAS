@@ -1,11 +1,12 @@
 import csv
 import io
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from typing import Optional
 from database import get_session
-from models import Prospect
+from models import Prospect, Campaign, AgentConfig, Call
 
 router = APIRouter(prefix="/prospects", tags=["prospects"])
 
@@ -96,6 +97,46 @@ def update_prospect(prospect_id: int, data: Prospect, session: Session = Depends
     session.commit()
     session.refresh(prospect)
     return prospect
+
+
+@router.post("/{prospect_id}/call")
+async def call_prospect(prospect_id: int, session: Session = Depends(get_session)):
+    from services import vapi_client
+    from services.call_orchestrator import build_system_prompt
+
+    prospect = session.get(Prospect, prospect_id)
+    if not prospect:
+        raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+
+    campaign = session.get(Campaign, prospect.campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
+
+    agent = session.get(AgentConfig, campaign.agent_config_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agente no encontrado")
+
+    call = Call(prospect_id=prospect.id, campaign_id=campaign.id, status="initiated")
+    session.add(call)
+    session.commit()
+    session.refresh(call)
+
+    try:
+        result = await vapi_client.create_call(prospect.phone, build_system_prompt(agent), agent)
+        call.vapi_call_id = result.get("id", "")
+        call.status = "in-progress"
+        prospect.status = "calling"
+        prospect.call_attempts += 1
+        prospect.last_called_at = datetime.utcnow()
+        session.add(call)
+        session.add(prospect)
+        session.commit()
+        return {"call_id": call.id, "vapi_call_id": call.vapi_call_id, "status": "in-progress"}
+    except Exception as e:
+        call.status = "failed"
+        session.add(call)
+        session.commit()
+        raise HTTPException(status_code=400, detail=str(e))
 
 
 @router.delete("/{prospect_id}")

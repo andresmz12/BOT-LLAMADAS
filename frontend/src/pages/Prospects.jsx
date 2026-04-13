@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
-import { getProspects, deleteProspect, getCampaigns, createProspect } from '../api/client'
+import { getProspects, deleteProspect, getCampaigns, createProspect, callProspect } from '../api/client'
 
 const STATUSES = ['', 'pending', 'calling', 'answered', 'voicemail', 'failed', 'do_not_call']
 
@@ -78,6 +78,20 @@ export default function Prospects() {
   const [filterStatus, setFilterStatus] = useState('')
   const [showImport, setShowImport] = useState(false)
   const [showNew, setShowNew] = useState(false)
+  const [callingId, setCallingId] = useState(null)
+
+  const handleCall = async (p) => {
+    if (callingId) return
+    setCallingId(p.id)
+    try {
+      await callProspect(p.id)
+      load()
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.detail || err.message))
+    } finally {
+      setCallingId(null)
+    }
+  }
 
   const load = () => {
     const params = {}
@@ -142,7 +156,7 @@ export default function Prospects() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {['Nombre', 'Empresa', 'Teléfono', 'Campaña', 'Estado', 'Intentos', 'Última llamada', ''].map(h => (
+              {['Nombre', 'Empresa', 'Teléfono', 'Campaña', 'Estado', 'Intentos', 'Última llamada', 'Acciones'].map(h => (
                 <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
               ))}
             </tr>
@@ -160,9 +174,19 @@ export default function Prospects() {
                   {p.last_called_at ? new Date(p.last_called_at).toLocaleString() : '—'}
                 </td>
                 <td className="px-6 py-3">
-                  <button onClick={() => handleDelete(p)} className="text-gray-300 hover:text-red-500 transition-colors">
-                    <TrashIcon className="w-4 h-4" />
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => handleCall(p)}
+                      disabled={callingId === p.id}
+                      title="Llamar ahora"
+                      className="text-gray-300 hover:text-gold transition-colors disabled:opacity-40"
+                    >
+                      <PhoneArrowUpRightIcon className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(p)} className="text-gray-300 hover:text-red-500 transition-colors">
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))}

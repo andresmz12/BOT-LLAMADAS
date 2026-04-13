@@ -26,6 +26,7 @@ export const importProspects = (campaignId, file) => {
 }
 export const updateProspect = (id, data) => api.put(`/prospects/${id}`, data).then(r => r.data)
 export const deleteProspect = (id) => api.delete(`/prospects/${id}`).then(r => r.data)
+export const callProspect = (id) => api.post(`/prospects/${id}/call`).then(r => r.data)
 
 export const getCalls = (params) => api.get('/calls', { params }).then(r => r.data)
 export const getCallDetail = (id) => api.get(`/calls/${id}`).then(r => r.data)

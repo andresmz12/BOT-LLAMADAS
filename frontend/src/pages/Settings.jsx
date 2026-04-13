@@ -5,7 +5,7 @@ import { getSettings, saveSettings, getAgents, makeDemoCall } from '../api/clien
 
 export default function Settings() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ vapi_api_key: '', vapi_phone_number_id: '' })
+  const [form, setForm] = useState({ vapi_api_key: '', vapi_phone_number_id: '', anthropic_api_key: '' })
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -20,6 +20,7 @@ export default function Settings() {
         ...f,
         vapi_api_key: data.vapi_api_key || '',
         vapi_phone_number_id: data.vapi_phone_number_id || '',
+        anthropic_api_key: data.anthropic_api_key || '',
       }))
     }).catch(() => {})
     getAgents().then(setAgents).catch(() => {})
@@ -90,6 +91,22 @@ export default function Settings() {
             />
             <p className="text-xs text-gray-400 mt-1">
               Obtén el ID en <span className="text-gold">dashboard.vapi.ai → Phone Numbers</span>
+            </p>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
+              <KeyIcon className="w-4 h-4 text-gray-400" /> Anthropic API Key
+            </label>
+            <input
+              type="password"
+              value={form.anthropic_api_key}
+              onChange={e => setForm(f => ({ ...f, anthropic_api_key: e.target.value }))}
+              placeholder="sk-ant-••••••••"
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold font-mono"
+            />
+            <p className="text-xs text-gray-400 mt-1">
+              Necesaria para que el agente hable durante la llamada — <span className="text-gold">console.anthropic.com → API Keys</span>
             </p>
           </div>
         </div>
