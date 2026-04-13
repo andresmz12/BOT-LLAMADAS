@@ -9,6 +9,7 @@ export const createAgent = (data) => api.post('/agents', data).then(r => r.data)
 export const updateAgent = (id, data) => api.put(`/agents/${id}`, data).then(r => r.data)
 export const deleteAgent = (id) => api.delete(`/agents/${id}`).then(r => r.data)
 export const setDefaultAgent = (id) => api.post(`/agents/${id}/set-default`).then(r => r.data)
+export const syncAgent = (id) => api.post(`/agents/${id}/sync`).then(r => r.data)
 
 export const getCampaigns = () => api.get('/campaigns').then(r => r.data)
 export const createCampaign = (data) => api.post('/campaigns', data).then(r => r.data)

@@ -17,6 +17,10 @@ class AgentConfig(SQLModel, table=True):
     max_call_duration: int = Field(default=180)
     is_default: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    vapi_assistant_id: Optional[str] = None
+    first_message_override: Optional[str] = None
+    voicemail_message: Optional[str] = None
+    temperature: float = Field(default=0.4)
 
     campaigns: List["Campaign"] = Relationship(back_populates="agent_config")
 
