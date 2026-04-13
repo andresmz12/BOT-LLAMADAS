@@ -40,7 +40,7 @@ async def create_call(phone: str, system_prompt: str, agent_config: AgentConfig)
         "phoneNumberId": phone_number_id,
         "customer": {"number": phone},
         "assistant": {
-            "language": "es-MX",
+            "language": "es",
             "transcriber": {
                 "provider": "deepgram",
                 "model": "nova-2",
