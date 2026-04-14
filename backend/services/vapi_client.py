@@ -52,7 +52,7 @@ async def sync_to_vapi(agent_config: AgentConfig) -> str:
         "name": agent_config.name,
         "model": {
             "provider": "anthropic",
-            "model": "claude-sonnet-4-20250514",
+            "model": "claude-3-5-sonnet-20241022",
             "systemPrompt": build_system_prompt(agent_config),
             "temperature": agent_config.temperature,
             "maxTokens": 500,
