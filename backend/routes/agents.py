@@ -24,6 +24,8 @@ class AgentUpdate(BaseModel):
     first_message_override: Optional[str] = None
     voicemail_message: Optional[str] = None
     temperature: Optional[float] = None
+    retell_agent_id: Optional[str] = None
+    retell_llm_id: Optional[str] = None
 
 
 @router.post("", response_model=AgentConfig)
@@ -53,7 +55,6 @@ def update_agent(agent_id: int, data: AgentUpdate, session: Session = Depends(ge
     agent = session.get(AgentConfig, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
-    # Skip null for non-nullable DB fields to avoid commit errors
     NON_NULLABLE = {'temperature', 'max_call_duration', 'is_default', 'language', 'name',
                     'agent_name', 'company_name', 'company_info', 'services', 'instructions'}
     for field, value in data.dict(exclude_unset=True).items():
@@ -71,25 +72,26 @@ def update_agent(agent_id: int, data: AgentUpdate, session: Session = Depends(ge
 
 @router.post("/{agent_id}/sync")
 async def sync_agent(agent_id: int, session: Session = Depends(get_session)):
-    from services import vapi_client
+    from services import retell_client
     agent = session.get(AgentConfig, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
 
-    logger.info(f"POST /agents/{agent_id}/sync — starting VAPI sync for '{agent.name}'")
-    vapi_error = None
+    logger.info(f"POST /agents/{agent_id}/sync — starting Retell sync for '{agent.name}'")
+    retell_error = None
     try:
-        assistant_id = await vapi_client.sync_to_vapi(agent)
-        agent.vapi_assistant_id = assistant_id
+        agent_id_retell, llm_id = await retell_client.sync_to_retell(agent)
+        agent.retell_agent_id = agent_id_retell
+        agent.retell_llm_id = llm_id
         session.add(agent)
         session.commit()
         session.refresh(agent)
-        logger.info(f"POST /agents/{agent_id}/sync — VAPI assistant ID: {assistant_id}")
+        logger.info(f"POST /agents/{agent_id}/sync — Retell agent_id={agent_id_retell} llm_id={llm_id}")
     except Exception as e:
-        vapi_error = str(e)
-        logger.error(f"POST /agents/{agent_id}/sync — VAPI error: {vapi_error}")
+        retell_error = str(e)
+        logger.error(f"POST /agents/{agent_id}/sync — Retell error: {retell_error}")
 
-    return {"agent": agent.dict(), "vapi_error": vapi_error}
+    return {"agent": agent.dict(exclude={"campaigns"}), "retell_error": retell_error}
 
 
 @router.delete("/{agent_id}")

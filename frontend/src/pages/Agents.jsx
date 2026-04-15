@@ -22,7 +22,10 @@ export default function Agents() {
     if (syncingId) return
     setSyncingId(agent.id)
     try {
-      await syncAgent(agent.id)
+      const resp = await syncAgent(agent.id)
+      if (resp.retell_error) {
+        alert('Error al sincronizar con Retell: ' + resp.retell_error)
+      }
       load()
     } catch (err) {
       alert('Error al sincronizar: ' + (err.response?.data?.detail || err.message))
@@ -51,7 +54,7 @@ export default function Agents() {
                   {agent.is_default && (
                     <span className="px-1.5 py-0.5 bg-gold/15 text-yellow-700 text-xs font-semibold rounded-full">Default</span>
                   )}
-                  {agent.vapi_assistant_id ? (
+                  {agent.retell_agent_id ? (
                     <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-green-700 text-xs font-semibold rounded-full">
                       <CheckCircleIcon className="w-3 h-3" /> Sincronizado
                     </span>
@@ -71,7 +74,7 @@ export default function Agents() {
             <p className="text-xs text-gray-500 mb-4">
               <span className="bg-gray-100 px-2 py-0.5 rounded-full">{agent.language}</span>
               {' • '}
-              <span className="bg-gray-100 px-2 py-0.5 rounded-full">{agent.voice_id || 'DaliaMultilingual'}</span>
+              <span className="bg-gray-100 px-2 py-0.5 rounded-full">{agent.voice_id || '11labs-Valentina'}</span>
               {' • '}max {agent.max_call_duration}s
             </p>
 

@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlmodel import Session, select
 from models import Campaign, Prospect, Call, AgentConfig
 from database import engine
-from services import vapi_client
+from services import retell_client
 
 logger = logging.getLogger(__name__)
 
@@ -58,10 +58,16 @@ async def _run_campaign_loop(campaign_id: int):
         agent_config = session.get(AgentConfig, campaign.agent_config_id)
         if not agent_config:
             return
-        system_prompt = build_system_prompt(agent_config)
+        # Cache all needed attributes before session closes
+        agent_config_id = agent_config.id
 
     while True:
+        # Re-load agent_config each iteration so retell_agent_id changes are picked up
         with Session(engine) as session:
+            agent_config = session.get(AgentConfig, agent_config_id)
+            if not agent_config:
+                break
+
             campaign = session.get(Campaign, campaign_id)
             if not campaign or campaign.status != "running":
                 break
@@ -100,14 +106,20 @@ async def _run_campaign_loop(campaign_id: int):
                 session.refresh(call)
                 call_id = call.id
                 prospect_phone = prospect.phone
+                prospect_name = prospect.name
+                prospect_company = prospect.company or ""
 
         try:
-            result = await vapi_client.create_call(prospect_phone, system_prompt, agent_config)
-            vapi_call_id = result.get("id", "")
+            result = await retell_client.create_call(
+                prospect_phone, agent_config,
+                prospect_name=prospect_name,
+                prospect_company=prospect_company,
+            )
+            retell_call_id = result.get("call_id", "")
             with Session(engine) as session:
                 call = session.get(Call, call_id)
                 if call:
-                    call.vapi_call_id = vapi_call_id
+                    call.vapi_call_id = retell_call_id
                     call.status = "in-progress"
                     session.add(call)
                     session.commit()

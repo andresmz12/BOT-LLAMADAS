@@ -3,9 +3,11 @@ import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/re
 import { createAgent, updateAgent, syncAgent } from '../api/client'
 
 const VOICES = [
-  { value: 'DaliaMultilingual', label: 'Dalia Multilingual (ES recomendada)' },
-  { value: 'Paloma', label: 'Paloma (ES-US)' },
-  { value: 'Jenny', label: 'Jenny (Multilingüe)' },
+  { value: '11labs-Valentina', label: 'Valentina (ES latina femenina — recomendada)' },
+  { value: '11labs-Adriana', label: 'Adriana (ES femenina)' },
+  { value: '11labs-Sofia', label: 'Sofia (ES femenina)' },
+  { value: '11labs-Adrian', label: 'Adrian (ES masculino)' },
+  { value: '11labs-Miguel', label: 'Miguel (ES latino masculino)' },
 ]
 
 const TEMPERATURES = [
@@ -18,14 +20,13 @@ const EMPTY = {
   name: '', agent_name: '', company_name: '', company_info: '',
   services: '', instructions: '', language: 'español',
   max_call_duration: 180, is_default: false,
-  voice_id: 'DaliaMultilingual',
+  voice_id: '11labs-Valentina',
   first_message_override: '',
   voicemail_message: '',
   temperature: 0.4,
 }
 
 export default function AgentFormModal({ agent, onClose, onSaved }) {
-  // Merge with EMPTY so existing agents always have defaults for new fields
   const [form, setForm] = useState(agent ? { ...EMPTY, ...agent } : { ...EMPTY })
   const [syncOnSave, setSyncOnSave] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -50,9 +51,9 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
         setSyncStatus('syncing')
         try {
           const syncResp = await syncAgent(saved.id)
-          if (syncResp.vapi_error) {
+          if (syncResp.retell_error) {
             setSyncStatus('error')
-            setSyncError('Agente guardado, pero error al sincronizar con VAPI: ' + syncResp.vapi_error)
+            setSyncError('Agente guardado, pero error al sincronizar con Retell: ' + syncResp.retell_error)
             setLoading(false)
           } else {
             setSyncStatus('ok')
@@ -97,7 +98,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
               <label className="block text-sm font-medium text-gray-700 mb-1">Voz del agente</label>
               <select
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                value={form.voice_id || 'DaliaMultilingual'}
+                value={form.voice_id || '11labs-Valentina'}
                 onChange={e => set('voice_id', e.target.value)}
               >
                 {VOICES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
@@ -136,10 +137,10 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
             label="Mensaje de bienvenida (opcional)"
             value={form.first_message_override || ''}
             onChange={v => set('first_message_override', v)}
-            placeholder={`Hola, buenos días. Habla ${form.agent_name || 'el agente'} de ${form.company_name || 'la empresa'}, ¿estoy hablando con {customerName}?`}
+            placeholder={`Hola, buenos días. Habla ${form.agent_name || 'el agente'} de ${form.company_name || 'la empresa'}, ¿estoy hablando con {{customer_name}}?`}
             rows={3}
           />
-          <p className="text-xs text-gray-400 -mt-2">Puedes usar &#123;&#123;customerName&#125;&#125; para insertar el nombre del cliente. Si lo dejas vacío se genera automáticamente.</p>
+          <p className="text-xs text-gray-400 -mt-2">Usa &#123;&#123;customer_name&#125;&#125; para insertar el nombre del cliente. Si lo dejas vacío se genera automáticamente.</p>
 
           <TextArea
             label="Mensaje de voicemail"
@@ -157,22 +158,22 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={syncOnSave} onChange={e => setSyncOnSave(e.target.checked)} className="w-4 h-4 accent-yellow-500" />
-              <span className="text-sm text-gray-700">Sincronizar con VAPI al guardar</span>
+              <span className="text-sm text-gray-700">Sincronizar con Retell al guardar</span>
             </label>
           </div>
 
           {/* Sync status */}
           {syncStatus === 'syncing' && (
-            <p className="text-sm text-blue-600">Sincronizando con VAPI...</p>
+            <p className="text-sm text-blue-600">Sincronizando con Retell AI...</p>
           )}
           {syncStatus === 'ok' && (
             <span className="flex items-center gap-1.5 text-sm text-green-600">
-              <CheckCircleIcon className="w-4 h-4" /> Sincronizado con VAPI correctamente
+              <CheckCircleIcon className="w-4 h-4" /> Sincronizado con Retell correctamente
             </span>
           )}
           {syncStatus === 'error' && (
             <span className="flex items-center gap-1.5 text-sm text-red-600">
-              <ExclamationCircleIcon className="w-4 h-4" /> Error al sincronizar: {syncError}
+              <ExclamationCircleIcon className="w-4 h-4" /> {syncError}
             </span>
           )}
 

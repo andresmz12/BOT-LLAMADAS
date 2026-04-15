@@ -3,7 +3,7 @@ from sqlmodel import Session, select
 from pydantic import BaseModel
 from database import get_session
 from models import Call, Campaign, Prospect, AgentConfig
-from services import vapi_client
+from services import retell_client
 from services.call_orchestrator import build_system_prompt
 
 router = APIRouter(prefix="/calls", tags=["calls"])
@@ -60,13 +60,16 @@ async def demo_call(req: DemoCallRequest, session: Session = Depends(get_session
     session.refresh(call)
 
     try:
-        system_prompt = build_system_prompt(agent)
-        result = await vapi_client.create_call(req.phone, system_prompt, agent)
-        call.vapi_call_id = result.get("id", "")
+        result = await retell_client.create_call(
+            req.phone, agent,
+            prospect_name="Demo",
+            prospect_company="Demo",
+        )
+        call.vapi_call_id = result.get("call_id", "")
         call.status = "in-progress"
         session.add(call)
         session.commit()
-        return {"call_id": call.id, "vapi_call_id": call.vapi_call_id, "status": call.status}
+        return {"call_id": call.id, "retell_call_id": call.vapi_call_id, "status": call.status}
     except Exception as e:
         call.status = "failed"
         session.add(call)

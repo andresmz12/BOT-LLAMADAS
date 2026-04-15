@@ -5,7 +5,11 @@ import { getSettings, saveSettings, getAgents, makeDemoCall } from '../api/clien
 
 export default function Settings() {
   const navigate = useNavigate()
-  const [form, setForm] = useState({ vapi_api_key: '', vapi_phone_number_id: '', anthropic_api_key: '' })
+  const [form, setForm] = useState({
+    retell_api_key: '',
+    retell_phone_number: '',
+    anthropic_api_key: '',
+  })
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
 
@@ -18,8 +22,8 @@ export default function Settings() {
     getSettings().then(data => {
       setForm(f => ({
         ...f,
-        vapi_api_key: data.vapi_api_key || '',
-        vapi_phone_number_id: data.vapi_phone_number_id || '',
+        retell_api_key: data.retell_api_key || '',
+        retell_phone_number: data.retell_phone_number || '',
         anthropic_api_key: data.anthropic_api_key || '',
       }))
     }).catch(() => {})
@@ -60,37 +64,37 @@ export default function Settings() {
 
       <form onSubmit={submit} className="space-y-6">
         <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 space-y-5">
-          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Credenciales VAPI</h2>
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Credenciales Retell AI</h2>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
-              <KeyIcon className="w-4 h-4 text-gray-400" /> VAPI API Key
+              <KeyIcon className="w-4 h-4 text-gray-400" /> Retell API Key
             </label>
             <input
               type="password"
-              value={form.vapi_api_key}
-              onChange={e => setForm(f => ({ ...f, vapi_api_key: e.target.value }))}
-              placeholder="vapi_••••••••"
+              value={form.retell_api_key}
+              onChange={e => setForm(f => ({ ...f, retell_api_key: e.target.value }))}
+              placeholder="key_••••••••"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold font-mono"
             />
             <p className="text-xs text-gray-400 mt-1">
-              Obtén tu API key en <span className="text-gold">dashboard.vapi.ai → Account → API Keys</span>
+              Obtén tu API key en <span className="text-gold">app.retellai.com → Settings → API Keys</span>
             </p>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5 flex items-center gap-1.5">
-              <PhoneIcon className="w-4 h-4 text-gray-400" /> VAPI Phone Number ID
+              <PhoneIcon className="w-4 h-4 text-gray-400" /> Número de teléfono Retell
             </label>
             <input
               type="text"
-              value={form.vapi_phone_number_id}
-              onChange={e => setForm(f => ({ ...f, vapi_phone_number_id: e.target.value }))}
-              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              value={form.retell_phone_number}
+              onChange={e => setForm(f => ({ ...f, retell_phone_number: e.target.value }))}
+              placeholder="+12025551234"
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold font-mono"
             />
             <p className="text-xs text-gray-400 mt-1">
-              Obtén el ID en <span className="text-gold">dashboard.vapi.ai → Phone Numbers</span>
+              Formato E.164 — compra un número en <span className="text-gold">app.retellai.com → Phone Numbers</span>
             </p>
           </div>
 
@@ -106,21 +110,20 @@ export default function Settings() {
               className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold font-mono"
             />
             <p className="text-xs text-gray-400 mt-1">
-              Necesaria para que el agente hable durante la llamada — <span className="text-gold">console.anthropic.com → API Keys</span>
+              Usada para analizar transcripciones — <span className="text-gold">console.anthropic.com → API Keys</span>
             </p>
           </div>
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 space-y-2">
-          <p className="font-semibold">Paso obligatorio para que el agente hable</p>
-          <p>VAPI necesita tu Anthropic API Key configurada en su propio dashboard para poder usar Claude durante las llamadas. Sigue estos pasos:</p>
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800 space-y-2">
+          <p className="font-semibold">Configura el webhook en Retell AI</p>
+          <p>Para recibir transcripciones y resultados de llamadas, configura el webhook en tu cuenta de Retell:</p>
           <ol className="list-decimal list-inside space-y-1 mt-1">
-            <li>Ve a <span className="font-mono font-medium">dashboard.vapi.ai</span></li>
-            <li>Menú lateral → <strong>Provider Keys</strong></li>
-            <li>Click en <strong>+ Add Key</strong> → selecciona <strong>Anthropic</strong></li>
-            <li>Pega tu key <code className="bg-amber-100 px-1 rounded">sk-ant-...</code> y guarda</li>
+            <li>Ve a <span className="font-mono font-medium">app.retellai.com → Settings → Webhooks</span></li>
+            <li>Agrega la URL: <code className="bg-blue-100 px-1 rounded">https://TU-BACKEND.railway.app/webhook/retell</code></li>
+            <li>Selecciona los eventos: <strong>call_ended</strong> y <strong>call_analyzed</strong></li>
           </ol>
-          <p className="text-xs mt-2 text-amber-600">Sin este paso el agente saluda pero no puede responder.</p>
+          <p className="text-xs mt-2 text-blue-600">Sin este paso las llamadas se realizan pero no se guardan resultados.</p>
         </div>
 
         <div className="flex items-center gap-3">
