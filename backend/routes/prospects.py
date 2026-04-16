@@ -6,7 +6,8 @@ from sqlmodel import Session, select
 from pydantic import BaseModel
 from typing import Optional
 from database import get_session
-from models import Prospect, Campaign, AgentConfig, Call
+from models import Prospect, Campaign, AgentConfig, Call, User, Organization
+from routes.auth import get_current_user, require_write_access
 
 router = APIRouter(prefix="/prospects", tags=["prospects"])
 
@@ -19,14 +20,19 @@ class ProspectCreate(BaseModel):
     notes: Optional[str] = None
 
 
-@router.post("", response_model=Prospect)
-def create_prospect(data: ProspectCreate, session: Session = Depends(get_session)):
+@router.post("")
+def create_prospect(
+    data: ProspectCreate,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
     prospect = Prospect(
         campaign_id=data.campaign_id,
         name=data.name,
         phone=data.phone,
         company=data.company or None,
         notes=data.notes or None,
+        organization_id=current_user.organization_id,
     )
     session.add(prospect)
     session.commit()
@@ -38,6 +44,7 @@ def create_prospect(data: ProspectCreate, session: Session = Depends(get_session
 async def import_file(
     campaign_id: int = Form(...),
     file: UploadFile = File(...),
+    current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
     content = await file.read()
@@ -66,7 +73,13 @@ async def import_file(
         company = row.get("company", "").strip()
         if not name or not phone:
             continue
-        session.add(Prospect(campaign_id=campaign_id, name=name, phone=phone, company=company or None))
+        session.add(Prospect(
+            campaign_id=campaign_id,
+            name=name,
+            phone=phone,
+            company=company or None,
+            organization_id=current_user.organization_id,
+        ))
         imported += 1
     session.commit()
     return {"imported": imported}
@@ -76,9 +89,12 @@ async def import_file(
 def list_prospects(
     campaign_id: int | None = None,
     status: str | None = None,
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
     query = select(Prospect)
+    if current_user.role != "superadmin":
+        query = query.where(Prospect.organization_id == current_user.organization_id)
     if campaign_id:
         query = query.where(Prospect.campaign_id == campaign_id)
     if status:
@@ -86,11 +102,18 @@ def list_prospects(
     return session.exec(query).all()
 
 
-@router.put("/{prospect_id}", response_model=Prospect)
-def update_prospect(prospect_id: int, data: Prospect, session: Session = Depends(get_session)):
+@router.put("/{prospect_id}")
+def update_prospect(
+    prospect_id: int,
+    data: Prospect,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
     prospect = session.get(Prospect, prospect_id)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
+    if current_user.role != "superadmin" and prospect.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
     for field, value in data.dict(exclude_unset=True, exclude={"id"}).items():
         setattr(prospect, field, value)
     session.add(prospect)
@@ -100,7 +123,11 @@ def update_prospect(prospect_id: int, data: Prospect, session: Session = Depends
 
 
 @router.post("/{prospect_id}/call")
-async def call_prospect(prospect_id: int, session: Session = Depends(get_session)):
+async def call_prospect(
+    prospect_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
     from services import retell_client
 
     prospect = session.get(Prospect, prospect_id)
@@ -115,7 +142,16 @@ async def call_prospect(prospect_id: int, session: Session = Depends(get_session
     if not agent:
         raise HTTPException(status_code=404, detail="Agente no encontrado")
 
-    call = Call(prospect_id=prospect.id, campaign_id=campaign.id, status="initiated")
+    org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
+    api_key = (org.retell_api_key if org else "") or ""
+    from_number = (org.retell_phone_number if org else "") or ""
+
+    call = Call(
+        prospect_id=prospect.id,
+        campaign_id=campaign.id,
+        status="initiated",
+        organization_id=current_user.organization_id,
+    )
     session.add(call)
     session.commit()
     session.refresh(call)
@@ -125,6 +161,8 @@ async def call_prospect(prospect_id: int, session: Session = Depends(get_session
             prospect.phone, agent,
             prospect_name=prospect.name,
             prospect_company=prospect.company or "",
+            api_key=api_key,
+            from_number=from_number,
         )
         call.vapi_call_id = result.get("call_id", "")
         call.status = "in-progress"
@@ -143,10 +181,16 @@ async def call_prospect(prospect_id: int, session: Session = Depends(get_session
 
 
 @router.delete("/{prospect_id}")
-def delete_prospect(prospect_id: int, session: Session = Depends(get_session)):
+def delete_prospect(
+    prospect_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
     prospect = session.get(Prospect, prospect_id)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospect not found")
+    if current_user.role != "superadmin" and prospect.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
     session.delete(prospect)
     session.commit()
     return {"ok": True}
