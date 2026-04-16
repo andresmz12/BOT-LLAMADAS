@@ -45,7 +45,7 @@ async def sync_to_retell(agent_config: AgentConfig) -> tuple[str, str]:
         )
 
     llm_payload = {
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-4.6-sonnet",
         "general_prompt": build_system_prompt(agent_config),
         "begin_message": begin_message,
         "general_tools": [],
