@@ -2,8 +2,12 @@ import os
 from sqlmodel import SQLModel, create_engine, Session, select
 from models import AgentConfig, Organization, User
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./calls.db")
-engine = create_engine(DATABASE_URL, echo=False, connect_args={"check_same_thread": False})
+_raw_url = os.getenv("DATABASE_URL", "sqlite:///./calls.db")
+# Railway PostgreSQL URLs start with "postgres://" but SQLAlchemy requires "postgresql://"
+DATABASE_URL = _raw_url.replace("postgres://", "postgresql://", 1)
+
+_connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+engine = create_engine(DATABASE_URL, echo=False, connect_args=_connect_args)
 
 RETELL_AGENT_ID_DEFAULT = "agent_1499fc3598510000648e68461e"
 RETELL_LLM_ID_DEFAULT = "llm_7bd5d1428d3903644ab5152e681d"
