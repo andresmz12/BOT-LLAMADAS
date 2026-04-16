@@ -27,6 +27,7 @@ const EMPTY = {
   first_message_override: '',
   voicemail_message: '',
   temperature: 0.4,
+  inbound_enabled: false,
 }
 
 export default function AgentFormModal({ agent, onClose, onSaved }) {
@@ -154,7 +155,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
           />
 
           {/* Opciones */}
-          <div className="flex items-center gap-6 pt-1">
+          <div className="flex flex-wrap items-center gap-6 pt-1">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={form.is_default} onChange={e => set('is_default', e.target.checked)} className="w-4 h-4 accent-yellow-500" />
               <span className="text-sm text-gray-700">Agente por defecto</span>
@@ -163,7 +164,16 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
               <input type="checkbox" checked={syncOnSave} onChange={e => setSyncOnSave(e.target.checked)} className="w-4 h-4 accent-yellow-500" />
               <span className="text-sm text-gray-700">Sincronizar con Retell al guardar</span>
             </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={form.inbound_enabled || false} onChange={e => set('inbound_enabled', e.target.checked)} className="w-4 h-4 accent-blue-500" />
+              <span className="text-sm text-gray-700">Recibir llamadas entrantes</span>
+            </label>
           </div>
+          {form.inbound_enabled && (
+            <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 -mt-2">
+              Este agente atenderá llamadas entrantes al número de Retell al sincronizar.
+            </p>
+          )}
 
           {/* Sync status */}
           {syncStatus === 'syncing' && (

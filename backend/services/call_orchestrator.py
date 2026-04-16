@@ -1,8 +1,9 @@
 import asyncio
 import logging
+import os
 from datetime import datetime
 from sqlmodel import Session, select
-from models import Campaign, Prospect, Call, AgentConfig
+from models import Campaign, Prospect, Call, AgentConfig, Organization
 from database import engine
 from services import retell_client
 
@@ -58,11 +59,9 @@ async def _run_campaign_loop(campaign_id: int):
         agent_config = session.get(AgentConfig, campaign.agent_config_id)
         if not agent_config:
             return
-        # Cache all needed attributes before session closes
         agent_config_id = agent_config.id
 
     while True:
-        # Re-load agent_config each iteration so retell_agent_id changes are picked up
         with Session(engine) as session:
             agent_config = session.get(AgentConfig, agent_config_id)
             if not agent_config:
@@ -71,6 +70,11 @@ async def _run_campaign_loop(campaign_id: int):
             campaign = session.get(Campaign, campaign_id)
             if not campaign or campaign.status != "running":
                 break
+
+            # Load org credentials
+            org = session.get(Organization, campaign.organization_id) if campaign.organization_id else None
+            org_api_key = (org.retell_api_key if org else "") or os.getenv("RETELL_API_KEY", "")
+            org_phone = (org.retell_phone_number if org else "") or os.getenv("RETELL_PHONE_NUMBER", "")
 
             prospects = session.exec(
                 select(Prospect).where(
@@ -100,6 +104,7 @@ async def _run_campaign_loop(campaign_id: int):
                     prospect_id=prospect.id,
                     campaign_id=campaign_id,
                     status="initiated",
+                    organization_id=campaign.organization_id,
                 )
                 session.add(call)
                 session.commit()
@@ -114,6 +119,8 @@ async def _run_campaign_loop(campaign_id: int):
                 prospect_phone, agent_config,
                 prospect_name=prospect_name,
                 prospect_company=prospect_company,
+                api_key=org_api_key,
+                from_number=org_phone,
             )
             retell_call_id = result.get("call_id", "")
             with Session(engine) as session:

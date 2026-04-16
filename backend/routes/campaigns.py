@@ -2,15 +2,22 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select
 from database import get_session
-from models import Campaign, Prospect
+from models import Campaign, Prospect, User
 from services import call_orchestrator
+from routes.auth import get_current_user, require_write_access
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
 
-@router.post("", response_model=Campaign)
-def create_campaign(campaign: Campaign, session: Session = Depends(get_session)):
+@router.post("")
+def create_campaign(
+    campaign: Campaign,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
     campaign.status = "draft"
+    if current_user.role != "superadmin":
+        campaign.organization_id = current_user.organization_id
     session.add(campaign)
     session.commit()
     session.refresh(campaign)
@@ -18,8 +25,14 @@ def create_campaign(campaign: Campaign, session: Session = Depends(get_session))
 
 
 @router.get("")
-def list_campaigns(session: Session = Depends(get_session)):
-    campaigns = session.exec(select(Campaign)).all()
+def list_campaigns(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    query = select(Campaign)
+    if current_user.role != "superadmin":
+        query = query.where(Campaign.organization_id == current_user.organization_id)
+    campaigns = session.exec(query).all()
     result = []
     for c in campaigns:
         total = session.exec(select(Prospect).where(Prospect.campaign_id == c.id)).all()
@@ -33,18 +46,31 @@ def list_campaigns(session: Session = Depends(get_session)):
 
 
 @router.get("/{campaign_id}")
-def get_campaign(campaign_id: int, session: Session = Depends(get_session)):
+def get_campaign(
+    campaign_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
     campaign = session.get(Campaign, campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    if current_user.role != "superadmin" and campaign.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
     return campaign
 
 
 @router.post("/{campaign_id}/start")
-async def start_campaign(campaign_id: int, background_tasks: BackgroundTasks, session: Session = Depends(get_session)):
+async def start_campaign(
+    campaign_id: int,
+    background_tasks: BackgroundTasks,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
     campaign = session.get(Campaign, campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    if current_user.role != "superadmin" and campaign.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
     if campaign.status == "running":
         raise HTTPException(status_code=400, detail="Campaign already running")
     campaign.status = "running"
@@ -56,10 +82,16 @@ async def start_campaign(campaign_id: int, background_tasks: BackgroundTasks, se
 
 
 @router.post("/{campaign_id}/pause")
-def pause_campaign(campaign_id: int, session: Session = Depends(get_session)):
+def pause_campaign(
+    campaign_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
     campaign = session.get(Campaign, campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    if current_user.role != "superadmin" and campaign.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
     campaign.status = "paused"
     session.add(campaign)
     session.commit()
@@ -70,10 +102,16 @@ def pause_campaign(campaign_id: int, session: Session = Depends(get_session)):
 
 
 @router.delete("/{campaign_id}")
-def delete_campaign(campaign_id: int, session: Session = Depends(get_session)):
+def delete_campaign(
+    campaign_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
     campaign = session.get(Campaign, campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
+    if current_user.role != "superadmin" and campaign.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
     if campaign.status != "draft":
         raise HTTPException(status_code=400, detail="Only draft campaigns can be deleted")
     session.delete(campaign)

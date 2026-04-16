@@ -4,13 +4,12 @@ from datetime import datetime
 from fastapi import APIRouter, Request, Depends
 from sqlmodel import Session, select
 from database import get_session
-from models import Call, Prospect, Campaign
+from models import Call, Prospect, Campaign, AgentConfig, Organization
 from services import summary_generator
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/webhook", tags=["webhook"])
 
-# Injected from main.py
 ws_manager = None
 
 
@@ -20,13 +19,34 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
     event = body.get("event", "")
     call_data = body.get("call", {})
     retell_call_id = call_data.get("call_id", "")
+    call_type_retell = call_data.get("call_type", "outbound_api")
 
-    logger.info(f"Retell webhook event: {event}, call_id: {retell_call_id}")
+    logger.info(f"Retell webhook event: {event}, call_id: {retell_call_id}, type: {call_type_retell}")
 
     call = session.exec(select(Call).where(Call.vapi_call_id == retell_call_id)).first()
 
+    # Handle inbound calls not in DB
+    if not call and call_type_retell == "inbound" and event in ("call_started", "call_ended", "call_analyzed"):
+        agent_id_retell = call_data.get("agent_id", "")
+        agent = session.exec(
+            select(AgentConfig).where(AgentConfig.retell_agent_id == agent_id_retell)
+        ).first() if agent_id_retell else None
+        call = Call(
+            prospect_id=None,
+            campaign_id=None,
+            vapi_call_id=retell_call_id,
+            status="initiated",
+            call_type="inbound",
+            organization_id=agent.organization_id if agent else None,
+        )
+        session.add(call)
+        session.commit()
+        session.refresh(call)
+
     if event == "call_started" and call:
         call.status = "in-progress"
+        if call_type_retell == "inbound":
+            call.call_type = "inbound"
         session.add(call)
         session.commit()
 
@@ -37,12 +57,12 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
         start_ts = call_data.get("start_timestamp")
         end_ts = call_data.get("end_timestamp")
 
-        # Retell analysis fields (available on call_analyzed event)
         call_analysis = call_data.get("call_analysis") or {}
         in_voicemail = call_analysis.get("in_voicemail", False)
 
         if call:
             call.status = "ended"
+            call.call_type = "inbound" if call_type_retell == "inbound" else "outbound"
             call.ended_at = datetime.utcnow() if not end_ts else datetime.utcfromtimestamp(end_ts / 1000)
             if start_ts:
                 call.started_at = datetime.utcfromtimestamp(start_ts / 1000)
@@ -52,7 +72,10 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
             if duration_ms:
                 call.duration_seconds = int(duration_ms / 1000)
 
-            # If Retell already determined voicemail, skip LLM analysis
+            # Get org's Anthropic key
+            org = session.get(Organization, call.organization_id) if call.organization_id else None
+            org_api_key = (org.anthropic_api_key if org else "") or ""
+
             if in_voicemail:
                 call.outcome = "voicemail"
                 call.sentiment = "neutral"
@@ -61,7 +84,7 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
                 call.services_mentioned = json.dumps([])
                 call.notes = "Llamada derivada a buzón de voz"
             else:
-                analysis = await summary_generator.analyze_transcript(transcript)
+                analysis = await summary_generator.analyze_transcript(transcript, api_key=org_api_key)
                 call.client_said = json.dumps(analysis.get("client_said", []))
                 call.agent_said = json.dumps(analysis.get("agent_said", []))
                 call.outcome = analysis.get("outcome")
@@ -78,33 +101,35 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
 
             session.add(call)
 
-            prospect = session.get(Prospect, call.prospect_id)
-            if prospect:
-                outcome = call.outcome or "failed"
-                if outcome == "voicemail":
-                    prospect.status = "voicemail"
-                elif outcome in ("interested", "callback_requested", "appointment_scheduled", "not_interested"):
-                    prospect.status = "answered"
-                else:
-                    prospect.status = "failed"
-                session.add(prospect)
+            if call.prospect_id:
+                prospect = session.get(Prospect, call.prospect_id)
+                if prospect:
+                    outcome = call.outcome or "failed"
+                    if outcome == "voicemail":
+                        prospect.status = "voicemail"
+                    elif outcome in ("interested", "callback_requested", "appointment_scheduled", "not_interested"):
+                        prospect.status = "answered"
+                    else:
+                        prospect.status = "failed"
+                    session.add(prospect)
 
-            campaign = session.get(Campaign, call.campaign_id)
-            if campaign:
-                campaign.total_calls += 1
-                if call.outcome == "voicemail":
-                    campaign.voicemail += 1
-                elif call.outcome == "interested":
-                    campaign.interested += 1
-                    campaign.answered += 1
-                elif call.outcome in ("not_interested", "callback_requested"):
-                    campaign.answered += 1
-                elif call.outcome == "appointment_scheduled":
-                    campaign.appointments_scheduled += 1
-                    campaign.answered += 1
-                else:
-                    campaign.failed += 1
-                session.add(campaign)
+            if call.campaign_id:
+                campaign = session.get(Campaign, call.campaign_id)
+                if campaign:
+                    campaign.total_calls += 1
+                    if call.outcome == "voicemail":
+                        campaign.voicemail += 1
+                    elif call.outcome == "interested":
+                        campaign.interested += 1
+                        campaign.answered += 1
+                    elif call.outcome in ("not_interested", "callback_requested"):
+                        campaign.answered += 1
+                    elif call.outcome == "appointment_scheduled":
+                        campaign.appointments_scheduled += 1
+                        campaign.answered += 1
+                    else:
+                        campaign.failed += 1
+                    session.add(campaign)
 
             session.commit()
 
@@ -121,10 +146,11 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
         call.outcome = "failed"
         call.ended_at = datetime.utcnow()
         session.add(call)
-        prospect = session.get(Prospect, call.prospect_id)
-        if prospect:
-            prospect.status = "failed"
-            session.add(prospect)
+        if call.prospect_id:
+            prospect = session.get(Prospect, call.prospect_id)
+            if prospect:
+                prospect.status = "failed"
+                session.add(prospect)
         session.commit()
 
     return {"ok": True}

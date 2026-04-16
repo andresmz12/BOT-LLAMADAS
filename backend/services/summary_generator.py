@@ -20,22 +20,16 @@ Dado un transcript, extrae y devuelve SOLO un JSON con este schema:
 Responde SOLO con el JSON válido, sin texto adicional, sin markdown, sin backticks."""
 
 
-async def analyze_transcript(transcript: str) -> dict:
+async def analyze_transcript(transcript: str, api_key: str = "") -> dict:
     if not transcript or not transcript.strip():
         return _empty_result()
 
-    api_key = os.getenv("ANTHROPIC_API_KEY", "")
     if not api_key:
-        try:
-            from sqlmodel import Session, select
-            from database import engine
-            from models import Settings
-            with Session(engine) as s:
-                row = s.exec(select(Settings).where(Settings.key == "anthropic_api_key")).first()
-                if row:
-                    api_key = row.value
-        except Exception:
-            pass
+        api_key = os.getenv("ANTHROPIC_API_KEY", "")
+
+    if not api_key:
+        logger.warning("No Anthropic API key available for transcript analysis")
+        return _empty_result()
 
     client = AsyncAnthropic(api_key=api_key)
     try:

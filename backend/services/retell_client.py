@@ -1,36 +1,60 @@
 import os
 import httpx
 import logging
+from typing import Optional
 from models import AgentConfig
 
 logger = logging.getLogger(__name__)
 RETELL_API_URL = "https://api.retellai.com"
 
 
-def _get_credentials() -> tuple[str, str]:
-    """Returns (api_key, phone_number), falling back to DB Settings if env vars are missing."""
+def _get_credentials(organization_id: Optional[int] = None) -> tuple[str, str]:
+    """Returns (api_key, phone_number). Reads from org if provided, else env vars."""
     api_key = os.getenv("RETELL_API_KEY", "")
     phone_number = os.getenv("RETELL_PHONE_NUMBER", "")
 
-    if not api_key or not phone_number:
-        from sqlmodel import Session, select
+    if organization_id and (not api_key or not phone_number):
+        from sqlmodel import Session
         from database import engine
-        from models import Settings
+        from models import Organization
         with Session(engine) as s:
-            for row in s.exec(select(Settings)).all():
-                if row.key == "retell_api_key" and not api_key:
-                    api_key = row.value
-                if row.key == "retell_phone_number" and not phone_number:
-                    phone_number = row.value
+            org = s.get(Organization, organization_id)
+            if org:
+                api_key = api_key or org.retell_api_key
+                phone_number = phone_number or org.retell_phone_number
 
     return api_key, phone_number
 
 
-async def sync_to_retell(agent_config: AgentConfig) -> tuple[str, str]:
+async def set_inbound_agent(phone_number: str, agent_id: Optional[str], api_key: str):
+    """PATCH /update-phone-number/{phone} to set or clear inbound_agent_id."""
+    if not phone_number or not api_key:
+        return
+    headers = {"Authorization": f"Bearer {api_key}"}
+    payload = {"inbound_agent_id": agent_id}
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.patch(
+            f"{RETELL_API_URL}/update-phone-number/{phone_number}",
+            json=payload, headers=headers,
+        )
+        logger.info(f"[Retell] set_inbound_agent {phone_number} → {agent_id}: {resp.status_code} {resp.text}")
+        if resp.status_code >= 400:
+            raise ValueError(f"Retell phone update {resp.status_code}: {resp.text}")
+
+
+async def sync_to_retell(
+    agent_config: AgentConfig,
+    api_key: str = "",
+    phone_number: str = "",
+) -> tuple[str, str]:
     """Creates or updates a Retell LLM + Agent. Returns (retell_agent_id, retell_llm_id)."""
     from services.call_orchestrator import build_system_prompt
 
-    api_key, _ = _get_credentials()
+    if not api_key or not phone_number:
+        api_key_env, phone_env = _get_credentials(agent_config.organization_id)
+        api_key = api_key or api_key_env
+        phone_number = phone_number or phone_env
+
     if not api_key:
         raise ValueError("Retell API key no configurada. Ve a Configuración.")
 
@@ -111,6 +135,15 @@ async def sync_to_retell(agent_config: AgentConfig) -> tuple[str, str]:
 
         agent_id = resp.json()["agent_id"]
         logger.info(f"[Retell] Agent synced: {agent_id}")
+
+        # Step 3: Configure inbound if phone_number available
+        if phone_number:
+            inbound_agent = agent_id if agent_config.inbound_enabled else None
+            try:
+                await set_inbound_agent(phone_number, inbound_agent, api_key)
+            except Exception as e:
+                logger.warning(f"[Retell] set_inbound_agent failed (non-fatal): {e}")
+
         return agent_id, llm_id
 
 
@@ -119,10 +152,15 @@ async def create_call(
     agent_config: AgentConfig,
     prospect_name: str = "",
     prospect_company: str = "",
+    api_key: str = "",
+    from_number: str = "",
 ) -> dict:
-    api_key, phone_number = _get_credentials()
+    if not api_key or not from_number:
+        api_key_env, from_env = _get_credentials(agent_config.organization_id)
+        api_key = api_key or api_key_env
+        from_number = from_number or from_env
 
-    if not api_key or not phone_number:
+    if not api_key or not from_number:
         raise ValueError("Credenciales Retell no configuradas. Ve a Configuración.")
 
     if not agent_config.retell_agent_id:
@@ -138,7 +176,7 @@ async def create_call(
         )
 
     payload = {
-        "from_number": phone_number,
+        "from_number": from_number,
         "to_number": phone,
         "override_agent_id": agent_config.retell_agent_id,
         "retell_llm_dynamic_variables": {
@@ -162,8 +200,9 @@ async def create_call(
         return resp.json()
 
 
-async def get_call(retell_call_id: str) -> dict:
-    api_key, _ = _get_credentials()
+async def get_call(retell_call_id: str, api_key: str = "") -> dict:
+    if not api_key:
+        api_key, _ = _get_credentials()
     headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.get(

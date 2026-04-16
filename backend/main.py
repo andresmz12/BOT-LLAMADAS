@@ -8,8 +8,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from database import create_db_and_tables, seed_default_agent
+from database import create_db_and_tables, seed_initial_data
 from routes import agents, campaigns, prospects, calls, stats, webhook, settings
+from routes import auth, admin
 from routes import webhook as webhook_module
 
 logging.basicConfig(level=logging.INFO)
@@ -50,7 +51,7 @@ webhook_module.ws_manager = ws_manager
 async def lifespan(app: FastAPI):
     try:
         create_db_and_tables()
-        seed_default_agent()
+        seed_initial_data()
         logger.info("Database initialized")
     except Exception as e:
         logger.error(f"Database initialization error: {e}")
@@ -67,6 +68,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
+app.include_router(admin.router)
 app.include_router(agents.router)
 app.include_router(campaigns.router)
 app.include_router(prospects.router)

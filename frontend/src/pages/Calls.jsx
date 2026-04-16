@@ -59,7 +59,7 @@ export default function Calls() {
         <table className="w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              {['Prospecto', 'Empresa', 'Teléfono', 'Outcome', 'Sentimiento', 'Duración', 'Fecha'].map(h => (
+              {['Prospecto', 'Empresa', 'Teléfono', 'Tipo', 'Outcome', 'Sentimiento', 'Duración', 'Fecha'].map(h => (
                 <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
               ))}
             </tr>
@@ -74,6 +74,12 @@ export default function Calls() {
                 <td className="px-6 py-3 font-medium text-gray-900">{call.prospect_name || '—'}</td>
                 <td className="px-6 py-3 text-gray-500">{call.prospect_company || '—'}</td>
                 <td className="px-6 py-3 text-gray-700 font-mono text-xs">{call.prospect_phone || '—'}</td>
+                <td className="px-6 py-3">
+                  {call.call_type === 'inbound'
+                    ? <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full font-medium">Entrante</span>
+                    : <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full font-medium">Saliente</span>
+                  }
+                </td>
                 <td className="px-6 py-3"><StatusBadge status={call.outcome} /></td>
                 <td className="px-6 py-3 text-gray-600">
                   {call.sentiment ? `${SENTIMENT_EMOJI[call.sentiment] || ''} ${call.sentiment}` : '—'}
@@ -87,7 +93,7 @@ export default function Calls() {
               </tr>
             ))}
             {calls.length === 0 && (
-              <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No hay llamadas registradas</td></tr>
+              <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-400">No hay llamadas registradas</td></tr>
             )}
           </tbody>
         </table>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PencilIcon, TrashIcon, StarIcon, ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, TrashIcon, StarIcon, ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon, PhoneArrowDownLeftIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { getAgents, deleteAgent, setDefaultAgent, syncAgent } from '../api/client'
 import AgentFormModal from '../components/AgentFormModal'
@@ -61,6 +61,11 @@ export default function Agents() {
                   ) : (
                     <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-700 text-xs font-semibold rounded-full">
                       <ExclamationTriangleIcon className="w-3 h-3" /> Sin sincronizar
+                    </span>
+                  )}
+                  {agent.inbound_enabled && (
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full">
+                      <PhoneArrowDownLeftIcon className="w-3 h-3" /> Entrante activo
                     </span>
                   )}
                 </div>

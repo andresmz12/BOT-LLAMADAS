@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from database import get_session
-from models import Call, Campaign, Prospect, AgentConfig
+from models import Call, Campaign, Prospect, AgentConfig, User, Organization
 from services import retell_client
+from routes.auth import get_current_user, require_write_access
 
 router = APIRouter(prefix="/calls", tags=["calls"])
 
@@ -14,12 +15,19 @@ class DemoCallRequest(BaseModel):
 
 
 @router.post("/demo")
-async def demo_call(req: DemoCallRequest, session: Session = Depends(get_session)):
+async def demo_call(
+    req: DemoCallRequest,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
     agent = session.get(AgentConfig, req.agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agente no encontrado")
 
-    # Find or create a persistent demo campaign for this agent
+    org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
+    api_key = (org.retell_api_key if org else "") or ""
+    from_number = (org.retell_phone_number if org else "") or ""
+
     demo_campaign = session.exec(
         select(Campaign).where(
             (Campaign.name == "__demo__") & (Campaign.agent_config_id == agent.id)
@@ -31,28 +39,29 @@ async def demo_call(req: DemoCallRequest, session: Session = Depends(get_session
             description="Campaña de llamadas demo",
             status="draft",
             agent_config_id=agent.id,
+            organization_id=current_user.organization_id,
         )
         session.add(demo_campaign)
         session.commit()
         session.refresh(demo_campaign)
 
-    # Create a temporary prospect for this demo call
     prospect = Prospect(
         campaign_id=demo_campaign.id,
         name="Demo",
         phone=req.phone,
         company="Demo",
+        organization_id=current_user.organization_id,
     )
     session.add(prospect)
     session.commit()
     session.refresh(prospect)
 
-    # Create the call record
     call = Call(
         prospect_id=prospect.id,
         campaign_id=demo_campaign.id,
         status="initiated",
         is_demo=True,
+        organization_id=current_user.organization_id,
     )
     session.add(call)
     session.commit()
@@ -63,6 +72,8 @@ async def demo_call(req: DemoCallRequest, session: Session = Depends(get_session
             req.phone, agent,
             prospect_name="Demo",
             prospect_company="Demo",
+            api_key=api_key,
+            from_number=from_number,
         )
         call.vapi_call_id = result.get("call_id", "")
         call.status = "in-progress"
@@ -80,9 +91,12 @@ async def demo_call(req: DemoCallRequest, session: Session = Depends(get_session
 def list_calls(
     campaign_id: int | None = None,
     outcome: str | None = None,
+    current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
     query = select(Call)
+    if current_user.role != "superadmin":
+        query = query.where(Call.organization_id == current_user.organization_id)
     if campaign_id:
         query = query.where(Call.campaign_id == campaign_id)
     if outcome:
@@ -100,10 +114,16 @@ def list_calls(
 
 
 @router.get("/{call_id}")
-def get_call(call_id: int, session: Session = Depends(get_session)):
+def get_call(
+    call_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
     call = session.get(Call, call_id)
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
+    if current_user.role != "superadmin" and call.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
     d = call.dict()
     if call.prospect:
         d["prospect_name"] = call.prospect.name

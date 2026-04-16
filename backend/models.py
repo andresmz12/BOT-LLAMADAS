@@ -1,7 +1,33 @@
 from typing import Optional, List
 from datetime import datetime
 from sqlmodel import SQLModel, Field, Relationship
-import json
+
+
+class Organization(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    logo_url: Optional[str] = None
+    plan: str = Field(default="basic")  # free/basic/pro
+    retell_api_key: str = Field(default="")
+    retell_phone_number: str = Field(default="")
+    anthropic_api_key: str = Field(default="")
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    users: List["User"] = Relationship(back_populates="organization")
+
+
+class User(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    email: str = Field(unique=True)
+    password_hash: str
+    full_name: str
+    role: str = Field(default="agent")  # superadmin/admin/agent/viewer
+    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    organization: Optional[Organization] = Relationship(back_populates="users")
 
 
 class AgentConfig(SQLModel, table=True):
@@ -22,6 +48,8 @@ class AgentConfig(SQLModel, table=True):
     first_message_override: Optional[str] = None
     voicemail_message: Optional[str] = None
     temperature: float = Field(default=0.4)
+    inbound_enabled: bool = Field(default=False)
+    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
 
     campaigns: List["Campaign"] = Relationship(back_populates="agent_config")
 
@@ -39,6 +67,7 @@ class Campaign(SQLModel, table=True):
     interested: int = Field(default=0)
     appointments_scheduled: int = Field(default=0)
     failed: int = Field(default=0)
+    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
 
     agent_config: Optional[AgentConfig] = Relationship(back_populates="campaigns")
     prospects: List["Prospect"] = Relationship(back_populates="campaign")
@@ -51,10 +80,11 @@ class Prospect(SQLModel, table=True):
     name: str
     phone: str
     company: Optional[str] = None
-    status: str = Field(default="pending")  # pending/calling/answered/voicemail/failed/do_not_call
+    status: str = Field(default="pending")
     call_attempts: int = Field(default=0)
     last_called_at: Optional[datetime] = None
     notes: Optional[str] = None
+    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
 
     campaign: Optional[Campaign] = Relationship(back_populates="prospects")
     calls: List["Call"] = Relationship(back_populates="prospect")
@@ -62,24 +92,26 @@ class Prospect(SQLModel, table=True):
 
 class Call(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    prospect_id: int = Field(foreign_key="prospect.id")
-    campaign_id: int = Field(foreign_key="campaign.id")
+    prospect_id: Optional[int] = Field(default=None, foreign_key="prospect.id")
+    campaign_id: Optional[int] = Field(default=None, foreign_key="campaign.id")
     vapi_call_id: str = Field(default="")
     status: str = Field(default="initiated")
+    call_type: str = Field(default="outbound")  # outbound/inbound
     duration_seconds: Optional[int] = None
     recording_url: Optional[str] = None
     started_at: datetime = Field(default_factory=datetime.utcnow)
     ended_at: Optional[datetime] = None
     raw_transcript: Optional[str] = None
-    client_said: Optional[str] = Field(default="[]")   # JSON string
-    agent_said: Optional[str] = Field(default="[]")    # JSON string
+    client_said: Optional[str] = Field(default="[]")
+    agent_said: Optional[str] = Field(default="[]")
     outcome: Optional[str] = None
-    services_mentioned: Optional[str] = Field(default="[]")  # JSON string
+    services_mentioned: Optional[str] = Field(default="[]")
     sentiment: Optional[str] = None
     appointment_scheduled: bool = Field(default=False)
     appointment_date: Optional[datetime] = None
     notes: Optional[str] = None
     is_demo: bool = Field(default=False)
+    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
 
     prospect: Optional[Prospect] = Relationship(back_populates="calls")
     campaign: Optional[Campaign] = Relationship(back_populates="calls")
