@@ -1,16 +1,23 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { login, getMe } from '../api/client'
+import api from '../api/client'
 
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [needsSetup, setNeedsSetup] = useState(false)
+  const [setupDone, setSetupDone] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
     if (localStorage.getItem('token')) navigate('/', { replace: true })
+    // Check if system needs initial setup
+    api.get('/auth/status').then(r => {
+      if (!r.data.initialized) setNeedsSetup(true)
+    }).catch(() => {})
   }, [])
 
   const submit = async (e) => {
@@ -29,6 +36,21 @@ export default function Login() {
     }
   }
 
+  const handleSetup = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      await api.post('/auth/setup')
+      setNeedsSetup(false)
+      setSetupDone(true)
+      setEmail('admin@ismconsulting.com')
+    } catch (err) {
+      setError(err.response?.data?.detail || 'Error al configurar')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
@@ -39,6 +61,26 @@ export default function Login() {
           <h1 className="text-2xl font-bold text-gray-900">Voice Agent</h1>
           <p className="text-gray-500 text-sm mt-1">ISM Consulting Services</p>
         </div>
+
+        {needsSetup && (
+          <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+            <p className="font-semibold mb-2">Sistema no inicializado</p>
+            <p className="mb-3">No hay usuarios configurados. Haz clic para crear el administrador inicial.</p>
+            <button
+              onClick={handleSetup}
+              disabled={loading}
+              className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg text-sm disabled:opacity-50"
+            >
+              {loading ? 'Configurando...' : 'Inicializar sistema'}
+            </button>
+          </div>
+        )}
+
+        {setupDone && (
+          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
+            Sistema inicializado. Usa la contraseña: <strong>ISMadmin2024!</strong>
+          </div>
+        )}
 
         <form onSubmit={submit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-4">
           <div>

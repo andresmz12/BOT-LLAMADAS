@@ -1,22 +1,31 @@
 import os
+import hmac
+import hashlib
+import base64
+import jwt
 from datetime import datetime, timedelta
 from typing import Optional
-from jose import JWTError, jwt
-from passlib.context import CryptContext
 
 SECRET_KEY = os.getenv("JWT_SECRET", "dev-secret-change-in-production-ism-2024")
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 24
-
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+_ITERATIONS = 200_000
 
 
 def hash_password(password: str) -> str:
-    return pwd_context.hash(password)
+    salt = os.urandom(32)
+    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, _ITERATIONS)
+    return base64.b64encode(salt + key).decode("utf-8")
 
 
-def verify_password(plain: str, hashed: str) -> bool:
-    return pwd_context.verify(plain, hashed)
+def verify_password(plain: str, stored: str) -> bool:
+    try:
+        data = base64.b64decode(stored.encode("utf-8"))
+        salt, key = data[:32], data[32:]
+        new_key = hashlib.pbkdf2_hmac("sha256", plain.encode("utf-8"), salt, _ITERATIONS)
+        return hmac.compare_digest(key, new_key)
+    except Exception:
+        return False
 
 
 def create_token(user_id: int, role: str, org_id: Optional[int]) -> str:
@@ -32,7 +41,6 @@ def create_token(user_id: int, role: str, org_id: Optional[int]) -> str:
 
 def decode_token(token: str) -> dict:
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload
-    except JWTError as e:
+        return jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except jwt.PyJWTError as e:
         raise ValueError(f"Token inválido: {e}")

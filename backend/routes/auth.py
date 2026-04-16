@@ -1,3 +1,4 @@
+import os
 import logging
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -81,3 +82,45 @@ def me(
     result = user.dict(exclude={"password_hash"})
     result["organization_name"] = org.name if org else ""
     return result
+
+
+@router.get("/status")
+def status(session: Session = Depends(get_session)):
+    """Public: check if system has been initialized (any users exist)."""
+    user_count = len(session.exec(select(User)).all())
+    return {"initialized": user_count > 0, "users": user_count}
+
+
+@router.post("/setup")
+def setup(session: Session = Depends(get_session)):
+    """Public bootstrap — only works if NO users exist yet."""
+    existing = session.exec(select(User)).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Sistema ya inicializado")
+
+    from services.auth import hash_password
+
+    org = session.exec(select(Organization)).first()
+    if not org:
+        org = Organization(
+            name="ISM Consulting Services",
+            plan="pro",
+            retell_api_key=os.getenv("RETELL_API_KEY", ""),
+            retell_phone_number=os.getenv("RETELL_PHONE_NUMBER", ""),
+            anthropic_api_key=os.getenv("ANTHROPIC_API_KEY", ""),
+        )
+        session.add(org)
+        session.commit()
+        session.refresh(org)
+
+    admin = User(
+        email="admin@ismconsulting.com",
+        password_hash=hash_password("ISMadmin2024!"),
+        full_name="Super Admin",
+        role="superadmin",
+        organization_id=org.id,
+    )
+    session.add(admin)
+    session.commit()
+    logger.info("Bootstrap: superadmin created via /auth/setup")
+    return {"ok": True, "email": "admin@ismconsulting.com"}
