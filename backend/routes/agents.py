@@ -23,11 +23,17 @@ class AgentUpdate(BaseModel):
     max_call_duration: Optional[int] = None
     is_default: Optional[bool] = None
     first_message_override: Optional[str] = None
+    outbound_system_prompt: Optional[str] = None
+    outbound_first_message: Optional[str] = None
     voicemail_message: Optional[str] = None
     temperature: Optional[float] = None
     retell_agent_id: Optional[str] = None
     retell_llm_id: Optional[str] = None
     inbound_enabled: Optional[bool] = None
+    inbound_system_prompt: Optional[str] = None
+    inbound_first_message: Optional[str] = None
+    inbound_retell_agent_id: Optional[str] = None
+    inbound_retell_llm_id: Optional[str] = None
 
 
 @router.post("")
@@ -115,15 +121,19 @@ async def sync_agent(
     logger.info(f"POST /agents/{agent_id}/sync — Retell sync for '{agent.name}'")
     retell_error = None
     try:
-        agent_id_retell, llm_id = await retell_client.sync_to_retell(
+        out_agent_id, out_llm_id, in_agent_id, in_llm_id = await retell_client.sync_to_retell(
             agent, api_key=api_key, phone_number=phone_number
         )
-        agent.retell_agent_id = agent_id_retell
-        agent.retell_llm_id = llm_id
+        agent.retell_agent_id = out_agent_id
+        agent.retell_llm_id = out_llm_id
+        if in_agent_id:
+            agent.inbound_retell_agent_id = in_agent_id
+        if in_llm_id:
+            agent.inbound_retell_llm_id = in_llm_id
         session.add(agent)
         session.commit()
         session.refresh(agent)
-        logger.info(f"POST /agents/{agent_id}/sync — OK agent_id={agent_id_retell} llm_id={llm_id}")
+        logger.info(f"POST /agents/{agent_id}/sync — OK out={out_agent_id} in={in_agent_id}")
     except Exception as e:
         retell_error = str(e)
         logger.error(f"POST /agents/{agent_id}/sync — error: {retell_error}")

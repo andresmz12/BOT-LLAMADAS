@@ -48,7 +48,13 @@ class AgentConfig(SQLModel, table=True):
     first_message_override: Optional[str] = None
     voicemail_message: Optional[str] = None
     temperature: float = Field(default=0.4)
+    outbound_system_prompt: Optional[str] = None
+    outbound_first_message: Optional[str] = None
     inbound_enabled: bool = Field(default=False)
+    inbound_system_prompt: Optional[str] = None
+    inbound_first_message: Optional[str] = None
+    inbound_retell_agent_id: Optional[str] = None
+    inbound_retell_llm_id: Optional[str] = None
     organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
 
     campaigns: List["Campaign"] = Relationship(back_populates="agent_config")

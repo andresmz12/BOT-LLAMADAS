@@ -9,7 +9,6 @@ RETELL_API_URL = "https://api.retellai.com"
 
 
 def _get_credentials(organization_id: Optional[int] = None) -> tuple[str, str]:
-    """Returns (api_key, phone_number). Reads from org if provided, else env vars."""
     api_key = os.getenv("RETELL_API_KEY", "")
     phone_number = os.getenv("RETELL_PHONE_NUMBER", "")
 
@@ -27,7 +26,6 @@ def _get_credentials(organization_id: Optional[int] = None) -> tuple[str, str]:
 
 
 async def set_inbound_agent(phone_number: str, agent_id: Optional[str], api_key: str):
-    """PATCH /update-phone-number/{phone} to set or clear inbound_agent_id."""
     if not phone_number or not api_key:
         return
     headers = {"Authorization": f"Bearer {api_key}"}
@@ -42,12 +40,66 @@ async def set_inbound_agent(phone_number: str, agent_id: Optional[str], api_key:
             raise ValueError(f"Retell phone update {resp.status_code}: {resp.text}")
 
 
+async def _sync_llm_and_agent(
+    client: httpx.AsyncClient,
+    headers: dict,
+    llm_id: Optional[str],
+    agent_id: Optional[str],
+    agent_label: str,
+    llm_payload: dict,
+    agent_payload: dict,
+) -> tuple[str, str]:
+    """Creates or updates a Retell LLM + Agent pair. Returns (agent_id, llm_id)."""
+    if llm_id:
+        url = f"{RETELL_API_URL}/update-retell-llm/{llm_id}"
+        logger.info(f"[Retell] PATCH {url} ({agent_label}) prompt_len={len(llm_payload.get('general_prompt',''))}")
+        resp = await client.patch(url, json=llm_payload, headers=headers)
+    else:
+        url = f"{RETELL_API_URL}/create-retell-llm"
+        logger.info(f"[Retell] POST {url} ({agent_label})")
+        resp = await client.post(url, json=llm_payload, headers=headers)
+
+    logger.info(f"[Retell] LLM {agent_label} → {resp.status_code}: {resp.text[:300]}")
+    if resp.status_code >= 400:
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = resp.text
+        raise ValueError(f"Retell LLM error ({agent_label}) {resp.status_code}: {detail}")
+
+    new_llm_id = resp.json()["llm_id"]
+
+    agent_payload["response_engine"] = {"type": "retell-llm", "llm_id": new_llm_id}
+
+    if agent_id:
+        url = f"{RETELL_API_URL}/update-agent/{agent_id}"
+        logger.info(f"[Retell] PATCH {url} ({agent_label})")
+        resp = await client.patch(url, json=agent_payload, headers=headers)
+    else:
+        url = f"{RETELL_API_URL}/create-agent"
+        logger.info(f"[Retell] POST {url} ({agent_label})")
+        resp = await client.post(url, json=agent_payload, headers=headers)
+
+    logger.info(f"[Retell] Agent {agent_label} → {resp.status_code}: {resp.text[:300]}")
+    if resp.status_code >= 400:
+        try:
+            detail = resp.json()
+        except Exception:
+            detail = resp.text
+        raise ValueError(f"Retell Agent error ({agent_label}) {resp.status_code}: {detail}")
+
+    new_agent_id = resp.json()["agent_id"]
+    logger.info(f"[Retell] {agent_label} synced: agent={new_agent_id} llm={new_llm_id}")
+    return new_agent_id, new_llm_id
+
+
 async def sync_to_retell(
     agent_config: AgentConfig,
     api_key: str = "",
     phone_number: str = "",
-) -> tuple[str, str]:
-    """Creates or updates a Retell LLM + Agent. Returns (retell_agent_id, retell_llm_id)."""
+) -> tuple[str, str, Optional[str], Optional[str]]:
+    """Creates or updates Retell agents for outbound (and optionally inbound).
+    Returns (outbound_agent_id, outbound_llm_id, inbound_agent_id, inbound_llm_id)."""
     from services.call_orchestrator import build_system_prompt
 
     if not api_key or not phone_number:
@@ -59,92 +111,92 @@ async def sync_to_retell(
         raise ValueError("Retell API key no configurada. Ve a Configuración.")
 
     headers = {"Authorization": f"Bearer {api_key}"}
-
-    if agent_config.first_message_override:
-        begin_message = agent_config.first_message_override
-    else:
-        begin_message = (
-            f"Hola, buenos días. Habla {agent_config.agent_name} de {agent_config.company_name}, "
-            "¿estoy hablando con {{customer_name}}?"
-        )
-
-    llm_payload = {
-        "model": "claude-4.6-sonnet",
-        "general_prompt": build_system_prompt(agent_config),
-        "begin_message": begin_message,
-        "general_tools": [],
-    }
-
     voice_id = agent_config.voice_id or "retell-Andrea"
 
+    base_agent_settings = {
+        "voice_id": voice_id,
+        "language": "es-ES",
+        "responsiveness": 1,
+        "interruption_sensitivity": 1,
+        "enable_backchannel": True,
+        "ambient_sound": "coffee-shop",
+    }
+
+    # ── OUTBOUND ─────────────────────────────────────────────────
+    outbound_prompt = (
+        agent_config.outbound_system_prompt
+        or build_system_prompt(agent_config)
+    )
+    outbound_begin = (
+        agent_config.outbound_first_message
+        or agent_config.first_message_override
+        or (
+            f"Hola, buenos días. Habla {agent_config.agent_name} de "
+            f"{agent_config.company_name}, ¿estoy hablando con {{{{customer_name}}}}?"
+        )
+    )
+
+    outbound_llm_payload = {
+        "model": "claude-4.6-sonnet",
+        "general_prompt": outbound_prompt,
+        "begin_message": outbound_begin,
+        "general_tools": [],
+    }
+    outbound_agent_payload = {
+        "agent_name": agent_config.name,
+        **base_agent_settings,
+    }
+
     async with httpx.AsyncClient(timeout=30) as client:
-        # Step 1: Create or update the Retell LLM
-        if agent_config.retell_llm_id:
-            llm_url = f"{RETELL_API_URL}/update-retell-llm/{agent_config.retell_llm_id}"
-            logger.info(f"[Retell] PATCH {llm_url} payload={llm_payload}")
-            resp = await client.patch(llm_url, json=llm_payload, headers=headers)
-        else:
-            llm_url = f"{RETELL_API_URL}/create-retell-llm"
-            logger.info(f"[Retell] POST {llm_url} payload={llm_payload}")
-            resp = await client.post(llm_url, json=llm_payload, headers=headers)
+        outbound_agent_id, outbound_llm_id = await _sync_llm_and_agent(
+            client, headers,
+            agent_config.retell_llm_id, agent_config.retell_agent_id,
+            "outbound",
+            outbound_llm_payload, outbound_agent_payload,
+        )
 
-        logger.info(f"[Retell] LLM response {resp.status_code}: {resp.text}")
+        # ── INBOUND ──────────────────────────────────────────────
+        inbound_agent_id: Optional[str] = None
+        inbound_llm_id: Optional[str] = None
 
-        if resp.status_code >= 400:
-            try:
-                detail = resp.json()
-            except Exception:
-                detail = resp.text
-            raise ValueError(f"Retell LLM error {resp.status_code}: {detail}")
+        if agent_config.inbound_enabled:
+            inbound_prompt = agent_config.inbound_system_prompt or (
+                f"Eres {agent_config.agent_name}, asesora virtual de "
+                f"{agent_config.company_name}. Atiendes llamadas entrantes. "
+                f"{agent_config.instructions or ''}"
+            )
+            inbound_begin = agent_config.inbound_first_message or (
+                f"Hola, gracias por llamar a {agent_config.company_name}. "
+                f"Mi nombre es {agent_config.agent_name}, ¿en qué le puedo ayudar hoy?"
+            )
 
-        llm_id = resp.json()["llm_id"]
-        logger.info(f"[Retell] LLM synced: {llm_id}")
+            inbound_llm_payload = {
+                "model": "claude-4.6-sonnet",
+                "general_prompt": inbound_prompt,
+                "begin_message": inbound_begin,
+                "general_tools": [],
+            }
+            inbound_agent_payload = {
+                "agent_name": f"{agent_config.name} (Entrante)",
+                **base_agent_settings,
+            }
 
-        # Step 2: Create or update the Retell Agent
-        agent_payload = {
-            "agent_name": agent_config.name,
-            "response_engine": {
-                "type": "retell-llm",
-                "llm_id": llm_id,
-            },
-            "voice_id": voice_id,
-            "language": "es-ES",
-            "responsiveness": 1,
-            "interruption_sensitivity": 1,
-            "enable_backchannel": True,
-            "ambient_sound": "coffee-shop",
-        }
+            inbound_agent_id, inbound_llm_id = await _sync_llm_and_agent(
+                client, headers,
+                agent_config.inbound_retell_llm_id, agent_config.inbound_retell_agent_id,
+                "inbound",
+                inbound_llm_payload, inbound_agent_payload,
+            )
 
-        if agent_config.retell_agent_id:
-            agent_url = f"{RETELL_API_URL}/update-agent/{agent_config.retell_agent_id}"
-            logger.info(f"[Retell] PATCH {agent_url} payload={agent_payload}")
-            resp = await client.patch(agent_url, json=agent_payload, headers=headers)
-        else:
-            agent_url = f"{RETELL_API_URL}/create-agent"
-            logger.info(f"[Retell] POST {agent_url} payload={agent_payload}")
-            resp = await client.post(agent_url, json=agent_payload, headers=headers)
-
-        logger.info(f"[Retell] Agent response {resp.status_code}: {resp.text}")
-
-        if resp.status_code >= 400:
-            try:
-                detail = resp.json()
-            except Exception:
-                detail = resp.text
-            raise ValueError(f"Retell Agent error {resp.status_code}: {detail}")
-
-        agent_id = resp.json()["agent_id"]
-        logger.info(f"[Retell] Agent synced: {agent_id}")
-
-        # Step 3: Configure inbound if phone_number available
+        # ── PHONE NUMBER ─────────────────────────────────────────
         if phone_number:
-            inbound_agent = agent_id if agent_config.inbound_enabled else None
+            phone_inbound_id = inbound_agent_id if agent_config.inbound_enabled else None
             try:
-                await set_inbound_agent(phone_number, inbound_agent, api_key)
+                await set_inbound_agent(phone_number, phone_inbound_id, api_key)
             except Exception as e:
                 logger.warning(f"[Retell] set_inbound_agent failed (non-fatal): {e}")
 
-        return agent_id, llm_id
+        return outbound_agent_id, outbound_llm_id, inbound_agent_id, inbound_llm_id
 
 
 async def create_call(
