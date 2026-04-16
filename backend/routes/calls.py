@@ -4,7 +4,6 @@ from pydantic import BaseModel
 from database import get_session
 from models import Call, Campaign, Prospect, AgentConfig
 from services import retell_client
-from services.call_orchestrator import build_system_prompt
 
 router = APIRouter(prefix="/calls", tags=["calls"])
 

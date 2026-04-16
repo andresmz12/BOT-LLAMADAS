@@ -129,6 +129,12 @@ async def create_call(
             "Ve a Agentes y pulsa 'Sincronizar'."
         )
 
+    if not agent_config.voice_id:
+        raise ValueError(
+            f"El agente '{agent_config.name}' no tiene voz configurada. "
+            "Ve a Agentes, edítalo y selecciona una voz."
+        )
+
     payload = {
         "from_number": phone_number,
         "to_number": phone,

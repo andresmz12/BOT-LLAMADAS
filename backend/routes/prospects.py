@@ -101,8 +101,7 @@ def update_prospect(prospect_id: int, data: Prospect, session: Session = Depends
 
 @router.post("/{prospect_id}/call")
 async def call_prospect(prospect_id: int, session: Session = Depends(get_session)):
-    from services import vapi_client
-    from services.call_orchestrator import build_system_prompt
+    from services import retell_client
 
     prospect = session.get(Prospect, prospect_id)
     if not prospect:
@@ -122,8 +121,12 @@ async def call_prospect(prospect_id: int, session: Session = Depends(get_session
     session.refresh(call)
 
     try:
-        result = await vapi_client.create_call(prospect.phone, build_system_prompt(agent), agent)
-        call.vapi_call_id = result.get("id", "")
+        result = await retell_client.create_call(
+            prospect.phone, agent,
+            prospect_name=prospect.name,
+            prospect_company=prospect.company or "",
+        )
+        call.vapi_call_id = result.get("call_id", "")
         call.status = "in-progress"
         prospect.status = "calling"
         prospect.call_attempts += 1
@@ -131,7 +134,7 @@ async def call_prospect(prospect_id: int, session: Session = Depends(get_session
         session.add(call)
         session.add(prospect)
         session.commit()
-        return {"call_id": call.id, "vapi_call_id": call.vapi_call_id, "status": "in-progress"}
+        return {"call_id": call.id, "retell_call_id": call.vapi_call_id, "status": "in-progress"}
     except Exception as e:
         call.status = "failed"
         session.add(call)
