@@ -18,7 +18,8 @@ export default function Login() {
     setLoading(true)
     setError('')
     try {
-      await login(email, password)
+      const data = await login(email, password)
+      localStorage.setItem('token', data.access_token)
       const user = await getMe()
       localStorage.setItem('user', JSON.stringify(user))
       navigate('/', { replace: true })
