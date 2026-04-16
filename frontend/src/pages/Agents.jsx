@@ -74,7 +74,7 @@ export default function Agents() {
             <p className="text-xs text-gray-500 mb-4">
               <span className="bg-gray-100 px-2 py-0.5 rounded-full">{agent.language}</span>
               {' • '}
-              <span className="bg-gray-100 px-2 py-0.5 rounded-full">{agent.voice_id || '11labs-Valentina'}</span>
+              <span className="bg-gray-100 px-2 py-0.5 rounded-full">{agent.voice_id || 'retell-Andrea'}</span>
               {' • '}max {agent.max_call_duration}s
             </p>
 

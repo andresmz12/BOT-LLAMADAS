@@ -81,7 +81,7 @@ async def sync_to_retell(agent_config: AgentConfig) -> tuple[str, str]:
                 "type": "retell-llm",
                 "llm_id": llm_id,
             },
-            "voice_id": agent_config.voice_id or "11labs-Valentina",
+            "voice_id": agent_config.voice_id,
             "language": "es-ES",
             "responsiveness": 1,
             "interruption_sensitivity": 1,

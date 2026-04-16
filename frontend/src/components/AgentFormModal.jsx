@@ -3,11 +3,14 @@ import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/re
 import { createAgent, updateAgent, syncAgent } from '../api/client'
 
 const VOICES = [
-  { value: '11labs-Valentina', label: 'Valentina (ES latina femenina — recomendada)' },
-  { value: '11labs-Adriana', label: 'Adriana (ES femenina)' },
-  { value: '11labs-Sofia', label: 'Sofia (ES femenina)' },
-  { value: '11labs-Adrian', label: 'Adrian (ES masculino)' },
-  { value: '11labs-Miguel', label: 'Miguel (ES latino masculino)' },
+  { value: 'retell-Andrea',    label: 'Andrea (Mexicana · Adulta)' },
+  { value: 'retell-Claudia',   label: 'Claudia (Mexicana · Adulta)' },
+  { value: 'retell-Gaby',      label: 'Gaby (Mexicana · Joven)' },
+  { value: 'retell-Alejandro', label: 'Alejandro (Mexicano · Joven · Masculino)' },
+  { value: 'retell-Brynne',    label: 'Brynne (Americana · Adulta)' },
+  { value: 'retell-Chloe',     label: 'Chloe (Americana · Joven)' },
+  { value: 'retell-Grace',     label: 'Grace (Americana · Adulta)' },
+  { value: 'retell-Rita',      label: 'Rita (Americana · Joven)' },
 ]
 
 const TEMPERATURES = [
@@ -20,7 +23,7 @@ const EMPTY = {
   name: '', agent_name: '', company_name: '', company_info: '',
   services: '', instructions: '', language: 'español',
   max_call_duration: 180, is_default: false,
-  voice_id: '11labs-Valentina',
+  voice_id: 'retell-Andrea',
   first_message_override: '',
   voicemail_message: '',
   temperature: 0.4,
