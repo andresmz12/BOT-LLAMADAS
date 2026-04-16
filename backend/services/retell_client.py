@@ -45,34 +45,36 @@ async def sync_to_retell(agent_config: AgentConfig) -> tuple[str, str]:
         )
 
     llm_payload = {
-        "model": "claude-4.6-sonnet",
+        "model": "claude-3-5-sonnet-20241022",
         "general_prompt": build_system_prompt(agent_config),
         "begin_message": begin_message,
         "general_tools": [],
     }
 
+    voice_id = agent_config.voice_id or "retell-Andrea"
+
     async with httpx.AsyncClient(timeout=30) as client:
         # Step 1: Create or update the Retell LLM
         if agent_config.retell_llm_id:
-            resp = await client.patch(
-                f"{RETELL_API_URL}/update-retell-llm/{agent_config.retell_llm_id}",
-                json=llm_payload, headers=headers,
-            )
+            llm_url = f"{RETELL_API_URL}/update-retell-llm/{agent_config.retell_llm_id}"
+            logger.info(f"[Retell] PATCH {llm_url} payload={llm_payload}")
+            resp = await client.patch(llm_url, json=llm_payload, headers=headers)
         else:
-            resp = await client.post(
-                f"{RETELL_API_URL}/create-retell-llm",
-                json=llm_payload, headers=headers,
-            )
+            llm_url = f"{RETELL_API_URL}/create-retell-llm"
+            logger.info(f"[Retell] POST {llm_url} payload={llm_payload}")
+            resp = await client.post(llm_url, json=llm_payload, headers=headers)
+
+        logger.info(f"[Retell] LLM response {resp.status_code}: {resp.text}")
 
         if resp.status_code >= 400:
             try:
                 detail = resp.json()
             except Exception:
                 detail = resp.text
-            raise ValueError(f"Retell LLM {resp.status_code}: {detail}")
+            raise ValueError(f"Retell LLM error {resp.status_code}: {detail}")
 
         llm_id = resp.json()["llm_id"]
-        logger.info(f"Retell LLM synced: {llm_id}")
+        logger.info(f"[Retell] LLM synced: {llm_id}")
 
         # Step 2: Create or update the Retell Agent
         agent_payload = {
@@ -81,7 +83,7 @@ async def sync_to_retell(agent_config: AgentConfig) -> tuple[str, str]:
                 "type": "retell-llm",
                 "llm_id": llm_id,
             },
-            "voice_id": agent_config.voice_id,
+            "voice_id": voice_id,
             "language": "es-ES",
             "responsiveness": 1,
             "interruption_sensitivity": 1,
@@ -90,25 +92,25 @@ async def sync_to_retell(agent_config: AgentConfig) -> tuple[str, str]:
         }
 
         if agent_config.retell_agent_id:
-            resp = await client.patch(
-                f"{RETELL_API_URL}/update-agent/{agent_config.retell_agent_id}",
-                json=agent_payload, headers=headers,
-            )
+            agent_url = f"{RETELL_API_URL}/update-agent/{agent_config.retell_agent_id}"
+            logger.info(f"[Retell] PATCH {agent_url} payload={agent_payload}")
+            resp = await client.patch(agent_url, json=agent_payload, headers=headers)
         else:
-            resp = await client.post(
-                f"{RETELL_API_URL}/create-agent",
-                json=agent_payload, headers=headers,
-            )
+            agent_url = f"{RETELL_API_URL}/create-agent"
+            logger.info(f"[Retell] POST {agent_url} payload={agent_payload}")
+            resp = await client.post(agent_url, json=agent_payload, headers=headers)
+
+        logger.info(f"[Retell] Agent response {resp.status_code}: {resp.text}")
 
         if resp.status_code >= 400:
             try:
                 detail = resp.json()
             except Exception:
                 detail = resp.text
-            raise ValueError(f"Retell Agent {resp.status_code}: {detail}")
+            raise ValueError(f"Retell Agent error {resp.status_code}: {detail}")
 
         agent_id = resp.json()["agent_id"]
-        logger.info(f"Retell Agent synced: {agent_id}")
+        logger.info(f"[Retell] Agent synced: {agent_id}")
         return agent_id, llm_id
 
 
