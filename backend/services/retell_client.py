@@ -138,7 +138,7 @@ async def create_call(
     payload = {
         "from_number": phone_number,
         "to_number": phone,
-        "agent_id": agent_config.retell_agent_id,
+        "override_agent_id": agent_config.retell_agent_id,
         "retell_llm_dynamic_variables": {
             "customer_name": prospect_name or "cliente",
             "company_name": prospect_company or "",

@@ -15,10 +15,23 @@ def get_session():
         yield session
 
 
+RETELL_AGENT_ID_DEFAULT = "agent_1499fc3598510000648e68461e"
+RETELL_LLM_ID_DEFAULT = "llm_7bd5d1428d3903644ab5152e681d"
+
+
 def seed_default_agent():
+    retell_agent_id = os.getenv("RETELL_AGENT_ID") or RETELL_AGENT_ID_DEFAULT
+    retell_llm_id = os.getenv("RETELL_LLM_ID") or RETELL_LLM_ID_DEFAULT
+
     with Session(engine) as session:
         existing = session.exec(select(AgentConfig)).first()
         if existing:
+            # Patch retell IDs if not already set
+            if not existing.retell_agent_id or not existing.retell_llm_id:
+                existing.retell_agent_id = retell_agent_id
+                existing.retell_llm_id = retell_llm_id
+                session.add(existing)
+                session.commit()
             return
         agent = AgentConfig(
             name="Isabella - ISM Consulting",
@@ -46,8 +59,8 @@ def seed_default_agent():
                 "agendar una cita de seguimiento con un asesor humano."
             ),
             is_default=True,
-            retell_agent_id=os.getenv("RETELL_AGENT_ID") or None,
-            retell_llm_id=os.getenv("RETELL_LLM_ID") or None,
+            retell_agent_id=retell_agent_id,
+            retell_llm_id=retell_llm_id,
         )
         session.add(agent)
         session.commit()
