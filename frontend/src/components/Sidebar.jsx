@@ -35,14 +35,23 @@ const NAV_BY_ROLE = {
 }
 
 function WaveformIcon({ className }) {
+  // Vertical audio bars matching ZyraVoice logo — tallest in center, tapering outward
+  const bars = [
+    { x: 1.5,  h: 8,  y: 12 },
+    { x: 5.5,  h: 14, y: 9  },
+    { x: 9.5,  h: 22, y: 5  },
+    { x: 13.5, h: 28, y: 2  },
+    { x: 17.5, h: 28, y: 2  },
+    { x: 21.5, h: 22, y: 5  },
+    { x: 25.5, h: 14, y: 9  },
+    { x: 29,   h: 8,  y: 12 },
+  ]
   return (
-    <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="16" cy="16" r="3.5" fill="currentColor" opacity="0.9" />
-      <path d="M16 5 C16 5 16 5 16 5" stroke="none"/>
-      <path d="M9.5 9.5 A9 9 0 0 0 9.5 22.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.7"/>
-      <path d="M22.5 9.5 A9 9 0 0 1 22.5 22.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.7"/>
-      <path d="M5.5 6 A14.5 14.5 0 0 0 5.5 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.4"/>
-      <path d="M26.5 6 A14.5 14.5 0 0 1 26.5 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.4"/>
+    <svg className={className} viewBox="0 0 32 32" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      {bars.map((b, i) => (
+        <rect key={i} x={b.x} y={b.y} width="2" height={b.h} rx="1"
+          opacity={0.4 + (i < 4 ? i : 7 - i) * 0.15} />
+      ))}
     </svg>
   )
 }
