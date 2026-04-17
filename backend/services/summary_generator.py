@@ -34,7 +34,7 @@ async def analyze_transcript(transcript: str, api_key: str = "") -> dict:
     client = AsyncAnthropic(api_key=api_key)
     try:
         message = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": transcript}],

@@ -37,8 +37,12 @@ const NAV_BY_ROLE = {
 function WaveformIcon({ className }) {
   return (
     <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M2 16 Q4 8 6 16 Q8 24 10 16 Q12 8 14 16 Q16 24 18 16 Q20 8 22 16 Q24 24 26 16 Q28 8 30 16"
-        stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="16" cy="16" r="3.5" fill="currentColor" opacity="0.9" />
+      <path d="M16 5 C16 5 16 5 16 5" stroke="none"/>
+      <path d="M9.5 9.5 A9 9 0 0 0 9.5 22.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.7"/>
+      <path d="M22.5 9.5 A9 9 0 0 1 22.5 22.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" opacity="0.7"/>
+      <path d="M5.5 6 A14.5 14.5 0 0 0 5.5 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.4"/>
+      <path d="M26.5 6 A14.5 14.5 0 0 1 26.5 26" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.4"/>
     </svg>
   )
 }
@@ -56,9 +60,12 @@ export default function Sidebar() {
       <div className={`flex items-center ${collapsed ? 'justify-center px-0' : 'gap-2.5 px-5'} py-4 border-b border-z-border min-h-[60px]`}>
         <WaveformIcon className="w-7 h-7 text-z-blue flex-shrink-0" />
         {!collapsed && (
-          <span className="font-black text-lg leading-none">
-            <span className="text-white">Zyra</span><span className="text-z-blue">Voice</span>
-          </span>
+          <>
+            <div className="w-px h-6 bg-z-border mx-1 flex-shrink-0" />
+            <span className="font-black text-lg leading-none tracking-tight">
+              <span className="text-white">Zyra</span><span className="text-z-blue-light">Voice</span>
+            </span>
+          </>
         )}
       </div>
 

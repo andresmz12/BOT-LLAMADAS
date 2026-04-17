@@ -109,6 +109,12 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
   const [form, setForm] = useState({ name: '', description: '', agent_config_id: agents[0]?.id || '' })
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    if (agents.length > 0 && !form.agent_config_id) {
+      setForm(f => ({ ...f, agent_config_id: agents[0].id }))
+    }
+  }, [agents])
+
   const submit = async (e) => {
     e.preventDefault()
     if (!form.agent_config_id) return alert('Selecciona un agente')
