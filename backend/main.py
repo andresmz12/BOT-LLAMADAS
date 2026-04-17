@@ -10,11 +10,13 @@ load_dotenv()
 
 from database import create_db_and_tables, seed_initial_data
 from routes import agents, campaigns, prospects, calls, stats, webhook, settings
-from routes import auth, admin
+from routes import auth, admin, users
 from routes import webhook as webhook_module
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
 
 
 class WebSocketManager:
@@ -58,18 +60,20 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Voice Agent API", lifespan=lifespan)
+app = FastAPI(title="ZyraVoice API", lifespan=lifespan)
 
+_origins = [FRONTEND_URL, "http://localhost:5173", "http://localhost:3000"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
+    allow_origins=_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(users.router)
 app.include_router(agents.router)
 app.include_router(campaigns.router)
 app.include_router(prospects.router)

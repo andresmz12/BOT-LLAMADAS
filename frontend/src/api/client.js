@@ -78,6 +78,12 @@ export const getCallDetail = (id) => api.get(`/calls/${id}`).then(r => r.data)
 export const makeDemoCall = (phone, agentId) =>
   api.post('/calls/demo', { phone, agent_id: agentId }).then(r => r.data)
 
+// Org Users
+export const getOrgUsers = () => api.get('/users').then(r => r.data)
+export const createOrgUser = (data) => api.post('/users', data).then(r => r.data)
+export const updateOrgUser = (id, data) => api.put(`/users/${id}`, data).then(r => r.data)
+export const deactivateOrgUser = (id) => api.delete(`/users/${id}`).then(r => r.data)
+
 // Stats
 export const getStats = () => api.get('/stats').then(r => r.data)
 export const getCampaignStats = (id) => api.get(`/stats/${id}`).then(r => r.data)

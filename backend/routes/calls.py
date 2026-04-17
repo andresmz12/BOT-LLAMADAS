@@ -75,11 +75,11 @@ async def demo_call(
             api_key=api_key,
             from_number=from_number,
         )
-        call.vapi_call_id = result.get("call_id", "")
+        call.retell_call_id = result.get("call_id", "")
         call.status = "in-progress"
         session.add(call)
         session.commit()
-        return {"call_id": call.id, "retell_call_id": call.vapi_call_id, "status": call.status}
+        return {"call_id": call.id, "retell_call_id": call.retell_call_id, "status": call.status}
     except Exception as e:
         call.status = "failed"
         session.add(call)

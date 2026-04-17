@@ -126,7 +126,7 @@ async def _run_campaign_loop(campaign_id: int):
             with Session(engine) as session:
                 call = session.get(Call, call_id)
                 if call:
-                    call.vapi_call_id = retell_call_id
+                    call.retell_call_id = retell_call_id
                     call.status = "in-progress"
                     session.add(call)
                     session.commit()

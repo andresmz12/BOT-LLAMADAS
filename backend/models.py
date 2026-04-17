@@ -100,7 +100,7 @@ class Call(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     prospect_id: Optional[int] = Field(default=None, foreign_key="prospect.id")
     campaign_id: Optional[int] = Field(default=None, foreign_key="campaign.id")
-    vapi_call_id: str = Field(default="")
+    retell_call_id: str = Field(default="")
     status: str = Field(default="initiated")
     call_type: str = Field(default="outbound")  # outbound/inbound
     duration_seconds: Optional[int] = None

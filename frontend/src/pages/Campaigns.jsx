@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PlayIcon, PauseIcon, TrashIcon } from '@heroicons/react/24/outline'
-import { XMarkIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PlayIcon, PauseIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import { getCampaigns, createCampaign, startCampaign, pauseCampaign, deleteCampaign, getAgents } from '../api/client'
 
@@ -35,68 +34,62 @@ export default function Campaigns() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Campañas</h1>
+        <h1 className="text-2xl font-bold text-zyra-text">Campañas</h1>
         <button
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gold hover:bg-gold-dark text-white font-semibold rounded-lg text-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-zyra-blue hover:bg-blue-700 text-white font-semibold rounded-lg text-sm"
         >
           <PlusIcon className="w-4 h-4" /> Nueva Campaña
         </button>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-zyra-card rounded-xl border border-zyra-border overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50">
+          <thead className="bg-[#0F172A]">
             <tr>
               {['Nombre', 'Estado', 'Prospectos', 'Llamadas', 'Interesados', 'Citas', 'Acciones'].map(h => (
-                <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                <th key={h} className="px-6 py-3 text-left text-xs font-medium text-zyra-muted uppercase">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-zyra-border">
             {campaigns.map(c => {
               const pct = c.total_prospects ? Math.round(c.completed_prospects / c.total_prospects * 100) : 0
               return (
-                <tr key={c.id} className="hover:bg-gray-50">
+                <tr key={c.id} className="hover:bg-white/5">
                   <td className="px-6 py-4">
-                    <p className="font-medium text-gray-900">{c.name}</p>
-                    {c.description && <p className="text-xs text-gray-400 mt-0.5">{c.description}</p>}
+                    <p className="font-medium text-zyra-text">{c.name}</p>
+                    {c.description && <p className="text-xs text-zyra-muted mt-0.5">{c.description}</p>}
                   </td>
                   <td className="px-6 py-4"><StatusBadge status={c.status} pulse /></td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      <div className="w-20 bg-gray-100 rounded-full h-1.5">
-                        <div className="bg-gold h-1.5 rounded-full" style={{ width: `${pct}%` }} />
+                      <div className="w-20 bg-zyra-border rounded-full h-1.5">
+                        <div className="bg-zyra-blue h-1.5 rounded-full" style={{ width: `${pct}%` }} />
                       </div>
-                      <span className="text-xs text-gray-500">{c.completed_prospects}/{c.total_prospects}</span>
+                      <span className="text-xs text-zyra-muted">{c.completed_prospects}/{c.total_prospects}</span>
                     </div>
                   </td>
-                  <td className="px-6 py-4 text-gray-700">{c.total_calls}</td>
-                  <td className="px-6 py-4 text-gray-700">{c.interested}</td>
-                  <td className="px-6 py-4 text-gray-700">{c.appointments_scheduled}</td>
+                  <td className="px-6 py-4 text-zyra-text">{c.total_calls}</td>
+                  <td className="px-6 py-4 text-zyra-text">{c.interested}</td>
+                  <td className="px-6 py-4 text-zyra-text">{c.appointments_scheduled}</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       {(c.status === 'draft' || c.status === 'paused') && (
-                        <button
-                          onClick={() => handleStart(c.id)}
-                          className="flex items-center gap-1 px-2.5 py-1 bg-green-50 hover:bg-green-100 text-green-700 text-xs font-medium rounded-lg"
-                        >
+                        <button onClick={() => handleStart(c.id)}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-green-900/40 hover:bg-green-900/60 text-green-400 text-xs font-medium rounded-lg">
                           <PlayIcon className="w-3.5 h-3.5" /> Iniciar
                         </button>
                       )}
                       {c.status === 'running' && (
-                        <button
-                          onClick={() => handlePause(c.id)}
-                          className="flex items-center gap-1 px-2.5 py-1 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 text-xs font-medium rounded-lg"
-                        >
+                        <button onClick={() => handlePause(c.id)}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-yellow-900/40 hover:bg-yellow-900/60 text-yellow-400 text-xs font-medium rounded-lg">
                           <PauseIcon className="w-3.5 h-3.5" /> Pausar
                         </button>
                       )}
                       {c.status === 'draft' && (
-                        <button
-                          onClick={() => handleDelete(c)}
-                          className="flex items-center gap-1 px-2.5 py-1 bg-red-50 hover:bg-red-100 text-red-600 text-xs font-medium rounded-lg"
-                        >
+                        <button onClick={() => handleDelete(c)}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-red-900/40 hover:bg-red-900/60 text-red-400 text-xs font-medium rounded-lg">
                           <TrashIcon className="w-3.5 h-3.5" /> Eliminar
                         </button>
                       )}
@@ -106,7 +99,7 @@ export default function Campaigns() {
               )
             })}
             {campaigns.length === 0 && (
-              <tr><td colSpan={7} className="px-6 py-12 text-center text-gray-400">No hay campañas creadas</td></tr>
+              <tr><td colSpan={7} className="px-6 py-12 text-center text-zyra-muted">No hay campañas creadas</td></tr>
             )}
           </tbody>
         </table>
@@ -142,46 +135,45 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-lg font-bold">Nueva Campaña</h2>
-          <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-gray-400" /></button>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-zyra-card rounded-2xl border border-zyra-border w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-zyra-border">
+          <h2 className="text-lg font-bold text-zyra-text">Nueva Campaña</h2>
+          <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-zyra-muted" /></button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre</label>
+            <label className="block text-sm font-medium text-zyra-muted mb-1">Nombre</label>
             <input
-              required
-              value={form.name}
+              required value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold"
+              className="w-full bg-[#0F172A] border border-zyra-border rounded-lg px-3 py-2 text-sm text-zyra-text focus:outline-none focus:border-zyra-blue"
               placeholder="Campaña Enero 2025"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Descripción (opcional)</label>
+            <label className="block text-sm font-medium text-zyra-muted mb-1">Descripción (opcional)</label>
             <input
               value={form.description}
               onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold"
+              className="w-full bg-[#0F172A] border border-zyra-border rounded-lg px-3 py-2 text-sm text-zyra-text focus:outline-none focus:border-zyra-blue"
               placeholder="Descripción breve"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Agente</label>
+            <label className="block text-sm font-medium text-zyra-muted mb-1">Agente</label>
             <select
               value={form.agent_config_id}
               onChange={e => setForm(f => ({ ...f, agent_config_id: e.target.value }))}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold"
+              className="w-full bg-[#0F172A] border border-zyra-border rounded-lg px-3 py-2 text-sm text-zyra-text focus:outline-none focus:border-zyra-blue"
             >
               {agents.map(a => <option key={a.id} value={a.id}>{a.agent_name} — {a.company_name}</option>)}
             </select>
           </div>
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-zyra-muted hover:text-zyra-text">Cancelar</button>
             <button type="submit" disabled={loading}
-              className="px-6 py-2 bg-gold hover:bg-gold-dark text-white font-semibold rounded-lg text-sm disabled:opacity-50">
+              className="px-6 py-2 bg-zyra-blue hover:bg-blue-700 text-white font-semibold rounded-lg text-sm disabled:opacity-50">
               {loading ? 'Creando...' : 'Crear campaña'}
             </button>
           </div>

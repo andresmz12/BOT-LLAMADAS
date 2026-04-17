@@ -23,7 +23,7 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
 
     logger.info(f"Retell webhook event: {event}, call_id: {retell_call_id}, type: {call_type_retell}")
 
-    call = session.exec(select(Call).where(Call.vapi_call_id == retell_call_id)).first()
+    call = session.exec(select(Call).where(Call.retell_call_id == retell_call_id)).first()
 
     # Handle inbound calls not in DB
     if not call and call_type_retell == "inbound" and event in ("call_started", "call_ended", "call_analyzed"):
@@ -34,7 +34,7 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
         call = Call(
             prospect_id=None,
             campaign_id=None,
-            vapi_call_id=retell_call_id,
+            retell_call_id=retell_call_id,
             status="initiated",
             call_type="inbound",
             organization_id=agent.organization_id if agent else None,

@@ -8,12 +8,15 @@ import Prospects from './pages/Prospects'
 import Calls from './pages/Calls'
 import Settings from './pages/Settings'
 import Admin from './pages/Admin'
+import Analytics from './pages/Analytics'
+import Billing from './pages/Billing'
+import OrgUsers from './pages/OrgUsers'
 
 function ProtectedLayout() {
   const token = localStorage.getItem('token')
   if (!token) return <Navigate to="/login" replace />
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-zyra-bg">
       <Sidebar />
       <main className="flex-1 overflow-auto">
         <Outlet />
@@ -35,6 +38,9 @@ export default function App() {
           <Route path="/calls" element={<Calls />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/analytics" element={<Analytics />} />
+          <Route path="/billing" element={<Billing />} />
+          <Route path="/org-users" element={<OrgUsers />} />
         </Route>
       </Routes>
     </BrowserRouter>

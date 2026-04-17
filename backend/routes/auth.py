@@ -99,6 +99,7 @@ def setup(session: Session = Depends(get_session)):
         raise HTTPException(status_code=400, detail="Sistema ya inicializado")
 
     from services.auth import hash_password
+    from database import SUPERADMIN_PASSWORD
 
     org = session.exec(select(Organization)).first()
     if not org:
@@ -115,7 +116,7 @@ def setup(session: Session = Depends(get_session)):
 
     admin = User(
         email="admin@ismconsulting.com",
-        password_hash=hash_password("ISMadmin2024!"),
+        password_hash=hash_password(SUPERADMIN_PASSWORD),
         full_name="Super Admin",
         role="superadmin",
         organization_id=org.id,

@@ -164,7 +164,7 @@ async def call_prospect(
             api_key=api_key,
             from_number=from_number,
         )
-        call.vapi_call_id = result.get("call_id", "")
+        call.retell_call_id = result.get("call_id", "")
         call.status = "in-progress"
         prospect.status = "calling"
         prospect.call_attempts += 1
@@ -172,7 +172,7 @@ async def call_prospect(
         session.add(call)
         session.add(prospect)
         session.commit()
-        return {"call_id": call.id, "retell_call_id": call.vapi_call_id, "status": "in-progress"}
+        return {"call_id": call.id, "retell_call_id": call.retell_call_id, "status": "in-progress"}
     except Exception as e:
         call.status = "failed"
         session.add(call)

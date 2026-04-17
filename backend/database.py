@@ -1,4 +1,5 @@
 import os
+from sqlalchemy import text
 from sqlmodel import SQLModel, create_engine, Session, select
 from models import AgentConfig, Organization, User
 
@@ -12,8 +13,17 @@ engine = create_engine(DATABASE_URL, echo=False, connect_args=_connect_args)
 RETELL_AGENT_ID_DEFAULT = "agent_1499fc3598510000648e68461e"
 RETELL_LLM_ID_DEFAULT = "llm_7bd5d1428d3903644ab5152e681d"
 
+SUPERADMIN_PASSWORD = os.getenv("SUPERADMIN_PASSWORD", "ISMadmin2024!")
+
 
 def create_db_and_tables():
+    if not DATABASE_URL.startswith("sqlite"):
+        with engine.connect() as conn:
+            try:
+                conn.execute(text("ALTER TABLE call RENAME COLUMN vapi_call_id TO retell_call_id"))
+                conn.commit()
+            except Exception:
+                pass
     SQLModel.metadata.create_all(engine)
 
 
@@ -48,7 +58,7 @@ def seed_initial_data():
         if not admin:
             admin = User(
                 email="admin@ismconsulting.com",
-                password_hash=hash_password("ISMadmin2024!"),
+                password_hash=hash_password(SUPERADMIN_PASSWORD),
                 full_name="Super Admin",
                 role="superadmin",
                 organization_id=org.id,

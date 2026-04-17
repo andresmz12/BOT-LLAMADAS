@@ -33,6 +33,9 @@ const EMPTY = {
   inbound_first_message: '',
 }
 
+const inputCls = "w-full bg-[#0F172A] border border-zyra-border rounded-lg px-3 py-2 text-sm text-zyra-text focus:outline-none focus:border-zyra-blue focus:ring-1 focus:ring-zyra-blue"
+const textareaCls = "w-full bg-[#0F172A] border border-zyra-border rounded-lg px-3 py-2 text-sm text-zyra-text focus:outline-none focus:border-zyra-blue focus:ring-1 focus:ring-zyra-blue resize-none"
+
 export default function AgentFormModal({ agent, onClose, onSaved }) {
   const [form, setForm] = useState(agent ? { ...EMPTY, ...agent } : { ...EMPTY })
   const [syncOnSave, setSyncOnSave] = useState(true)
@@ -82,15 +85,14 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-lg font-bold">{agent ? 'Editar Agente' : 'Nuevo Agente'}</h2>
-          <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-gray-400" /></button>
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+      <div className="bg-zyra-card rounded-2xl border border-zyra-border w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-6 border-b border-zyra-border">
+          <h2 className="text-lg font-bold text-zyra-text">{agent ? 'Editar Agente' : 'Nuevo Agente'}</h2>
+          <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-zyra-muted" /></button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
 
-          {/* Identidad */}
           <div className="grid grid-cols-2 gap-4">
             <Field label="Nombre interno" value={form.name} onChange={v => set('name', v)} required />
             <Field label="Nombre en llamada" value={form.agent_name} onChange={v => set('agent_name', v)} required />
@@ -99,25 +101,16 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
           <TextArea label="Info de la empresa" value={form.company_info} onChange={v => set('company_info', v)} placeholder="Historia, valores, a quién sirven..." rows={3} />
           <TextArea label="Servicios y precios" value={form.services} onChange={v => set('services', v)} placeholder="Lista servicios con precios..." rows={3} />
 
-          {/* Voz y duración */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Voz del agente</label>
-              <select
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                value={form.voice_id || 'retell-Andrea'}
-                onChange={e => set('voice_id', e.target.value)}
-              >
+              <label className="block text-sm font-medium text-zyra-muted mb-1">Voz del agente</label>
+              <select className={inputCls} value={form.voice_id || 'retell-Andrea'} onChange={e => set('voice_id', e.target.value)}>
                 {VOICES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Temperatura del modelo</label>
-              <select
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                value={form.temperature ?? 0.4}
-                onChange={e => set('temperature', parseFloat(e.target.value))}
-              >
+              <label className="block text-sm font-medium text-zyra-muted mb-1">Temperatura del modelo</label>
+              <select className={inputCls} value={form.temperature ?? 0.4} onChange={e => set('temperature', parseFloat(e.target.value))}>
                 {TEMPERATURES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
               </select>
             </div>
@@ -125,12 +118,8 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Idioma</label>
-              <select
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold"
-                value={form.language}
-                onChange={e => set('language', e.target.value)}
-              >
+              <label className="block text-sm font-medium text-zyra-muted mb-1">Idioma</label>
+              <select className={inputCls} value={form.language} onChange={e => set('language', e.target.value)}>
                 <option value="español">Español</option>
                 <option value="english">English</option>
                 <option value="bilingüe">Bilingüe</option>
@@ -147,8 +136,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
             rows={2}
           />
 
-          {/* Outbound / Inbound tabs */}
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
+          <div className="border border-zyra-border rounded-xl overflow-hidden">
             <div className="flex">
               {[['outbound', 'Llamadas Salientes'], ['inbound', 'Llamadas Entrantes']].map(([key, label]) => (
                 <button
@@ -157,8 +145,8 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
                   onClick={() => setCallTab(key)}
                   className={`flex-1 py-2.5 text-sm font-medium transition-colors border-b-2 ${
                     callTab === key
-                      ? 'border-gold text-gray-900 bg-white'
-                      : 'border-transparent text-gray-500 bg-gray-50 hover:text-gray-700'
+                      ? 'border-zyra-blue text-zyra-text bg-zyra-card'
+                      : 'border-transparent text-zyra-muted bg-[#0F172A] hover:text-zyra-text'
                   }`}
                 >
                   {label}
@@ -183,7 +171,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
                     placeholder={`Hola, buenos días. Habla ${form.agent_name || '{agent_name}'} de ${form.company_name || '{company_name}'}, ¿estoy hablando con {{customer_name}}?`}
                     rows={2}
                   />
-                  <p className="text-xs text-gray-400">Usa &#123;&#123;customer_name&#125;&#125; para el nombre del cliente. Si lo dejas vacío se genera automáticamente.</p>
+                  <p className="text-xs text-zyra-muted">Usa &#123;&#123;customer_name&#125;&#125; para el nombre del cliente. Si lo dejas vacío se genera automáticamente.</p>
                 </>
               )}
 
@@ -196,12 +184,12 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
                       onChange={e => set('inbound_enabled', e.target.checked)}
                       className="w-4 h-4 accent-blue-500"
                     />
-                    <span className="text-sm font-medium text-gray-700">Activar llamadas entrantes</span>
+                    <span className="text-sm font-medium text-zyra-muted">Activar llamadas entrantes</span>
                   </label>
 
                   {form.inbound_enabled && (
                     <>
-                      <p className="text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2">
+                      <p className="text-xs text-blue-400 bg-blue-900/20 border border-blue-800/40 rounded-lg px-3 py-2">
                         Se creará un agente Retell separado para entrantes y se asignará al número al sincronizar.
                       </p>
                       <TextArea
@@ -225,40 +213,35 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
             </div>
           </div>
 
-          {/* Opciones */}
           <div className="flex flex-wrap items-center gap-6 pt-1">
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={form.is_default} onChange={e => set('is_default', e.target.checked)} className="w-4 h-4 accent-yellow-500" />
-              <span className="text-sm text-gray-700">Agente por defecto</span>
+              <input type="checkbox" checked={form.is_default} onChange={e => set('is_default', e.target.checked)} className="w-4 h-4 accent-blue-500" />
+              <span className="text-sm text-zyra-muted">Agente por defecto</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={syncOnSave} onChange={e => setSyncOnSave(e.target.checked)} className="w-4 h-4 accent-yellow-500" />
-              <span className="text-sm text-gray-700">Sincronizar con Retell al guardar</span>
+              <input type="checkbox" checked={syncOnSave} onChange={e => setSyncOnSave(e.target.checked)} className="w-4 h-4 accent-blue-500" />
+              <span className="text-sm text-zyra-muted">Sincronizar con Retell al guardar</span>
             </label>
           </div>
 
-          {/* Sync status */}
           {syncStatus === 'syncing' && (
-            <p className="text-sm text-blue-600">Sincronizando con Retell AI...</p>
+            <p className="text-sm text-blue-400">Sincronizando con Retell AI...</p>
           )}
           {syncStatus === 'ok' && (
-            <span className="flex items-center gap-1.5 text-sm text-green-600">
+            <span className="flex items-center gap-1.5 text-sm text-green-400">
               <CheckCircleIcon className="w-4 h-4" /> Sincronizado con Retell correctamente
             </span>
           )}
           {syncStatus === 'error' && (
-            <span className="flex items-center gap-1.5 text-sm text-red-600">
+            <span className="flex items-center gap-1.5 text-sm text-red-400">
               <ExclamationCircleIcon className="w-4 h-4" /> {syncError}
             </span>
           )}
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-2 bg-gold hover:bg-gold-dark text-white font-semibold rounded-lg text-sm disabled:opacity-50"
-            >
+            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-zyra-muted hover:text-zyra-text">Cancelar</button>
+            <button type="submit" disabled={loading}
+              className="px-6 py-2 bg-zyra-blue hover:bg-blue-700 text-white font-semibold rounded-lg text-sm disabled:opacity-50">
               {loading
                 ? (syncStatus === 'syncing' ? 'Sincronizando...' : 'Guardando...')
                 : (syncOnSave ? 'Guardar y sincronizar' : 'Guardar')}
@@ -273,9 +256,9 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
 function Field({ label, value, onChange, type = 'text', required, placeholder }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-zyra-muted mb-1">{label}</label>
       <input type={type} value={value} onChange={e => onChange(e.target.value)} required={required} placeholder={placeholder}
-        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold" />
+        className="w-full bg-[#0F172A] border border-zyra-border rounded-lg px-3 py-2 text-sm text-zyra-text focus:outline-none focus:border-zyra-blue focus:ring-1 focus:ring-zyra-blue" />
     </div>
   )
 }
@@ -283,9 +266,9 @@ function Field({ label, value, onChange, type = 'text', required, placeholder })
 function TextArea({ label, value, onChange, placeholder, rows = 3 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+      <label className="block text-sm font-medium text-zyra-muted mb-1">{label}</label>
       <textarea value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} rows={rows}
-        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold resize-none" />
+        className="w-full bg-[#0F172A] border border-zyra-border rounded-lg px-3 py-2 text-sm text-zyra-text focus:outline-none focus:border-zyra-blue focus:ring-1 focus:ring-zyra-blue resize-none placeholder:text-zyra-muted/60" />
     </div>
   )
 }
