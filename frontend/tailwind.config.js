@@ -4,12 +4,15 @@ export default {
   theme: {
     extend: {
       colors: {
-        gold: {
-          DEFAULT: '#D4AF37',
-          light: '#E8CC5A',
-          dark: '#B8961E',
+        'z-bg': '#0A0A0F',
+        'z-card': '#111827',
+        'z-border': '#1E293B',
+        'z-blue': {
+          DEFAULT: '#2563EB',
+          light: '#3B82F6',
+          dark: '#1D4ED8',
         },
-        sidebar: '#111827',
+        sidebar: '#0D0D16',
       },
     },
   },

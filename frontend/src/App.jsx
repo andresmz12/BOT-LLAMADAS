@@ -13,7 +13,7 @@ function ProtectedLayout() {
   const token = localStorage.getItem('token')
   if (!token) return <Navigate to="/login" replace />
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-z-bg">
       <Sidebar />
       <main className="flex-1 overflow-auto">
         <Outlet />

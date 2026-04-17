@@ -3,6 +3,15 @@ import { useNavigate } from 'react-router-dom'
 import { login, getMe } from '../api/client'
 import api from '../api/client'
 
+function WaveformIcon({ className }) {
+  return (
+    <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M2 16 Q4 8 6 16 Q8 24 10 16 Q12 8 14 16 Q16 24 18 16 Q20 8 22 16 Q24 24 26 16 Q28 8 30 16"
+        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -14,7 +23,6 @@ export default function Login() {
 
   useEffect(() => {
     if (localStorage.getItem('token')) navigate('/', { replace: true })
-    // Check if system needs initial setup
     api.get('/auth/status').then(r => {
       if (!r.data.initialized) setNeedsSetup(true)
     }).catch(() => {})
@@ -43,7 +51,7 @@ export default function Login() {
       await api.post('/auth/setup')
       setNeedsSetup(false)
       setSetupDone(true)
-      setEmail('admin@ismconsulting.com')
+      setEmail(localStorage.getItem('setup_email') || 'admin@ismconsulting.com')
     } catch (err) {
       setError(err.response?.data?.detail || 'Error al configurar')
     } finally {
@@ -52,20 +60,23 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-z-bg flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
+        {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gold rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg">
-            <span className="text-white font-black text-xl">ISM</span>
+          <div className="w-16 h-16 bg-z-blue/10 border border-z-blue/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <WaveformIcon className="w-9 h-9 text-z-blue" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900">Voice Agent</h1>
-          <p className="text-gray-500 text-sm mt-1">ISM Consulting Services</p>
+          <h1 className="text-2xl font-black">
+            <span className="text-white">Zyra</span><span className="text-z-blue">Voice</span>
+          </h1>
+          <p className="text-slate-500 text-sm mt-1">Plataforma de llamadas con IA</p>
         </div>
 
         {needsSetup && (
-          <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800">
+          <div className="mb-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-sm text-amber-300">
             <p className="font-semibold mb-2">Sistema no inicializado</p>
-            <p className="mb-3">No hay usuarios configurados. Haz clic para crear el administrador inicial.</p>
+            <p className="mb-3 text-amber-400/80">No hay usuarios configurados. Inicializa el sistema primero.</p>
             <button
               onClick={handleSetup}
               disabled={loading}
@@ -77,37 +88,37 @@ export default function Login() {
         )}
 
         {setupDone && (
-          <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-700">
-            Sistema inicializado. Usa la contraseña: <strong>ISMadmin2024!</strong>
+          <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-xl text-sm text-green-400">
+            Sistema inicializado. Contraseña por defecto: <strong>ISMadmin2024!</strong>
           </div>
         )}
 
-        <form onSubmit={submit} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-8 space-y-4">
+        <form onSubmit={submit} className="bg-z-card border border-z-border rounded-2xl p-8 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
             <input
               type="email" value={email} onChange={e => setEmail(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold"
+              className="z-input"
               placeholder="usuario@empresa.com"
               required autoFocus
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Contraseña</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Contraseña</label>
             <input
               type="password" value={password} onChange={e => setPassword(e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold"
+              className="z-input"
               required
             />
           </div>
           {error && (
-            <p className="text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            <p className="text-sm text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
           <button
             type="submit" disabled={loading}
-            className="w-full py-2.5 bg-gold hover:bg-gold-dark text-white font-semibold rounded-lg text-sm disabled:opacity-50 transition-colors"
+            className="w-full py-2.5 bg-z-blue hover:bg-z-blue-dark text-white font-semibold rounded-lg text-sm disabled:opacity-50 transition-colors"
           >
             {loading ? 'Entrando...' : 'Iniciar sesión'}
           </button>

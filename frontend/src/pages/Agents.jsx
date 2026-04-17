@@ -13,7 +13,7 @@ export default function Agents() {
   useEffect(() => { load() }, [])
 
   const handleDelete = async (agent) => {
-    if (!confirm(`¿Eliminar "${agent.name}"?`)) return
+    if (!confirm(`¿Eliminar "${agent.agent_name}"?`)) return
     try { await deleteAgent(agent.id); load() }
     catch (err) { alert(err.response?.data?.detail || 'Error') }
   }
@@ -37,49 +37,48 @@ export default function Agents() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Agentes de Voz</h1>
-        <button onClick={() => setModal('new')}
-          className="flex items-center gap-2 px-4 py-2 bg-gold hover:bg-gold-dark text-white font-semibold rounded-lg text-sm">
+        <h1 className="text-2xl font-bold text-slate-100">Agentes de Voz</h1>
+        <button onClick={() => setModal('new')} className="z-btn-primary flex items-center gap-2">
           <PlusIcon className="w-4 h-4" /> Nuevo Agente
         </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {agents.map(agent => (
-          <div key={agent.id} className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <div key={agent.id} className="bg-z-card rounded-xl p-5 border border-z-border">
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-gray-900">{agent.agent_name}</h3>
+                  <h3 className="font-bold text-slate-100">{agent.agent_name}</h3>
                   {agent.is_default && (
-                    <span className="px-1.5 py-0.5 bg-gold/15 text-yellow-700 text-xs font-semibold rounded-full">Default</span>
+                    <span className="px-1.5 py-0.5 bg-yellow-500/15 text-yellow-400 text-xs font-semibold rounded-full">Default</span>
                   )}
                   {agent.retell_agent_id ? (
-                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-50 text-green-700 text-xs font-semibold rounded-full">
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-green-500/15 text-green-400 text-xs font-semibold rounded-full">
                       <CheckCircleIcon className="w-3 h-3" /> Sincronizado
                     </span>
                   ) : (
-                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-50 text-amber-700 text-xs font-semibold rounded-full">
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/15 text-amber-400 text-xs font-semibold rounded-full">
                       <ExclamationTriangleIcon className="w-3 h-3" /> Sin sincronizar
                     </span>
                   )}
                   {agent.inbound_enabled && (
-                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full">
+                    <span className="flex items-center gap-1 px-1.5 py-0.5 bg-z-blue/15 text-z-blue-light text-xs font-semibold rounded-full">
                       <PhoneArrowDownLeftIcon className="w-3 h-3" /> Entrante activo
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-gray-500">{agent.company_name}</p>
+                <p className="text-sm text-slate-500 mt-0.5">{agent.company_name}</p>
               </div>
-              <button onClick={() => setDefaultAgent(agent.id).then(load)} className="text-gray-300 hover:text-gold ml-2 flex-shrink-0">
-                {agent.is_default ? <StarSolid className="w-5 h-5 text-gold" /> : <StarIcon className="w-5 h-5" />}
+              <button onClick={() => setDefaultAgent(agent.id).then(load)} className="text-slate-600 hover:text-yellow-400 ml-2 flex-shrink-0">
+                {agent.is_default ? <StarSolid className="w-5 h-5 text-yellow-400" /> : <StarIcon className="w-5 h-5" />}
               </button>
             </div>
 
-            <p className="text-xs text-gray-500 mb-4">
-              <span className="bg-gray-100 px-2 py-0.5 rounded-full">{agent.language}</span>
+            <p className="text-xs text-slate-500 mb-4">
+              <span className="bg-slate-800 px-2 py-0.5 rounded-full">{agent.language}</span>
               {' • '}
-              <span className="bg-gray-100 px-2 py-0.5 rounded-full">{agent.voice_id || 'retell-Andrea'}</span>
+              <span className="bg-slate-800 px-2 py-0.5 rounded-full">{agent.voice_id || 'retell-Andrea'}</span>
               {' • '}max {agent.max_call_duration}s
             </p>
 
@@ -87,24 +86,24 @@ export default function Agents() {
               <button
                 onClick={() => handleSync(agent)}
                 disabled={syncingId === agent.id}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 disabled:opacity-50"
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-z-blue-light border border-z-blue/30 rounded-lg hover:bg-z-blue/10 disabled:opacity-50"
               >
                 <ArrowPathIcon className={`w-3.5 h-3.5 ${syncingId === agent.id ? 'animate-spin' : ''}`} />
                 {syncingId === agent.id ? 'Sincronizando...' : 'Sincronizar'}
               </button>
               <button onClick={() => setModal(agent)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50">
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-400 border border-z-border rounded-lg hover:bg-white/[0.04]">
                 <PencilIcon className="w-3.5 h-3.5" /> Editar
               </button>
               <button onClick={() => handleDelete(agent)}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-500 border border-red-100 rounded-lg hover:bg-red-50">
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10">
                 <TrashIcon className="w-3.5 h-3.5" /> Eliminar
               </button>
             </div>
           </div>
         ))}
         {agents.length === 0 && (
-          <div className="col-span-3 text-center py-16 text-gray-400">No hay agentes configurados</div>
+          <div className="col-span-3 text-center py-16 text-slate-500">No hay agentes configurados</div>
         )}
       </div>
 

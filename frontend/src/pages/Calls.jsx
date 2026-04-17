@@ -24,84 +24,60 @@ export default function Calls() {
   useEffect(() => { load() }, [filterCampaign, filterOutcome])
 
   const openDetail = async (call) => {
-    try {
-      const detail = await getCallDetail(call.id)
-      setSelectedCall(detail)
-    } catch {
-      setSelectedCall(call)
-    }
+    try { const detail = await getCallDetail(call.id); setSelectedCall(detail) }
+    catch { setSelectedCall(call) }
   }
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-gray-900">Llamadas</h1>
-
+      <h1 className="text-2xl font-bold text-slate-100">Llamadas</h1>
       <div className="flex gap-3 flex-wrap">
-        <select
-          value={filterCampaign}
-          onChange={e => setFilterCampaign(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold"
-        >
+        <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-auto">
           <option value="">Todas las campañas</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select
-          value={filterOutcome}
-          onChange={e => setFilterOutcome(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold"
-        >
+        <select value={filterOutcome} onChange={e => setFilterOutcome(e.target.value)} className="z-input w-auto">
           {OUTCOMES.map(o => <option key={o} value={o}>{o || 'Todos los outcomes'}</option>)}
         </select>
-        <span className="ml-auto text-sm text-gray-500 self-center">{calls.length} llamadas</span>
+        <span className="ml-auto text-sm text-slate-500 self-center">{calls.length} llamadas</span>
       </div>
-
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50">
+          <thead className="bg-black/20">
             <tr>
               {['Prospecto', 'Empresa', 'Teléfono', 'Tipo', 'Outcome', 'Sentimiento', 'Duración', 'Fecha'].map(h => (
-                <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-z-border">
             {calls.map(call => (
-              <tr
-                key={call.id}
-                onClick={() => openDetail(call)}
-                className="hover:bg-gray-50 cursor-pointer"
-              >
-                <td className="px-6 py-3 font-medium text-gray-900">{call.prospect_name || '—'}</td>
-                <td className="px-6 py-3 text-gray-500">{call.prospect_company || '—'}</td>
-                <td className="px-6 py-3 text-gray-700 font-mono text-xs">{call.prospect_phone || '—'}</td>
+              <tr key={call.id} onClick={() => openDetail(call)} className="hover:bg-white/[0.02] cursor-pointer">
+                <td className="px-6 py-3 font-medium text-slate-200">{call.prospect_name || '—'}</td>
+                <td className="px-6 py-3 text-slate-400">{call.prospect_company || '—'}</td>
+                <td className="px-6 py-3 text-slate-300 font-mono text-xs">{call.prospect_phone || '—'}</td>
                 <td className="px-6 py-3">
                   {call.call_type === 'inbound'
-                    ? <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full font-medium">Entrante</span>
-                    : <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs rounded-full font-medium">Saliente</span>
-                  }
+                    ? <span className="px-2 py-0.5 bg-blue-500/15 text-blue-400 text-xs rounded-full font-medium">Entrante</span>
+                    : <span className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded-full font-medium">Saliente</span>}
                 </td>
                 <td className="px-6 py-3"><StatusBadge status={call.outcome} /></td>
-                <td className="px-6 py-3 text-gray-600">
+                <td className="px-6 py-3 text-slate-400">
                   {call.sentiment ? `${SENTIMENT_EMOJI[call.sentiment] || ''} ${call.sentiment}` : '—'}
                 </td>
-                <td className="px-6 py-3 text-gray-500">
-                  {call.duration_seconds ? `${call.duration_seconds}s` : '—'}
-                </td>
-                <td className="px-6 py-3 text-gray-400 text-xs">
+                <td className="px-6 py-3 text-slate-500">{call.duration_seconds ? `${call.duration_seconds}s` : '—'}</td>
+                <td className="px-6 py-3 text-slate-500 text-xs">
                   {call.started_at ? new Date(call.started_at).toLocaleString() : '—'}
                 </td>
               </tr>
             ))}
             {calls.length === 0 && (
-              <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-400">No hay llamadas registradas</td></tr>
+              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-500">No hay llamadas registradas</td></tr>
             )}
           </tbody>
         </table>
       </div>
-
-      {selectedCall && (
-        <CallDetailModal call={selectedCall} onClose={() => setSelectedCall(null)} />
-      )}
+      {selectedCall && <CallDetailModal call={selectedCall} onClose={() => setSelectedCall(null)} />}
     </div>
   )
 }

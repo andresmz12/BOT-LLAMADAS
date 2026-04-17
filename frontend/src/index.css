@@ -1,3 +1,33 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #0A0A0F;
+    color: #F1F5F9;
+  }
+
+  /* Dark inputs/selects */
+  input, textarea, select {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  .z-input {
+    @apply w-full bg-slate-800 border border-z-border rounded-lg px-3 py-2 text-sm text-slate-100
+           placeholder-slate-500 focus:outline-none focus:border-z-blue focus:ring-1 focus:ring-z-blue;
+  }
+  .z-card {
+    @apply bg-z-card rounded-xl border border-z-border;
+  }
+  .z-btn-primary {
+    @apply px-4 py-2 bg-z-blue hover:bg-z-blue-dark text-white font-semibold rounded-lg text-sm
+           disabled:opacity-50 transition-colors;
+  }
+  .z-btn-ghost {
+    @apply px-4 py-2 text-slate-400 hover:text-slate-100 text-sm rounded-lg hover:bg-white/5
+           transition-colors;
+  }
+}

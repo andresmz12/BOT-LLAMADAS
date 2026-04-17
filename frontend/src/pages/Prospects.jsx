@@ -19,49 +19,42 @@ function NewProspectModal({ campaigns, onClose, onSaved }) {
       onSaved()
     } catch (err) {
       alert('Error: ' + (err.response?.data?.detail || err.message))
-    } finally {
-      setLoading(false)
-    }
+    } finally { setLoading(false) }
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-md">
-        <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-lg font-bold">Nuevo Prospecto</h2>
-          <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-gray-400" /></button>
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-z-border">
+          <h2 className="text-lg font-bold text-slate-100">Nuevo Prospecto</h2>
+          <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Nombre *</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Nombre *</label>
             <input required value={form.name} onChange={e => set('name', e.target.value)}
-              placeholder="Juan Pérez"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold" />
+              placeholder="Juan Pérez" className="z-input" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Teléfono *</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Teléfono *</label>
             <input required value={form.phone} onChange={e => set('phone', e.target.value)}
-              placeholder="+521234567890"
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold font-mono" />
-            <p className="text-xs text-gray-400 mt-1">Formato E.164 con código de país</p>
+              placeholder="+521234567890" className="z-input font-mono" />
+            <p className="text-xs text-slate-500 mt-1">Formato E.164 con código de país</p>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Empresa</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Empresa</label>
             <input value={form.company} onChange={e => set('company', e.target.value)}
-              placeholder="Empresa S.A."
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold" />
+              placeholder="Empresa S.A." className="z-input" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Campaña *</label>
-            <select required value={form.campaign_id} onChange={e => set('campaign_id', e.target.value)}
-              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold focus:ring-1 focus:ring-gold">
+            <label className="block text-sm font-medium text-slate-300 mb-1">Campaña *</label>
+            <select required value={form.campaign_id} onChange={e => set('campaign_id', e.target.value)} className="z-input">
               {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm text-gray-600">Cancelar</button>
-            <button type="submit" disabled={loading}
-              className="px-6 py-2 bg-gold hover:bg-gold-dark text-white font-semibold rounded-lg text-sm disabled:opacity-50">
+            <button type="button" onClick={onClose} className="z-btn-ghost">Cancelar</button>
+            <button type="submit" disabled={loading} className="z-btn-primary">
               {loading ? 'Guardando...' : 'Agregar'}
             </button>
           </div>
@@ -83,14 +76,9 @@ export default function Prospects() {
   const handleCall = async (p) => {
     if (callingId) return
     setCallingId(p.id)
-    try {
-      await callProspect(p.id)
-      load()
-    } catch (err) {
-      alert('Error: ' + (err.response?.data?.detail || err.message))
-    } finally {
-      setCallingId(null)
-    }
+    try { await callProspect(p.id); load() }
+    catch (err) { alert('Error: ' + (err.response?.data?.detail || err.message)) }
+    finally { setCallingId(null) }
   }
 
   const load = () => {
@@ -110,80 +98,62 @@ export default function Prospects() {
   }
 
   const campaignName = (id) => campaigns.find(c => c.id === id)?.name || `#${id}`
-
   const noCampaigns = campaigns.length === 0
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900">Prospectos</h1>
+        <h1 className="text-2xl font-bold text-slate-100">Prospectos</h1>
         <div className="flex gap-2">
-          <button
-            onClick={() => setShowNew(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-gold text-gold hover:bg-gold/5 font-semibold rounded-lg text-sm"
-          >
+          <button onClick={() => setShowNew(true)}
+            className="flex items-center gap-2 px-4 py-2 border border-z-blue text-z-blue-light hover:bg-z-blue/10 font-semibold rounded-lg text-sm transition-colors">
             <PlusIcon className="w-4 h-4" /> Nuevo prospecto
           </button>
-          <button
-            onClick={() => setShowImport(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-gold hover:bg-gold-dark text-white font-semibold rounded-lg text-sm"
-          >
+          <button onClick={() => setShowImport(true)} className="z-btn-primary flex items-center gap-2">
             <ArrowUpTrayIcon className="w-4 h-4" /> Importar Excel / CSV
           </button>
         </div>
       </div>
 
       <div className="flex gap-3">
-        <select
-          value={filterCampaign}
-          onChange={e => setFilterCampaign(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold"
-        >
+        <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-auto">
           <option value="">Todas las campañas</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select
-          value={filterStatus}
-          onChange={e => setFilterStatus(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-gold"
-        >
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="z-input w-auto">
           {STATUSES.map(s => <option key={s} value={s}>{s || 'Todos los estados'}</option>)}
         </select>
-        <span className="ml-auto text-sm text-gray-500 self-center">{prospects.length} prospectos</span>
+        <span className="ml-auto text-sm text-slate-500 self-center">{prospects.length} prospectos</span>
       </div>
 
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
         <table className="w-full text-sm">
-          <thead className="bg-gray-50">
+          <thead className="bg-black/20">
             <tr>
               {['Nombre', 'Empresa', 'Teléfono', 'Campaña', 'Estado', 'Intentos', 'Última llamada', 'Acciones'].map(h => (
-                <th key={h} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">{h}</th>
+                <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
               ))}
             </tr>
           </thead>
-          <tbody className="divide-y divide-gray-100">
+          <tbody className="divide-y divide-z-border">
             {prospects.map(p => (
-              <tr key={p.id} className="hover:bg-gray-50">
-                <td className="px-6 py-3 font-medium text-gray-900">{p.name}</td>
-                <td className="px-6 py-3 text-gray-500">{p.company || '—'}</td>
-                <td className="px-6 py-3 text-gray-700 font-mono text-xs">{p.phone}</td>
-                <td className="px-6 py-3 text-gray-500 text-xs">{campaignName(p.campaign_id)}</td>
+              <tr key={p.id} className="hover:bg-white/[0.02]">
+                <td className="px-6 py-3 font-medium text-slate-200">{p.name}</td>
+                <td className="px-6 py-3 text-slate-400">{p.company || '—'}</td>
+                <td className="px-6 py-3 text-slate-300 font-mono text-xs">{p.phone}</td>
+                <td className="px-6 py-3 text-slate-400 text-xs">{campaignName(p.campaign_id)}</td>
                 <td className="px-6 py-3"><StatusBadge status={p.status} /></td>
-                <td className="px-6 py-3 text-gray-500">{p.call_attempts}</td>
-                <td className="px-6 py-3 text-gray-400 text-xs">
+                <td className="px-6 py-3 text-slate-400">{p.call_attempts}</td>
+                <td className="px-6 py-3 text-slate-500 text-xs">
                   {p.last_called_at ? new Date(p.last_called_at).toLocaleString() : '—'}
                 </td>
                 <td className="px-6 py-3">
                   <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => handleCall(p)}
-                      disabled={callingId === p.id}
-                      title="Llamar ahora"
-                      className="text-gray-300 hover:text-gold transition-colors disabled:opacity-40"
-                    >
+                    <button onClick={() => handleCall(p)} disabled={callingId === p.id}
+                      className="text-slate-600 hover:text-z-blue-light transition-colors disabled:opacity-40">
                       <PhoneArrowUpRightIcon className="w-4 h-4" />
                     </button>
-                    <button onClick={() => handleDelete(p)} className="text-gray-300 hover:text-red-500 transition-colors">
+                    <button onClick={() => handleDelete(p)} className="text-slate-600 hover:text-red-400 transition-colors">
                       <TrashIcon className="w-4 h-4" />
                     </button>
                   </div>
@@ -191,7 +161,7 @@ export default function Prospects() {
               </tr>
             ))}
             {prospects.length === 0 && (
-              <tr><td colSpan={8} className="px-6 py-12 text-center text-gray-400">No hay prospectos</td></tr>
+              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-500">No hay prospectos</td></tr>
             )}
           </tbody>
         </table>
@@ -199,24 +169,26 @@ export default function Prospects() {
 
       {showNew && (
         noCampaigns
-          ? <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-2xl p-8 text-center max-w-sm">
-                <p className="text-gray-700 mb-4">Debes crear una campaña antes de agregar prospectos.</p>
-                <button onClick={() => setShowNew(false)} className="px-4 py-2 bg-gold text-white rounded-lg text-sm font-semibold">Cerrar</button>
+          ? <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+              <div className="bg-z-card border border-z-border rounded-2xl p-8 text-center max-w-sm">
+                <p className="text-slate-300 mb-4">Debes crear una campaña antes de agregar prospectos.</p>
+                <button onClick={() => setShowNew(false)} className="z-btn-primary">Cerrar</button>
               </div>
             </div>
-          : <NewProspectModal campaigns={campaigns} onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); load() }} />
+          : <NewProspectModal campaigns={campaigns} onClose={() => setShowNew(false)}
+              onSaved={() => { setShowNew(false); load() }} />
       )}
 
       {showImport && (
         noCampaigns
-          ? <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-2xl p-8 text-center max-w-sm">
-                <p className="text-gray-700 mb-4">Debes crear una campaña antes de importar prospectos.</p>
-                <button onClick={() => setShowImport(false)} className="px-4 py-2 bg-gold text-white rounded-lg text-sm font-semibold">Cerrar</button>
+          ? <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50">
+              <div className="bg-z-card border border-z-border rounded-2xl p-8 text-center max-w-sm">
+                <p className="text-slate-300 mb-4">Debes crear una campaña antes de importar prospectos.</p>
+                <button onClick={() => setShowImport(false)} className="z-btn-primary">Cerrar</button>
               </div>
             </div>
-          : <ImportCSVModal campaigns={campaigns} onClose={() => setShowImport(false)} onImported={() => { setShowImport(false); load() }} />
+          : <ImportCSVModal campaigns={campaigns} onClose={() => setShowImport(false)}
+              onImported={() => { setShowImport(false); load() }} />
       )}
     </div>
   )

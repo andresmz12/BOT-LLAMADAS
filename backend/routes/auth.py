@@ -113,9 +113,11 @@ def setup(session: Session = Depends(get_session)):
         session.commit()
         session.refresh(org)
 
+    admin_email = os.getenv("SUPERADMIN_EMAIL", "admin@ismconsulting.com")
+    admin_password = os.getenv("SUPERADMIN_PASSWORD", "ISMadmin2024!")
     admin = User(
-        email="admin@ismconsulting.com",
-        password_hash=hash_password("ISMadmin2024!"),
+        email=admin_email,
+        password_hash=hash_password(admin_password),
         full_name="Super Admin",
         role="superadmin",
         organization_id=org.id,

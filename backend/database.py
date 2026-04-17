@@ -44,11 +44,13 @@ def seed_initial_data():
             session.refresh(org)
 
         # 2. Superadmin
-        admin = session.exec(select(User).where(User.email == "admin@ismconsulting.com")).first()
+        admin_email = os.getenv("SUPERADMIN_EMAIL", "admin@ismconsulting.com")
+        admin_password = os.getenv("SUPERADMIN_PASSWORD", "ISMadmin2024!")
+        admin = session.exec(select(User).where(User.email == admin_email)).first()
         if not admin:
             admin = User(
-                email="admin@ismconsulting.com",
-                password_hash=hash_password("ISMadmin2024!"),
+                email=admin_email,
+                password_hash=hash_password(admin_password),
                 full_name="Super Admin",
                 role="superadmin",
                 organization_id=org.id,
