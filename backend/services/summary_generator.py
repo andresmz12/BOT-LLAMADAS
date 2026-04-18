@@ -50,7 +50,7 @@ def _empty_result() -> dict:
     return {
         "client_said": [],
         "agent_said": [],
-        "outcome": "failed",
+        "outcome": None,
         "services_mentioned": [],
         "sentiment": "neutral",
         "appointment_scheduled": False,
