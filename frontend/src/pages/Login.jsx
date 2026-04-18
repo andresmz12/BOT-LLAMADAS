@@ -63,7 +63,7 @@ export default function Login() {
       await api.post('/auth/setup')
       setNeedsSetup(false)
       setSetupDone(true)
-      setEmail(localStorage.getItem('setup_email') || 'admin@ismconsulting.com')
+      setEmail('admin@ismconsulting.com')
     } catch (err) {
       setError(err.response?.data?.detail || 'Error al configurar')
     } finally {

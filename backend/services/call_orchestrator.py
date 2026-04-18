@@ -139,9 +139,9 @@ async def _run_campaign_loop(campaign_id: int):
                 "company": prospect.company or "",
                 "api_key": api_key,
                 "from_number": from_number,
-                # Agent fields (column attrs work on detached instances)
                 "retell_agent_id": agent_config.retell_agent_id,
                 "agent_name": agent_config.name,
+                "voice_id": agent_config.voice_id or "retell-Andrea",
             }
             logger.info(
                 f"[Campaign {campaign_id}] Dialing {prospect.phone} "
@@ -153,10 +153,11 @@ async def _run_campaign_loop(campaign_id: int):
             break
 
         try:
-            result = await retell_client.create_call(
-                call_info["phone"],
-                # Pass agent_config as detached — column attrs are accessible
-                agent_config,
+            result = await retell_client.create_call_direct(
+                phone=call_info["phone"],
+                retell_agent_id=call_info["retell_agent_id"],
+                agent_name=call_info["agent_name"],
+                voice_id=call_info["voice_id"],
                 prospect_name=call_info["name"],
                 prospect_company=call_info["company"],
                 api_key=call_info["api_key"],

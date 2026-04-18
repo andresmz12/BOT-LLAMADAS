@@ -252,6 +252,50 @@ async def create_call(
         return resp.json()
 
 
+async def create_call_direct(
+    phone: str,
+    retell_agent_id: str,
+    agent_name: str = "",
+    voice_id: str = "",
+    prospect_name: str = "",
+    prospect_company: str = "",
+    api_key: str = "",
+    from_number: str = "",
+) -> dict:
+    """Like create_call but takes individual values — avoids detached SQLModel instance issues."""
+    if not api_key or not from_number:
+        raise ValueError("Credenciales Retell no configuradas.")
+    if not retell_agent_id:
+        raise ValueError(
+            f"El agente '{agent_name}' no está sincronizado con Retell. "
+            "Ve a Agentes y pulsa 'Sincronizar'."
+        )
+
+    payload = {
+        "from_number": from_number,
+        "to_number": phone,
+        "override_agent_id": retell_agent_id,
+        "retell_llm_dynamic_variables": {
+            "customer_name": prospect_name or "cliente",
+            "company_name": prospect_company or "",
+        },
+    }
+
+    headers = {"Authorization": f"Bearer {api_key}"}
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.post(
+            f"{RETELL_API_URL}/v2/create-phone-call",
+            json=payload, headers=headers,
+        )
+        if resp.status_code >= 400:
+            try:
+                detail = resp.json()
+            except Exception:
+                detail = resp.text
+            raise ValueError(f"Retell {resp.status_code}: {detail}")
+        return resp.json()
+
+
 async def get_call(retell_call_id: str, api_key: str = "") -> dict:
     if not api_key:
         api_key, _ = _get_credentials()

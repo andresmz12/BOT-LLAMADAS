@@ -20,6 +20,14 @@ class ProspectCreate(BaseModel):
     notes: Optional[str] = None
 
 
+class ProspectUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    company: Optional[str] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None
+
+
 @router.post("")
 def create_prospect(
     data: ProspectCreate,
@@ -105,7 +113,7 @@ def list_prospects(
 @router.put("/{prospect_id}")
 def update_prospect(
     prospect_id: int,
-    data: Prospect,
+    data: ProspectUpdate,
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
@@ -114,7 +122,7 @@ def update_prospect(
         raise HTTPException(status_code=404, detail="Prospect not found")
     if current_user.role != "superadmin" and prospect.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
-    for field, value in data.dict(exclude_unset=True, exclude={"id"}).items():
+    for field, value in data.dict(exclude_unset=True).items():
         setattr(prospect, field, value)
     session.add(prospect)
     session.commit()

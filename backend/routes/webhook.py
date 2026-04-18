@@ -91,12 +91,12 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
         call.call_type = "inbound" if call_type_retell == "inbound" else "outbound"
 
         if end_ts:
-            call.ended_at = datetime.utcfromtimestamp(end_ts / 1000)
+            call.ended_at = datetime.fromtimestamp(end_ts / 1000)
         else:
             call.ended_at = datetime.utcnow()
 
         if start_ts:
-            call.started_at = datetime.utcfromtimestamp(start_ts / 1000)
+            call.started_at = datetime.fromtimestamp(start_ts / 1000)
 
         if transcript:
             call.raw_transcript = transcript
