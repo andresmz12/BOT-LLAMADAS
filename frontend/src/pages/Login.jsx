@@ -4,10 +4,22 @@ import { login, getMe } from '../api/client'
 import api from '../api/client'
 
 function WaveformIcon({ className }) {
+  const bars = [
+    { x: 1.5,  h: 8,  y: 12 },
+    { x: 5.5,  h: 14, y: 9  },
+    { x: 9.5,  h: 22, y: 5  },
+    { x: 13.5, h: 28, y: 2  },
+    { x: 17.5, h: 28, y: 2  },
+    { x: 21.5, h: 22, y: 5  },
+    { x: 25.5, h: 14, y: 9  },
+    { x: 29,   h: 8,  y: 12 },
+  ]
   return (
-    <svg className={className} viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M2 16 Q4 8 6 16 Q8 24 10 16 Q12 8 14 16 Q16 24 18 16 Q20 8 22 16 Q24 24 26 16 Q28 8 30 16"
-        stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+    <svg className={className} viewBox="0 0 32 32" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      {bars.map((b, i) => (
+        <rect key={i} x={b.x} y={b.y} width="2" height={b.h} rx="1"
+          opacity={0.4 + (i < 4 ? i : 7 - i) * 0.15} />
+      ))}
     </svg>
   )
 }

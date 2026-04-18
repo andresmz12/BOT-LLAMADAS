@@ -1,4 +1,5 @@
-import { BrowserRouter, Routes, Route, Outlet, Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Outlet, Navigate, useNavigate } from 'react-router-dom'
 import Sidebar from './components/Sidebar'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
@@ -9,8 +10,32 @@ import Calls from './pages/Calls'
 import Settings from './pages/Settings'
 import Admin from './pages/Admin'
 
+const IDLE_MS = 10 * 60 * 1000 // 10 minutes
+
 function ProtectedLayout() {
   const token = localStorage.getItem('token')
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!token) return
+    let timer
+    const reset = () => {
+      clearTimeout(timer)
+      timer = setTimeout(() => {
+        localStorage.removeItem('token')
+        localStorage.removeItem('user')
+        navigate('/login', { replace: true })
+      }, IDLE_MS)
+    }
+    const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll']
+    events.forEach(e => window.addEventListener(e, reset, { passive: true }))
+    reset()
+    return () => {
+      clearTimeout(timer)
+      events.forEach(e => window.removeEventListener(e, reset))
+    }
+  }, [token])
+
   if (!token) return <Navigate to="/login" replace />
   return (
     <div className="flex min-h-screen bg-z-bg">
