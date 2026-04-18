@@ -93,6 +93,37 @@ async def _sync_llm_and_agent(
     return new_agent_id, new_llm_id
 
 
+async def create_knowledge_base(name: str, file_bytes: bytes, filename: str, api_key: str) -> str:
+    """Create a Retell KB and upload a file in one call. Returns knowledge_base_id."""
+    headers = {"Authorization": f"Bearer {api_key}"}
+    safe_name = name[:39]
+    async with httpx.AsyncClient(timeout=120) as client:
+        resp = await client.post(
+            f"{RETELL_API_URL}/create-knowledge-base",
+            headers=headers,
+            data={"knowledge_base_name": safe_name},
+            files={"knowledge_base_files": (filename, file_bytes, "application/octet-stream")},
+        )
+        logger.info(f"[Retell] create_knowledge_base '{safe_name}' → {resp.status_code}: {resp.text[:200]}")
+        if resp.status_code >= 400:
+            raise ValueError(f"Retell KB create {resp.status_code}: {resp.text}")
+        return resp.json()["knowledge_base_id"]
+
+
+async def attach_kb_to_llm(llm_id: str, kb_id: str, api_key: str):
+    """Patch a Retell LLM to include a knowledge base."""
+    headers = {"Authorization": f"Bearer {api_key}"}
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.patch(
+            f"{RETELL_API_URL}/update-retell-llm/{llm_id}",
+            json={"knowledge_base_ids": [kb_id]},
+            headers=headers,
+        )
+        logger.info(f"[Retell] attach_kb llm={llm_id} kb={kb_id} → {resp.status_code}")
+        if resp.status_code >= 400:
+            raise ValueError(f"Retell LLM KB attach {resp.status_code}: {resp.text}")
+
+
 async def sync_to_retell(
     agent_config: AgentConfig,
     api_key: str = "",
@@ -142,6 +173,8 @@ async def sync_to_retell(
         "begin_message": outbound_begin,
         "general_tools": [],
     }
+    if agent_config.retell_knowledge_base_id:
+        outbound_llm_payload["knowledge_base_ids"] = [agent_config.retell_knowledge_base_id]
     outbound_agent_payload = {
         "agent_name": agent_config.name,
         **base_agent_settings,
@@ -176,6 +209,8 @@ async def sync_to_retell(
                 "begin_message": inbound_begin,
                 "general_tools": [],
             }
+            if agent_config.retell_knowledge_base_id:
+                inbound_llm_payload["knowledge_base_ids"] = [agent_config.retell_knowledge_base_id]
             inbound_agent_payload = {
                 "agent_name": f"{agent_config.name} (Entrante)",
                 **base_agent_settings,

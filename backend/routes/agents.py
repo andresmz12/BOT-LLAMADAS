@@ -1,5 +1,5 @@
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from typing import Optional
@@ -158,6 +158,59 @@ def delete_agent(
     session.delete(agent)
     session.commit()
     return {"ok": True}
+
+
+@router.post("/{agent_id}/upload-kb")
+async def upload_knowledge_base(
+    agent_id: int,
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    from services import retell_client as rc
+
+    agent = session.get(AgentConfig, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if current_user.role != "superadmin" and agent.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+
+    org = session.get(Organization, agent.organization_id) if agent.organization_id else None
+    api_key = (org.retell_api_key if org else "") or ""
+    if not api_key:
+        raise HTTPException(status_code=400, detail="API key de Retell no configurada en la organización")
+    if not agent.retell_llm_id:
+        raise HTTPException(status_code=400, detail="El agente no está sincronizado con Retell. Sincroniza primero.")
+
+    # Validate file size (10 MB)
+    content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="El archivo supera el límite de 10 MB")
+
+    allowed_ext = {".pdf", ".txt", ".docx", ".doc", ".md", ".csv"}
+    filename = file.filename or "document"
+    ext = "." + filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    if ext not in allowed_ext:
+        raise HTTPException(status_code=400, detail=f"Formato no permitido. Usa: PDF, TXT, DOCX, MD, CSV")
+
+    kb_name = agent.name[:39]
+    kb_id = await rc.create_knowledge_base(kb_name, content, filename, api_key)
+
+    # Attach KB to outbound LLM
+    await rc.attach_kb_to_llm(agent.retell_llm_id, kb_id, api_key)
+
+    # Attach KB to inbound LLM if exists
+    if agent.inbound_retell_llm_id:
+        try:
+            await rc.attach_kb_to_llm(agent.inbound_retell_llm_id, kb_id, api_key)
+        except Exception as e:
+            logger.warning(f"Could not attach KB to inbound LLM: {e}")
+
+    agent.retell_knowledge_base_id = kb_id
+    session.add(agent)
+    session.commit()
+    logger.info(f"[KB] Agent {agent_id}: created KB {kb_id} from file '{filename}'")
+    return {"ok": True, "knowledge_base_id": kb_id, "filename": filename}
 
 
 @router.post("/{agent_id}/set-default")

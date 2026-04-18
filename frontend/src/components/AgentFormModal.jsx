@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline'
-import { createAgent, updateAgent, syncAgent } from '../api/client'
+import { useState, useRef } from 'react'
+import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon, DocumentArrowUpIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+import { createAgent, updateAgent, syncAgent, uploadKnowledgeBase } from '../api/client'
 
 const VOICES = [
   { value: 'retell-Andrea',    label: 'Andrea (Mexicana · Adulta)' },
@@ -19,6 +19,9 @@ const TEMPERATURES = [
   { value: 0.2, label: 'Preciso (0.2)' },
 ]
 
+const ALLOWED_EXTS = ['.pdf', '.txt', '.docx', '.doc', '.md', '.csv']
+const MAX_MB = 10
+
 const EMPTY = {
   name: '', agent_name: '', company_name: '', company_info: '',
   services: '', instructions: '', language: 'español',
@@ -33,6 +36,12 @@ const EMPTY = {
   inbound_first_message: '',
 }
 
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+}
+
 export default function AgentFormModal({ agent, onClose, onSaved }) {
   const [form, setForm] = useState(agent ? { ...EMPTY, ...agent } : { ...EMPTY })
   const [syncOnSave, setSyncOnSave] = useState(true)
@@ -41,13 +50,47 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
   const [syncError, setSyncError] = useState('')
   const [callTab, setCallTab] = useState('outbound')
 
+  // KB state
+  const [kbFile, setKbFile] = useState(null)
+  const [kbFileError, setKbFileError] = useState('')
+  const [kbStatus, setKbStatus] = useState(null) // null | 'uploading' | 'ok' | 'warning'
+  const [kbWarning, setKbWarning] = useState('')
+  const [isDragging, setIsDragging] = useState(false)
+  const fileInputRef = useRef(null)
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const validateAndSetFile = (file) => {
+    setKbFileError('')
+    if (!file) return
+    const ext = '.' + file.name.split('.').pop().toLowerCase()
+    if (!ALLOWED_EXTS.includes(ext)) {
+      setKbFileError(`Formato no permitido. Usa: ${ALLOWED_EXTS.join(', ')}`)
+      return
+    }
+    if (file.size > MAX_MB * 1024 * 1024) {
+      setKbFileError(`El archivo supera el límite de ${MAX_MB} MB`)
+      return
+    }
+    setKbFile(file)
+  }
+
+  const handleDrop = (e) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const file = e.dataTransfer.files[0]
+    if (file) validateAndSetFile(file)
+  }
 
   const submit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setSyncStatus(null)
+    setKbStatus(null)
+    setKbWarning('')
+
     try {
+      // Step 1: Save agent
       let saved
       if (agent?.id) {
         saved = await updateAgent(agent.id, form)
@@ -55,6 +98,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
         saved = await createAgent(form)
       }
 
+      // Step 2: Sync with Retell
       if (syncOnSave) {
         setSyncStatus('syncing')
         try {
@@ -63,22 +107,49 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
             setSyncStatus('error')
             setSyncError('Agente guardado, pero error al sincronizar con Retell: ' + syncResp.retell_error)
             setLoading(false)
-          } else {
-            setSyncStatus('ok')
-            setTimeout(() => onSaved(), 800)
+            return
           }
+          setSyncStatus('ok')
         } catch (syncErr) {
           setSyncStatus('error')
           setSyncError(syncErr.response?.data?.detail || syncErr.message)
           setLoading(false)
+          return
         }
-      } else {
-        onSaved()
       }
+
+      // Step 3: Upload KB if file selected
+      if (kbFile) {
+        setKbStatus('uploading')
+        try {
+          await uploadKnowledgeBase(saved.id, kbFile)
+          setKbStatus('ok')
+        } catch (kbErr) {
+          setKbStatus('warning')
+          setKbWarning(
+            'Agente creado correctamente, pero el documento no se pudo subir. ' +
+            'Puedes subirlo desde Editar agente. Detalle: ' +
+            (kbErr.response?.data?.detail || kbErr.message)
+          )
+          // Don't block — just warn, then close after delay
+          setTimeout(() => onSaved(), 4000)
+          setLoading(false)
+          return
+        }
+      }
+
+      setTimeout(() => onSaved(), 800)
     } catch (err) {
       alert('Error: ' + (err.response?.data?.detail || err.message))
       setLoading(false)
     }
+  }
+
+  const submitLabel = () => {
+    if (!loading) return syncOnSave ? 'Guardar y sincronizar' : 'Guardar'
+    if (syncStatus === 'syncing') return 'Sincronizando...'
+    if (kbStatus === 'uploading') return 'Subiendo documento...'
+    return 'Guardando...'
   }
 
   return (
@@ -211,6 +282,76 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
             </div>
           </div>
 
+          {/* Knowledge Base */}
+          <div className="border border-z-border rounded-xl overflow-hidden">
+            <div className="px-4 py-3 bg-black/20 border-b border-z-border">
+              <h3 className="text-sm font-medium text-slate-300">Base de Conocimiento <span className="text-slate-500 font-normal">(opcional)</span></h3>
+            </div>
+            <div className="p-4 space-y-3">
+              {/* Existing KB indicator */}
+              {agent?.retell_knowledge_base_id && !kbFile && (
+                <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <CheckCircleIcon className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  <span className="text-xs text-green-400">Documento actual: <span className="font-mono">{agent.retell_knowledge_base_id}</span></span>
+                </div>
+              )}
+
+              {/* Drop zone */}
+              {!kbFile ? (
+                <div
+                  onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
+                  onDragLeave={() => setIsDragging(false)}
+                  onDrop={handleDrop}
+                  onClick={() => fileInputRef.current?.click()}
+                  className={`flex flex-col items-center justify-center gap-2 border-2 border-dashed rounded-xl px-4 py-6 cursor-pointer transition-colors ${
+                    isDragging
+                      ? 'border-z-blue bg-z-blue/10'
+                      : 'border-z-border hover:border-z-blue/50 hover:bg-white/[0.02]'
+                  }`}
+                >
+                  <DocumentArrowUpIcon className="w-8 h-8 text-slate-500" />
+                  <p className="text-sm text-slate-400 text-center">
+                    Arrastra un archivo aquí o <span className="text-z-blue-light">selecciona uno</span>
+                  </p>
+                  <p className="text-xs text-slate-600">
+                    PDF, TXT, DOCX, MD, CSV · máximo {MAX_MB} MB
+                  </p>
+                  <p className="text-xs text-slate-600 text-center">
+                    Sube documentos con información de tu empresa. El agente los usará durante las llamadas.
+                  </p>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".pdf,.txt,.docx,.doc,.md,.csv"
+                    className="hidden"
+                    onChange={e => validateAndSetFile(e.target.files[0])}
+                  />
+                </div>
+              ) : (
+                <div className="flex items-center gap-3 px-3 py-2.5 bg-z-blue/10 border border-z-blue/30 rounded-lg">
+                  <DocumentArrowUpIcon className="w-5 h-5 text-z-blue-light flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-slate-200 truncate font-medium">{kbFile.name}</p>
+                    <p className="text-xs text-slate-500">{formatBytes(kbFile.size)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setKbFile(null); setKbFileError('') }}
+                    className="text-slate-500 hover:text-red-400 flex-shrink-0"
+                  >
+                    <XMarkIcon className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
+              {kbFileError && (
+                <p className="text-xs text-red-400 flex items-center gap-1">
+                  <ExclamationCircleIcon className="w-3.5 h-3.5 flex-shrink-0" /> {kbFileError}
+                </p>
+              )}
+            </div>
+          </div>
+
           <div className="flex flex-wrap items-center gap-6 pt-1">
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={form.is_default} onChange={e => set('is_default', e.target.checked)} className="w-4 h-4 accent-yellow-500" />
@@ -222,26 +363,40 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
             </label>
           </div>
 
-          {syncStatus === 'syncing' && (
-            <p className="text-sm text-z-blue-light">Sincronizando con Retell AI...</p>
-          )}
-          {syncStatus === 'ok' && (
-            <span className="flex items-center gap-1.5 text-sm text-green-400">
-              <CheckCircleIcon className="w-4 h-4" /> Sincronizado con Retell correctamente
-            </span>
-          )}
-          {syncStatus === 'error' && (
-            <span className="flex items-center gap-1.5 text-sm text-red-400">
-              <ExclamationCircleIcon className="w-4 h-4" /> {syncError}
-            </span>
-          )}
+          {/* Status messages */}
+          <div className="space-y-1.5">
+            {syncStatus === 'syncing' && (
+              <p className="text-sm text-z-blue-light">Sincronizando con Retell AI...</p>
+            )}
+            {syncStatus === 'ok' && kbStatus !== 'uploading' && kbStatus !== 'ok' && kbStatus !== 'warning' && (
+              <span className="flex items-center gap-1.5 text-sm text-green-400">
+                <CheckCircleIcon className="w-4 h-4" /> Sincronizado con Retell correctamente
+              </span>
+            )}
+            {syncStatus === 'error' && (
+              <span className="flex items-center gap-1.5 text-sm text-red-400">
+                <ExclamationCircleIcon className="w-4 h-4" /> {syncError}
+              </span>
+            )}
+            {kbStatus === 'uploading' && (
+              <p className="text-sm text-z-blue-light">Subiendo documento a Retell Knowledge Base...</p>
+            )}
+            {kbStatus === 'ok' && (
+              <span className="flex items-center gap-1.5 text-sm text-green-400">
+                <CheckCircleIcon className="w-4 h-4" /> Agente sincronizado y documento subido correctamente
+              </span>
+            )}
+            {kbStatus === 'warning' && (
+              <span className="flex items-center gap-1.5 text-sm text-amber-400">
+                <ExclamationTriangleIcon className="w-4 h-4 flex-shrink-0" /> {kbWarning}
+              </span>
+            )}
+          </div>
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="z-btn-ghost">Cancelar</button>
-            <button type="submit" disabled={loading} className="z-btn-primary disabled:opacity-50">
-              {loading
-                ? (syncStatus === 'syncing' ? 'Sincronizando...' : 'Guardando...')
-                : (syncOnSave ? 'Guardar y sincronizar' : 'Guardar')}
+            <button type="submit" disabled={loading || !!kbFileError} className="z-btn-primary disabled:opacity-50">
+              {submitLabel()}
             </button>
           </div>
         </form>
