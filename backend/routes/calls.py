@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
+from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from database import get_session
 from models import Call, Campaign, Prospect, AgentConfig, User, Organization
@@ -94,7 +95,7 @@ def list_calls(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    query = select(Call)
+    query = select(Call).options(selectinload(Call.prospect))
     if current_user.role != "superadmin":
         query = query.where(Call.organization_id == current_user.organization_id)
     if campaign_id:
@@ -104,7 +105,7 @@ def list_calls(
     calls = session.exec(query.order_by(Call.started_at.desc())).all()
     result = []
     for call in calls:
-        d = call.dict()
+        d = call.dict(exclude={"prospect", "campaign"})
         if call.prospect:
             d["prospect_name"] = call.prospect.name
             d["prospect_company"] = call.prospect.company
@@ -119,12 +120,13 @@ def get_call(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    call = session.get(Call, call_id)
+    query = select(Call).options(selectinload(Call.prospect)).where(Call.id == call_id)
+    call = session.exec(query).first()
     if not call:
         raise HTTPException(status_code=404, detail="Call not found")
     if current_user.role != "superadmin" and call.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
-    d = call.dict()
+    d = call.dict(exclude={"prospect", "campaign"})
     if call.prospect:
         d["prospect_name"] = call.prospect.name
         d["prospect_company"] = call.prospect.company
