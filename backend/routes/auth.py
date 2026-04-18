@@ -1,12 +1,26 @@
 import os
+import time
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from collections import defaultdict
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from database import get_session
 from models import User, Organization
 from services.auth import verify_password, create_token, decode_token
+
+_login_attempts: dict[str, list[float]] = defaultdict(list)
+_RATE_WINDOW = 60
+_RATE_MAX = 5
+
+
+def _check_rate_limit(ip: str):
+    now = time.time()
+    _login_attempts[ip] = [t for t in _login_attempts[ip] if now - t < _RATE_WINDOW]
+    if len(_login_attempts[ip]) >= _RATE_MAX:
+        raise HTTPException(status_code=429, detail="Demasiados intentos. Intenta en 1 minuto.")
+    _login_attempts[ip].append(now)
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -51,7 +65,9 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
 
 
 @router.post("/login")
-def login(req: LoginRequest, session: Session = Depends(get_session)):
+def login(req: LoginRequest, request: Request, session: Session = Depends(get_session)):
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(client_ip)
     user = session.exec(select(User).where(User.email == req.email)).first()
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")

@@ -1,7 +1,10 @@
+import os
 import json
+import hmac
+import hashlib
 import logging
 from datetime import datetime
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Request, Depends, HTTPException
 from sqlmodel import Session, select
 from sqlalchemy import or_
 from database import get_session
@@ -14,9 +17,21 @@ router = APIRouter(prefix="/webhook", tags=["webhook"])
 ws_manager = None
 
 
+async def _verify_retell_signature(request: Request, raw_body: bytes):
+    secret = os.getenv("RETELL_WEBHOOK_SECRET", "")
+    if not secret:
+        return
+    sig = request.headers.get("x-retell-signature", "")
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(sig, expected):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+
+
 @router.post("/retell")
 async def retell_webhook(request: Request, session: Session = Depends(get_session)):
-    body = await request.json()
+    raw_body = await request.body()
+    await _verify_retell_signature(request, raw_body)
+    body = json.loads(raw_body)
     event = body.get("event", "")
     call_data = body.get("call", {})
     retell_call_id = call_data.get("call_id", "")
