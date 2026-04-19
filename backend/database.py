@@ -17,6 +17,48 @@ def create_db_and_tables():
     SQLModel.metadata.create_all(engine)
 
 
+def run_migrations():
+    """Add missing columns to existing tables (safe to run on every startup)."""
+    import logging
+    from sqlalchemy import text, inspect as sa_inspect
+    log = logging.getLogger(__name__)
+    try:
+        insp = sa_inspect(engine)
+        tables = insp.get_table_names()
+
+        if "agentconfig" in tables:
+            agent_cols = {c["name"] for c in insp.get_columns("agentconfig")}
+            new_cols = {
+                "retell_knowledge_base_id": "VARCHAR(255)",
+                "outbound_system_prompt": "TEXT",
+                "outbound_first_message": "TEXT",
+                "inbound_enabled": "BOOLEAN DEFAULT FALSE",
+                "inbound_system_prompt": "TEXT",
+                "inbound_first_message": "TEXT",
+                "inbound_retell_agent_id": "VARCHAR(255)",
+                "inbound_retell_llm_id": "VARCHAR(255)",
+                "voicemail_message": "TEXT",
+            }
+            with engine.begin() as conn:
+                for col, col_type in new_cols.items():
+                    if col not in agent_cols:
+                        conn.execute(text(f"ALTER TABLE agentconfig ADD COLUMN {col} {col_type}"))
+                        log.info(f"Migration: added agentconfig.{col}")
+
+        if "call" in tables:
+            call_cols = {c["name"] for c in insp.get_columns("call")}
+            with engine.begin() as conn:
+                if "call_type" not in call_cols:
+                    conn.execute(text("ALTER TABLE call ADD COLUMN call_type VARCHAR(50) DEFAULT 'outbound'"))
+                    log.info("Migration: added call.call_type")
+                if "organization_id" not in call_cols:
+                    conn.execute(text("ALTER TABLE call ADD COLUMN organization_id INTEGER"))
+                    log.info("Migration: added call.organization_id")
+
+    except Exception as e:
+        log.warning(f"Migration warning (non-fatal): {e}")
+
+
 def get_session():
     with Session(engine) as session:
         yield session
