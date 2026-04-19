@@ -140,7 +140,11 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
 
       setTimeout(() => onSaved(), 800)
     } catch (err) {
-      alert('Error: ' + (err.response?.data?.detail || err.message))
+      const status = err.response?.status
+      const detail = err.response?.data?.detail || err.response?.data || err.message
+      console.error('[AgentForm] save error', status, detail, err)
+      const msg = status ? `Error ${status}: ${JSON.stringify(detail)}` : `Error de red: ${err.message}`
+      alert(msg)
       setLoading(false)
     }
   }

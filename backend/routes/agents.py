@@ -11,6 +11,27 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["agents"])
 
 
+class AgentCreate(BaseModel):
+    name: str
+    agent_name: str
+    company_name: str
+    company_info: str = ""
+    services: str = ""
+    instructions: str = ""
+    language: str = "español"
+    voice_id: Optional[str] = None
+    max_call_duration: int = 180
+    is_default: bool = False
+    first_message_override: Optional[str] = None
+    outbound_system_prompt: Optional[str] = None
+    outbound_first_message: Optional[str] = None
+    voicemail_message: Optional[str] = None
+    temperature: float = 0.4
+    inbound_enabled: bool = False
+    inbound_system_prompt: Optional[str] = None
+    inbound_first_message: Optional[str] = None
+
+
 class AgentUpdate(BaseModel):
     name: Optional[str] = None
     agent_name: Optional[str] = None
@@ -38,12 +59,12 @@ class AgentUpdate(BaseModel):
 
 @router.post("")
 def create_agent(
-    agent: AgentConfig,
+    data: AgentCreate,
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
-    if current_user.role != "superadmin":
-        agent.organization_id = current_user.organization_id
+    org_id = None if current_user.role == "superadmin" else current_user.organization_id
+    agent = AgentConfig(**data.dict(), organization_id=org_id)
     session.add(agent)
     session.commit()
     session.refresh(agent)
