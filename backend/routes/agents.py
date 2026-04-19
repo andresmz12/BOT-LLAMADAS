@@ -47,7 +47,7 @@ def create_agent(
     session.add(agent)
     session.commit()
     session.refresh(agent)
-    return agent
+    return agent.dict(exclude={"campaigns"})
 
 
 @router.get("")
@@ -58,7 +58,7 @@ def list_agents(
     query = select(AgentConfig)
     if current_user.role != "superadmin":
         query = query.where(AgentConfig.organization_id == current_user.organization_id)
-    return session.exec(query).all()
+    return [a.dict(exclude={"campaigns"}) for a in session.exec(query).all()]
 
 
 @router.get("/{agent_id}")
@@ -72,7 +72,7 @@ def get_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     if current_user.role != "superadmin" and agent.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
-    return agent
+    return agent.dict(exclude={"campaigns"})
 
 
 @router.put("/{agent_id}")
@@ -97,7 +97,7 @@ def update_agent(
     session.add(agent)
     session.commit()
     session.refresh(agent)
-    return agent
+    return agent.dict(exclude={"campaigns"})
 
 
 @router.post("/{agent_id}/sync")
