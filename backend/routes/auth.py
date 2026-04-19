@@ -66,7 +66,8 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
 
 @router.post("/login")
 def login(req: LoginRequest, request: Request, session: Session = Depends(get_session)):
-    client_ip = request.client.host if request.client else "unknown"
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else (request.client.host if request.client else "unknown")
     _check_rate_limit(client_ip)
     user = session.exec(select(User).where(User.email == req.email)).first()
     if not user or not verify_password(req.password, user.password_hash):
