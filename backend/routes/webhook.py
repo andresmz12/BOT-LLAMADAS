@@ -201,20 +201,30 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
             f"client_said={len(json.loads(call.client_said or '[]'))} items"
         )
 
-        # ── CRM webhook dispatch ───────────────────────────────────────────────
-        if org and org.crm_webhook_enabled and org.crm_webhook_url:
-            from services.crm_webhook import send_crm_webhook
-            crm_prospect = session.get(Prospect, call.prospect_id) if call.prospect_id else None
-            crm_agent = None
-            if call.campaign_id:
-                crm_camp = session.get(Campaign, call.campaign_id)
-                if crm_camp:
-                    crm_agent = session.get(AgentConfig, crm_camp.agent_config_id)
-            await send_crm_webhook(org, call, crm_prospect, crm_agent, "call_ended", session)
-            if call.outcome == "interested":
-                await send_crm_webhook(org, call, crm_prospect, crm_agent, "interested", session)
-            if call.appointment_scheduled:
-                await send_crm_webhook(org, call, crm_prospect, crm_agent, "appointment_scheduled", session)
+        # ── CRM dispatch (native APIs + generic webhooks) ──────────────────────
+        if org and org.crm_webhook_enabled and org.crm_type and org.crm_type != "none":
+            try:
+                from services.crm_service import send_call_to_crm
+                crm_prospect = session.get(Prospect, call.prospect_id) if call.prospect_id else None
+                crm_camp = None
+                crm_agent = None
+                if call.campaign_id:
+                    crm_camp = session.get(Campaign, call.campaign_id)
+                    if crm_camp:
+                        crm_agent = session.get(AgentConfig, crm_camp.agent_config_id)
+                call_data_crm = {
+                    "phone": crm_prospect.phone if crm_prospect else None,
+                    "call_result": call.outcome,
+                    "duration_seconds": call.duration_seconds,
+                    "summary": call.notes,
+                    "campaign_name": crm_camp.name if crm_camp else None,
+                    "transcript": call.raw_transcript,
+                    "timestamp": (call.ended_at or datetime.utcnow()).isoformat(),
+                }
+                await send_call_to_crm(org, call_data_crm, call, crm_prospect, crm_agent, session)
+            except Exception as e:
+                logger.error(f"CRM sync failed: {e}")
+                # NO re-raise — Retell must always receive 200
 
         if ws_manager and call.campaign_id:
             await ws_manager.broadcast(call.campaign_id, {

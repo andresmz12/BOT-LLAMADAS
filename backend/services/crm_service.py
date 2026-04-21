@@ -1,0 +1,247 @@
+import json
+import logging
+from datetime import datetime
+
+import httpx
+
+from models import Organization
+
+logger = logging.getLogger(__name__)
+
+TIMEOUT = 15
+NATIVE_CRM_TYPES = {"monday", "hubspot", "gohighlevel", "zoho", "salesforce"}
+
+
+async def send_call_to_crm(org: Organization, call_data: dict, call=None, prospect=None, agent_config=None, session=None) -> None:
+    crm_type = (org.crm_type or "").lower()
+
+    if crm_type == "monday":
+        await _send_monday(org, call_data)
+    elif crm_type == "hubspot":
+        await _send_hubspot(org, call_data)
+    elif crm_type == "gohighlevel":
+        await _send_gohighlevel(org, call_data)
+    elif crm_type == "zoho":
+        await _send_zoho(org, call_data)
+    elif crm_type == "salesforce":
+        await _send_salesforce(org, call_data)
+    else:
+        # Generic webhook — preserve existing multi-event behavior exactly
+        from services.crm_webhook import send_crm_webhook
+        await send_crm_webhook(org, call, prospect, agent_config, "call_ended", session)
+        if call and call.outcome == "interested":
+            await send_crm_webhook(org, call, prospect, agent_config, "interested", session)
+        if call and call.appointment_scheduled:
+            await send_crm_webhook(org, call, prospect, agent_config, "appointment_scheduled", session)
+
+
+async def _send_monday(org: Organization, call_data: dict) -> None:
+    if not org.crm_api_key or not org.crm_board_or_list_id:
+        logger.warning(f"[CRM_MONDAY] org={org.id} missing api_key or board_id — skipping")
+        return
+
+    phone = call_data.get("phone") or ""
+    call_result = call_data.get("call_result") or ""
+    duration = call_data.get("duration_seconds") or 0
+    summary = call_data.get("summary") or ""
+    campaign = call_data.get("campaign_name") or ""
+    ts = call_data.get("timestamp") or datetime.utcnow().isoformat()
+    date_only = ts[:10]  # YYYY-MM-DD
+
+    mutation = """
+    mutation ($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
+      create_item(board_id: $boardId, item_name: $itemName, column_values: $columnValues) {
+        id
+      }
+    }
+    """
+    column_values = json.dumps({
+        "phone": {"phone": phone, "countryShortName": "US"},
+        "status": {"label": call_result},
+        "date": {"date": date_only},
+        "numbers": str(duration),
+        "long_text": {"text": summary},
+        "text": campaign,
+    })
+    variables = {
+        "boardId": org.crm_board_or_list_id,
+        "itemName": phone or "ZyraVoice Lead",
+        "columnValues": column_values,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            resp = await client.post(
+                "https://api.monday.com/v2",
+                json={"query": mutation, "variables": variables},
+                headers={
+                    "Authorization": f"Bearer {org.crm_api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+        if resp.status_code < 400:
+            logger.info(f"[CRM_MONDAY] org={org.id} item created status={resp.status_code}")
+        else:
+            logger.error(f"[CRM_MONDAY] org={org.id} failed status={resp.status_code} body={resp.text[:300]}")
+    except Exception as exc:
+        logger.error(f"[CRM_MONDAY] org={org.id} request error: {exc}")
+
+
+async def _send_hubspot(org: Organization, call_data: dict) -> None:
+    if not org.crm_api_key:
+        logger.warning(f"[CRM_HUBSPOT] org={org.id} missing api_key — skipping")
+        return
+
+    phone = call_data.get("phone") or ""
+    call_result = call_data.get("call_result") or ""
+    summary = call_data.get("summary") or ""
+    campaign = call_data.get("campaign_name") or ""
+    notes = f"Campaña: {campaign}\n\n{summary}".strip() if campaign else summary
+
+    body = {
+        "properties": {
+            "firstname": phone,
+            "phone": phone,
+            "hs_lead_status": call_result,
+            "notes": notes,
+        }
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            resp = await client.post(
+                "https://api.hubapi.com/crm/v3/objects/contacts",
+                json=body,
+                headers={
+                    "Authorization": f"Bearer {org.crm_api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+        if resp.status_code < 400:
+            logger.info(f"[CRM_HUBSPOT] org={org.id} contact created status={resp.status_code}")
+        else:
+            logger.error(f"[CRM_HUBSPOT] org={org.id} failed status={resp.status_code} body={resp.text[:300]}")
+    except Exception as exc:
+        logger.error(f"[CRM_HUBSPOT] org={org.id} request error: {exc}")
+
+
+async def _send_gohighlevel(org: Organization, call_data: dict) -> None:
+    if not org.crm_api_key:
+        logger.warning(f"[CRM_GHL] org={org.id} missing api_key — skipping")
+        return
+
+    phone = call_data.get("phone") or ""
+    call_result = call_data.get("call_result") or ""
+    summary = call_data.get("summary") or ""
+    campaign = call_data.get("campaign_name") or ""
+
+    body = {
+        "phone": phone,
+        "tags": [call_result] if call_result else [],
+        "customField": {
+            "summary": summary,
+            "campaign": campaign,
+        },
+    }
+    if org.crm_board_or_list_id:
+        body["locationId"] = org.crm_board_or_list_id
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            resp = await client.post(
+                "https://rest.gohighlevel.com/v1/contacts/",
+                json=body,
+                headers={
+                    "Authorization": f"Bearer {org.crm_api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+        if resp.status_code < 400:
+            logger.info(f"[CRM_GHL] org={org.id} contact created status={resp.status_code}")
+        else:
+            logger.error(f"[CRM_GHL] org={org.id} failed status={resp.status_code} body={resp.text[:300]}")
+    except Exception as exc:
+        logger.error(f"[CRM_GHL] org={org.id} request error: {exc}")
+
+
+async def _send_zoho(org: Organization, call_data: dict) -> None:
+    if not org.crm_api_key:
+        logger.warning(f"[CRM_ZOHO] org={org.id} missing api_key — skipping")
+        return
+
+    phone = call_data.get("phone") or ""
+    summary = call_data.get("summary") or ""
+    campaign = call_data.get("campaign_name") or ""
+    description = f"Campaña: {campaign}\n\n{summary}".strip() if campaign else summary
+
+    body = {
+        "data": [
+            {
+                "Phone": phone,
+                "Last_Name": phone or "ZyraVoice Lead",
+                "Lead_Source": "ZyraVoice",
+                "Description": description,
+            }
+        ]
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            resp = await client.post(
+                "https://www.zohoapis.com/crm/v2/Leads",
+                json=body,
+                headers={
+                    "Authorization": f"Zoho-oauthtoken {org.crm_api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+        if resp.status_code < 400:
+            logger.info(f"[CRM_ZOHO] org={org.id} lead created status={resp.status_code}")
+        else:
+            logger.error(f"[CRM_ZOHO] org={org.id} failed status={resp.status_code} body={resp.text[:300]}")
+    except Exception as exc:
+        logger.error(f"[CRM_ZOHO] org={org.id} request error: {exc}")
+
+
+async def _send_salesforce(org: Organization, call_data: dict) -> None:
+    if not org.crm_api_key:
+        logger.warning(f"[CRM_SF] org={org.id} missing api_key — skipping")
+        return
+
+    try:
+        extra = json.loads(org.crm_extra_config or "{}")
+    except Exception:
+        extra = {}
+    instance_url = extra.get("instance_url", "").rstrip("/")
+    if not instance_url:
+        logger.warning(f"[CRM_SF] org={org.id} missing instance_url in crm_extra_config — skipping")
+        return
+
+    phone = call_data.get("phone") or ""
+    summary = call_data.get("summary") or ""
+    campaign = call_data.get("campaign_name") or ""
+    description = f"Campaña: {campaign}\n\n{summary}".strip() if campaign else summary
+
+    body = {
+        "Phone": phone,
+        "LastName": phone or "ZyraVoice Lead",
+        "LeadSource": "ZyraVoice",
+        "Description": description,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=TIMEOUT) as client:
+            resp = await client.post(
+                f"{instance_url}/services/data/v57.0/sobjects/Lead/",
+                json=body,
+                headers={
+                    "Authorization": f"Bearer {org.crm_api_key}",
+                    "Content-Type": "application/json",
+                },
+            )
+        if resp.status_code < 400:
+            logger.info(f"[CRM_SF] org={org.id} lead created status={resp.status_code}")
+        else:
+            logger.error(f"[CRM_SF] org={org.id} failed status={resp.status_code} body={resp.text[:300]}")
+    except Exception as exc:
+        logger.error(f"[CRM_SF] org={org.id} request error: {exc}")
