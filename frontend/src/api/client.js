@@ -91,4 +91,15 @@ export const getCampaignStats = (id) => api.get(`/stats/${id}`).then(r => r.data
 export const getSettings = () => api.get('/settings').then(r => r.data)
 export const saveSettings = (data) => api.post('/settings', data).then(r => r.data)
 
+// Admin — CRM
+export const testCRMWebhook = (orgId) =>
+  api.post(`/admin/organizations/${orgId}/crm/test`).then(r => r.data)
+export const getCRMWebhookLogs = (orgId) =>
+  api.get(`/admin/organizations/${orgId}/crm/logs`).then(r => r.data)
+
+// Settings — CRM (org-admin)
+export const getCRMSettings = () => api.get('/settings/crm').then(r => r.data)
+export const testMyCRMWebhook = () => api.post('/settings/crm/test').then(r => r.data)
+export const getMyCRMLogs = () => api.get('/settings/crm/logs').then(r => r.data)
+
 export default api

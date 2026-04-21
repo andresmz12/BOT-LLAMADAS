@@ -201,6 +201,21 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
             f"client_said={len(json.loads(call.client_said or '[]'))} items"
         )
 
+        # ── CRM webhook dispatch ───────────────────────────────────────────────
+        if org and org.crm_webhook_enabled and org.crm_webhook_url:
+            from services.crm_webhook import send_crm_webhook
+            crm_prospect = session.get(Prospect, call.prospect_id) if call.prospect_id else None
+            crm_agent = None
+            if call.campaign_id:
+                crm_camp = session.get(Campaign, call.campaign_id)
+                if crm_camp:
+                    crm_agent = session.get(AgentConfig, crm_camp.agent_config_id)
+            await send_crm_webhook(org, call, crm_prospect, crm_agent, "call_ended", session)
+            if call.outcome == "interested":
+                await send_crm_webhook(org, call, crm_prospect, crm_agent, "interested", session)
+            if call.appointment_scheduled:
+                await send_crm_webhook(org, call, crm_prospect, crm_agent, "appointment_scheduled", session)
+
         if ws_manager and call.campaign_id:
             await ws_manager.broadcast(call.campaign_id, {
                 "event": "call_updated",

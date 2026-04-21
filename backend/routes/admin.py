@@ -1,9 +1,11 @@
+import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
+from sqlalchemy import desc
 from pydantic import BaseModel
 from typing import Optional
 from database import get_session
-from models import Organization, User
+from models import Organization, User, WebhookLog
 from services.auth import hash_password
 from routes.auth import require_superadmin
 
@@ -18,6 +20,11 @@ class OrgCreate(BaseModel):
     retell_phone_number: str = ""
     anthropic_api_key: str = ""
     is_active: bool = True
+    crm_webhook_url: Optional[str] = None
+    crm_webhook_enabled: bool = False
+    crm_webhook_secret: Optional[str] = None
+    crm_type: Optional[str] = None
+    crm_events: str = '["call_ended","interested"]'
 
 
 class UserCreate(BaseModel):
@@ -72,6 +79,37 @@ def update_org(
     session.commit()
     session.refresh(org)
     return org
+
+
+@router.post("/organizations/{org_id}/crm/test")
+async def test_org_crm_webhook(
+    org_id: int,
+    _: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    org = session.get(Organization, org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    if not org.crm_webhook_url:
+        raise HTTPException(status_code=400, detail="No hay URL de webhook configurada")
+    from services.crm_webhook import send_test_webhook
+    result = await send_test_webhook(org, session)
+    return result
+
+
+@router.get("/organizations/{org_id}/crm/logs")
+def get_org_crm_logs(
+    org_id: int,
+    _: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    logs = session.exec(
+        select(WebhookLog)
+        .where(WebhookLog.organization_id == org_id)
+        .order_by(desc(WebhookLog.created_at))
+        .limit(20)
+    ).all()
+    return logs
 
 
 @router.post("/users")

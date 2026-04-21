@@ -1,6 +1,6 @@
 import os
 from sqlmodel import SQLModel, create_engine, Session, select
-from models import AgentConfig, Organization, User
+from models import AgentConfig, Organization, User, WebhookLog  # noqa: F401 — ensures table is registered
 
 _raw_url = os.getenv("DATABASE_URL", "sqlite:///./calls.db")
 # Railway PostgreSQL URLs start with "postgres://" but SQLAlchemy requires "postgresql://"
@@ -54,6 +54,21 @@ def run_migrations():
                 if "organization_id" not in call_cols:
                     conn.execute(text("ALTER TABLE call ADD COLUMN organization_id INTEGER"))
                     log.info("Migration: added call.organization_id")
+
+        if "organization" in tables:
+            org_cols = {c["name"] for c in insp.get_columns("organization")}
+            org_new = {
+                "crm_webhook_url": "VARCHAR(500)",
+                "crm_webhook_enabled": "BOOLEAN DEFAULT FALSE",
+                "crm_webhook_secret": "VARCHAR(255)",
+                "crm_type": "VARCHAR(100)",
+                "crm_events": "TEXT DEFAULT '[\"call_ended\",\"interested\"]'",
+            }
+            with engine.begin() as conn:
+                for col, col_type in org_new.items():
+                    if col not in org_cols:
+                        conn.execute(text(f"ALTER TABLE organization ADD COLUMN {col} {col_type}"))
+                        log.info(f"Migration: added organization.{col}")
 
     except Exception as e:
         log.warning(f"Migration warning (non-fatal): {e}")

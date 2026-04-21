@@ -1,7 +1,22 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { KeyIcon, PhoneIcon, CheckCircleIcon, PhoneArrowUpRightIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline'
-import { getSettings, saveSettings, getAgents, makeDemoCall } from '../api/client'
+import { getSettings, saveSettings, getAgents, makeDemoCall, getCRMSettings, testMyCRMWebhook, getMyCRMLogs } from '../api/client'
+
+const CRM_TYPE_LABELS = {
+  zapier: 'Zapier',
+  make: 'Make (Integromat)',
+  gohighlevel: 'GoHighLevel',
+  hubspot: 'HubSpot',
+  monday: 'Monday.com',
+  zoho: 'Zoho CRM',
+  airtable: 'Airtable',
+  notion: 'Notion',
+  pipedrive: 'Pipedrive',
+  salesforce: 'Salesforce',
+  n8n: 'n8n',
+  custom: 'Webhook personalizado',
+}
 
 export default function Settings() {
   const navigate = useNavigate()
@@ -18,6 +33,11 @@ export default function Settings() {
   const [demoStatus, setDemoStatus] = useState(null)
   const [demoError, setDemoError] = useState('')
 
+  const [crmConfig, setCrmConfig] = useState(null)
+  const [crmLogs, setCrmLogs] = useState([])
+  const [crmTestResult, setCrmTestResult] = useState(null)
+  const [crmTestLoading, setCrmTestLoading] = useState(false)
+
   useEffect(() => {
     getSettings().then(data => {
       setForm(f => ({
@@ -28,6 +48,8 @@ export default function Settings() {
       }))
     }).catch(() => {})
     getAgents().then(setAgents).catch(() => {})
+    getCRMSettings().then(setCrmConfig).catch(() => {})
+    getMyCRMLogs().then(setCrmLogs).catch(() => {})
   }, [])
 
   const submit = async (e) => {
@@ -55,6 +77,19 @@ export default function Settings() {
     } catch (err) {
       setDemoError(err.response?.data?.detail || 'Error al iniciar llamada')
       setDemoStatus('error')
+    }
+  }
+
+  const handleCrmTest = async () => {
+    setCrmTestLoading(true)
+    setCrmTestResult(null)
+    try {
+      const res = await testMyCRMWebhook()
+      setCrmTestResult(res)
+    } catch (err) {
+      setCrmTestResult({ success: false, response: err.response?.data?.detail || 'Error de conexión' })
+    } finally {
+      setCrmTestLoading(false)
     }
   }
 
@@ -202,6 +237,112 @@ export default function Settings() {
           )}
         </div>
       </form>
+
+      {/* ── CRM & Webhooks ───────────────────────────────────────────────────── */}
+      {crmConfig && (
+        <div className="bg-z-card rounded-xl p-6 border border-z-border space-y-5">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">CRM & Webhooks</h2>
+
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-slate-200">
+                {crmConfig.crm_type && crmConfig.crm_type !== 'none'
+                  ? CRM_TYPE_LABELS[crmConfig.crm_type] || crmConfig.crm_type
+                  : 'Sin integración configurada'
+                }
+              </p>
+              {crmConfig.crm_webhook_url && (
+                <p className="text-xs text-slate-500 font-mono mt-0.5 break-all">
+                  {crmConfig.crm_webhook_url.replace(/^(https?:\/\/[^/]+)(.*)$/, (_, host, path) =>
+                    host + (path.length > 20 ? path.slice(0, 20) + '...' : path)
+                  )}
+                </p>
+              )}
+            </div>
+            <span className={`flex-shrink-0 px-2.5 py-1 text-xs rounded-full font-medium ${
+              crmConfig.crm_webhook_enabled && crmConfig.crm_webhook_url
+                ? 'bg-green-500/20 text-green-400'
+                : 'bg-slate-700 text-slate-500'
+            }`}>
+              {crmConfig.crm_webhook_enabled && crmConfig.crm_webhook_url ? 'Activo' : 'No configurado'}
+            </span>
+          </div>
+
+          {crmConfig.crm_webhook_url && (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={handleCrmTest}
+                disabled={crmTestLoading}
+                className="z-btn-ghost border border-z-border text-sm disabled:opacity-50"
+              >
+                {crmTestLoading ? 'Enviando prueba...' : 'Probar webhook'}
+              </button>
+              {crmTestResult && (
+                <div className={`text-xs rounded-lg px-3 py-2 ${
+                  crmTestResult.success
+                    ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                    : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                }`}>
+                  {crmTestResult.success
+                    ? `✓ Webhook enviado correctamente (HTTP ${crmTestResult.status_code})`
+                    : `✗ Error: ${crmTestResult.response}`
+                  }
+                </div>
+              )}
+            </div>
+          )}
+
+          {!crmConfig.crm_webhook_url && (
+            <p className="text-xs text-slate-500">
+              Configura un CRM en el Panel de Administración → Organizaciones para activar esta función.
+            </p>
+          )}
+
+          {crmLogs.length > 0 && (
+            <div>
+              <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
+                Últimos envíos
+              </h3>
+              <div className="space-y-0 rounded-lg border border-z-border overflow-hidden">
+                {crmLogs.map((log, i) => (
+                  <div
+                    key={log.id}
+                    className={`flex items-center justify-between text-xs px-4 py-2.5 ${
+                      i < crmLogs.length - 1 ? 'border-b border-z-border/50' : ''
+                    } hover:bg-white/[0.02]`}
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
+                        log.success ? 'bg-green-400' : 'bg-red-400'
+                      }`} />
+                      <span className="text-slate-500 font-mono flex-shrink-0">
+                        {new Date(log.created_at).toLocaleString('es-MX', {
+                          month: 'short', day: 'numeric',
+                          hour: '2-digit', minute: '2-digit',
+                        })}
+                      </span>
+                      <span className="text-slate-400 truncate">{log.event_type}</span>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0 text-slate-500">
+                      {log.status_code && (
+                        <span className={log.success ? 'text-green-500' : 'text-red-500'}>
+                          {log.status_code}
+                        </span>
+                      )}
+                      <span>{log.duration_ms}ms</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {crmLogs.length === 0 && crmConfig.crm_webhook_url && (
+            <p className="text-xs text-slate-600">No hay envíos registrados aún.</p>
+          )}
+        </div>
+      )}
     </div>
   )
 }

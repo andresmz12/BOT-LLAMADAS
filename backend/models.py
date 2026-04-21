@@ -12,6 +12,11 @@ class Organization(SQLModel, table=True):
     retell_phone_number: str = Field(default="")
     anthropic_api_key: str = Field(default="")
     is_active: bool = Field(default=True)
+    crm_webhook_url: Optional[str] = None
+    crm_webhook_enabled: bool = Field(default=False)
+    crm_webhook_secret: Optional[str] = None
+    crm_type: Optional[str] = None
+    crm_events: str = Field(default='["call_ended","interested"]')
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")
@@ -128,3 +133,14 @@ class Settings(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     key: str = Field(unique=True)
     value: str = Field(default="")
+
+
+class WebhookLog(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: int = Field(index=True)
+    event_type: str = Field(default="")
+    success: bool = Field(default=False)
+    status_code: Optional[int] = None
+    response_text: Optional[str] = None
+    duration_ms: int = Field(default=0)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
