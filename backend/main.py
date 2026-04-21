@@ -93,3 +93,18 @@ async def websocket_endpoint(websocket: WebSocket, campaign_id: int):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/health/db")
+def health_db():
+    from sqlalchemy import text, inspect as sa_inspect
+    try:
+        insp = sa_inspect(engine)
+        org_cols = {c["name"] for c in insp.get_columns("organization")}
+        required = {"crm_api_key", "crm_board_or_list_id", "crm_extra_config"}
+        missing = list(required - org_cols)
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"db": "ok", "org_columns_missing": missing, "migration_needed": bool(missing)}
+    except Exception as e:
+        return {"db": "error", "detail": str(e)}

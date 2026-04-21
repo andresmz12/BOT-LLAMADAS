@@ -74,7 +74,7 @@ def run_migrations():
                         log.info(f"Migration: added organization.{col}")
 
     except Exception as e:
-        log.warning(f"Migration warning (non-fatal): {e}")
+        log.error(f"Migration FAILED: {e}", exc_info=True)
 
 
 def get_session():
