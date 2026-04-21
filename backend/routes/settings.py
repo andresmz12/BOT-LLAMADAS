@@ -67,6 +67,8 @@ def get_crm_settings(
             "crm_webhook_enabled": False,
             "crm_events": [],
             "crm_webhook_secret_configured": False,
+            "crm_api_key_configured": False,
+            "crm_board_or_list_id": None,
         }
     try:
         events = json.loads(org.crm_events or "[]")
@@ -78,6 +80,8 @@ def get_crm_settings(
         "crm_webhook_enabled": org.crm_webhook_enabled,
         "crm_events": events,
         "crm_webhook_secret_configured": bool(org.crm_webhook_secret),
+        "crm_api_key_configured": bool(org.crm_api_key),
+        "crm_board_or_list_id": org.crm_board_or_list_id,
     }
 
 
