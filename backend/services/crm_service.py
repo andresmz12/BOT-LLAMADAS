@@ -37,7 +37,11 @@ async def send_call_to_crm(org: Organization, call_data: dict, call=None, prospe
 
 async def _send_monday(org: Organization, call_data: dict) -> None:
     if not org.crm_api_key or not org.crm_board_or_list_id:
-        logger.warning(f"[CRM_MONDAY] org={org.id} missing api_key or board_id — skipping")
+        logger.warning(
+            f"[CRM_MONDAY] org={org.id} skipping — "
+            f"api_key={'SET' if org.crm_api_key else 'MISSING'} "
+            f"board_id={org.crm_board_or_list_id!r}"
+        )
         return
 
     phone = call_data.get("phone") or ""
@@ -48,43 +52,62 @@ async def _send_monday(org: Organization, call_data: dict) -> None:
     ts = call_data.get("timestamp") or datetime.utcnow().isoformat()
     date_only = ts[:10]  # YYYY-MM-DD
 
-    mutation = """
-    mutation ($boardId: ID!, $itemName: String!, $columnValues: JSON!) {
-      create_item(board_id: $boardId, item_name: $itemName, column_values: $columnValues) {
-        id
-      }
-    }
-    """
-    column_values = json.dumps({
-        "phone": {"phone": phone, "countryShortName": "US"},
+    # column_values must be a JSON-encoded string (not a nested object) per Monday API
+    col_values_str = json.dumps({
         "status": {"label": call_result},
         "date": {"date": date_only},
         "numbers": str(duration),
         "long_text": {"text": summary},
         "text": campaign,
-    })
-    variables = {
-        "boardId": org.crm_board_or_list_id,
-        "itemName": phone or "ZyraVoice Lead",
-        "columnValues": column_values,
-    }
+    }, ensure_ascii=False)
+
+    # Inline mutation — Monday.com requires board_id as integer literal and
+    # column_values as a JSON string literal (not a GraphQL variable of type JSON)
+    board_id = int(org.crm_board_or_list_id)
+    item_name = (phone or "ZyraVoice Lead").replace('"', '\\"')
+    col_values_escaped = col_values_str.replace('\\', '\\\\').replace('"', '\\"')
+
+    mutation = (
+        f'mutation {{'
+        f'  create_item('
+        f'    board_id: {board_id},'
+        f'    item_name: "{item_name}",'
+        f'    column_values: "{col_values_escaped}"'
+        f'  ) {{ id }}'
+        f'}}'
+    )
+
+    logger.info(f"[CRM_MONDAY] org={org.id} board={board_id} phone={phone} result={call_result}")
 
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
             resp = await client.post(
                 "https://api.monday.com/v2",
-                json={"query": mutation, "variables": variables},
+                json={"query": mutation},
                 headers={
                     "Authorization": f"Bearer {org.crm_api_key}",
                     "Content-Type": "application/json",
+                    "API-Version": "2024-01",
                 },
             )
+        body = resp.text
+        # Monday returns HTTP 200 even for GraphQL errors — check body explicitly
         if resp.status_code < 400:
-            logger.info(f"[CRM_MONDAY] org={org.id} item created status={resp.status_code}")
+            try:
+                parsed = resp.json()
+            except Exception:
+                parsed = {}
+            if "errors" in parsed:
+                logger.error(f"[CRM_MONDAY] org={org.id} GraphQL error: {parsed['errors']}")
+            else:
+                item_id = parsed.get("data", {}).get("create_item", {}).get("id")
+                logger.info(f"[CRM_MONDAY] org={org.id} item created id={item_id} status={resp.status_code}")
         else:
-            logger.error(f"[CRM_MONDAY] org={org.id} failed status={resp.status_code} body={resp.text[:300]}")
+            logger.error(f"[CRM_MONDAY] org={org.id} HTTP error status={resp.status_code} body={body[:400]}")
+    except ValueError as exc:
+        logger.error(f"[CRM_MONDAY] org={org.id} board_id is not an integer: {org.crm_board_or_list_id!r} — {exc}")
     except Exception as exc:
-        logger.error(f"[CRM_MONDAY] org={org.id} request error: {exc}")
+        logger.error(f"[CRM_MONDAY] org={org.id} request error: {exc}", exc_info=True)
 
 
 async def _send_hubspot(org: Organization, call_data: dict) -> None:

@@ -202,7 +202,15 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
         )
 
         # ── CRM dispatch (native APIs + generic webhooks) ──────────────────────
+        logger.info(
+            f"[CRM] org={org.id if org else None} "
+            f"crm_type={org.crm_type if org else None} "
+            f"crm_webhook_enabled={org.crm_webhook_enabled if org else None} "
+            f"crm_api_key={'SET' if (org and org.crm_api_key) else 'MISSING'} "
+            f"crm_board_or_list_id={org.crm_board_or_list_id if org else None}"
+        )
         if org and org.crm_webhook_enabled and org.crm_type and org.crm_type != "none":
+            logger.info(f"[CRM] Dispatching to CRM type={org.crm_type} for call_id={call.id}")
             try:
                 from services.crm_service import send_call_to_crm
                 crm_prospect = session.get(Prospect, call.prospect_id) if call.prospect_id else None
@@ -221,10 +229,17 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
                     "transcript": call.raw_transcript,
                     "timestamp": (call.ended_at or datetime.utcnow()).isoformat(),
                 }
+                logger.info(f"[CRM] call_data_crm phone={call_data_crm['phone']} result={call_data_crm['call_result']} duration={call_data_crm['duration_seconds']}")
                 await send_call_to_crm(org, call_data_crm, call, crm_prospect, crm_agent, session)
             except Exception as e:
-                logger.error(f"CRM sync failed: {e}")
+                logger.error(f"[CRM] sync failed for call_id={call.id}: {e}", exc_info=True)
                 # NO re-raise — Retell must always receive 200
+        else:
+            logger.info(
+                f"[CRM] Skipping — org={bool(org)} "
+                f"enabled={org.crm_webhook_enabled if org else None} "
+                f"type={org.crm_type if org else None}"
+            )
 
         if ws_manager and call.campaign_id:
             await ws_manager.broadcast(call.campaign_id, {
