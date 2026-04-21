@@ -17,6 +17,9 @@ class Organization(SQLModel, table=True):
     crm_webhook_secret: Optional[str] = None
     crm_type: Optional[str] = None
     crm_events: str = Field(default='["call_ended","interested"]')
+    crm_api_key: Optional[str] = None
+    crm_board_or_list_id: Optional[str] = None
+    crm_extra_config: Optional[str] = None  # JSON string, e.g. {"instance_url": "https://..."}
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")

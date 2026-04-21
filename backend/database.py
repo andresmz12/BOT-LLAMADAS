@@ -63,6 +63,9 @@ def run_migrations():
                 "crm_webhook_secret": "VARCHAR(255)",
                 "crm_type": "VARCHAR(100)",
                 "crm_events": "TEXT DEFAULT '[\"call_ended\",\"interested\"]'",
+                "crm_api_key": "VARCHAR(500)",
+                "crm_board_or_list_id": "VARCHAR(255)",
+                "crm_extra_config": "TEXT",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():

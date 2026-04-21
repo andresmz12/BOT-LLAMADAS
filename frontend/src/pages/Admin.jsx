@@ -28,10 +28,18 @@ const CRM_TYPES = [
 const CRM_PLACEHOLDERS = {
   zapier: 'https://hooks.zapier.com/hooks/catch/...',
   make: 'https://hook.make.com/...',
-  gohighlevel: 'https://services.leadconnectorhq.com/hooks/...',
-  hubspot: 'https://api.hubspot.com/webhooks/...',
   n8n: 'https://tu-instancia-n8n.com/webhook/...',
   custom: 'https://tu-servidor.com/webhook',
+}
+
+const NATIVE_CRM_TYPES = ['monday', 'hubspot', 'gohighlevel', 'zoho', 'salesforce']
+
+const NATIVE_CRM_LABELS = {
+  monday:       { apiKey: 'API Key de Monday',        boardId: 'Board ID', boardIdPlaceholder: 'ej: 1234567890' },
+  hubspot:      { apiKey: 'API Key de HubSpot',       boardId: 'Pipeline ID (opcional)', boardIdPlaceholder: 'ej: default' },
+  gohighlevel:  { apiKey: 'API Key de GoHighLevel',   boardId: 'Location ID', boardIdPlaceholder: 'ej: abc123xyz' },
+  zoho:         { apiKey: 'OAuth Token de Zoho',      boardId: null },
+  salesforce:   { apiKey: 'Access Token de Salesforce', boardId: null },
 }
 
 const CRM_INSTRUCTIONS = {
@@ -259,11 +267,18 @@ export default function Admin() {
 }
 
 function OrgModal({ org, onClose, onSaved }) {
-  const [form, setForm] = useState(org || {
+  const [form, setForm] = useState(org ? {
+    ...org,
+    crm_extra_config: (() => {
+      try { return org.crm_extra_config ? JSON.parse(org.crm_extra_config) : null }
+      catch { return null }
+    })(),
+  } : {
     name: '', plan: 'basic', retell_api_key: '', retell_phone_number: '',
     anthropic_api_key: '', is_active: true,
     crm_type: 'none', crm_webhook_url: '', crm_webhook_enabled: false,
     crm_webhook_secret: '', crm_events: '["call_ended","interested"]',
+    crm_api_key: '', crm_board_or_list_id: '', crm_extra_config: null,
   })
   const [loading, setLoading] = useState(false)
   const [crmAccordionOpen, setCrmAccordionOpen] = useState(false)
@@ -271,6 +286,7 @@ function OrgModal({ org, onClose, onSaved }) {
   const [testLoading, setTestLoading] = useState(false)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+  const setCrmExtra = (key, value) => set('crm_extra_config', { ...(form.crm_extra_config || {}), [key]: value })
 
   const getCrmEvents = () => {
     try { return JSON.parse(form.crm_events || '[]') }
@@ -304,9 +320,13 @@ function OrgModal({ org, onClose, onSaved }) {
     setLoading(true)
     // Ensure call_ended is always in the events list
     const events = getCrmEvents()
-    const finalForm = events.includes('call_ended')
+    const withEvents = events.includes('call_ended')
       ? form
       : { ...form, crm_events: JSON.stringify(['call_ended', ...events]) }
+    const finalForm = {
+      ...withEvents,
+      crm_extra_config: form.crm_extra_config ? JSON.stringify(form.crm_extra_config) : null,
+    }
     try {
       if (org?.id) await updateOrganization(org.id, finalForm)
       else await createOrganization(finalForm)
@@ -382,100 +402,149 @@ function OrgModal({ org, onClose, onSaved }) {
                     onChange={e => set('crm_webhook_enabled', e.target.checked)}
                     className="w-4 h-4 accent-blue-500"
                   />
-                  <span className="text-sm text-slate-300">Activar envío de webhooks</span>
+                  <span className="text-sm text-slate-300">Activar envío al CRM</span>
                 </label>
 
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">URL del Webhook</label>
-                  <input
-                    value={form.crm_webhook_url || ''}
-                    onChange={e => { set('crm_webhook_url', e.target.value); setTestResult(null) }}
-                    placeholder={CRM_PLACEHOLDERS[crmType] || 'https://...'}
-                    className="z-input font-mono text-xs"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">
-                    Secreto de firma{' '}
-                    <span className="text-slate-500 font-normal">(opcional)</span>
-                  </label>
-                  <input
-                    type="password"
-                    value={form.crm_webhook_secret || ''}
-                    onChange={e => set('crm_webhook_secret', e.target.value)}
-                    placeholder="Clave para verificar firma HMAC SHA-256"
-                    className="z-input font-mono"
-                  />
-                  <p className="text-xs text-slate-600 mt-1">
-                    Tu CRM puede verificar el header <code className="text-slate-500">X-ZyraVoice-Signature</code>
-                  </p>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-2">Enviar datos cuando:</label>
-                  <div className="space-y-1.5">
-                    {CRM_EVENTS_OPTIONS.map(ev => (
-                      <label key={ev.value} className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={ev.always || getCrmEvents().includes(ev.value)}
-                          disabled={ev.always}
-                          onChange={() => !ev.always && toggleCrmEvent(ev.value)}
-                          className="w-4 h-4 accent-blue-500 disabled:opacity-60"
-                        />
-                        <span className="text-sm text-slate-300">{ev.label}</span>
-                        {ev.always && <span className="text-xs text-slate-600">(siempre)</span>}
+                {NATIVE_CRM_TYPES.includes(crmType) ? (
+                  /* ── Native CRM fields ──────────────────────────────────── */
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
+                        {NATIVE_CRM_LABELS[crmType]?.apiKey || 'API Key'}
                       </label>
-                    ))}
-                  </div>
-                </div>
+                      <input
+                        type="password"
+                        value={form.crm_api_key || ''}
+                        onChange={e => set('crm_api_key', e.target.value)}
+                        placeholder="••••••••••••••••"
+                        className="z-input font-mono"
+                      />
+                    </div>
 
-                {/* Test connection */}
-                {form.crm_webhook_url && org?.id && (
-                  <div className="space-y-2">
-                    <button
-                      type="button"
-                      onClick={handleTestWebhook}
-                      disabled={testLoading}
-                      className="z-btn-ghost border border-z-border text-sm disabled:opacity-50"
-                    >
-                      {testLoading ? 'Enviando prueba...' : 'Probar conexión'}
-                    </button>
-                    {testResult && (
-                      <div className={`text-xs rounded-lg px-3 py-2 ${
-                        testResult.success
-                          ? 'bg-green-500/10 text-green-400 border border-green-500/20'
-                          : 'bg-red-500/10 text-red-400 border border-red-500/20'
-                      }`}>
-                        {testResult.success
-                          ? `✓ Conexión exitosa (HTTP ${testResult.status_code}) — webhook recibido correctamente`
-                          : `✗ Error ${testResult.status_code || ''}: ${testResult.response}`
-                        }
+                    {NATIVE_CRM_LABELS[crmType]?.boardId && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">
+                          {NATIVE_CRM_LABELS[crmType].boardId}
+                        </label>
+                        <input
+                          type="text"
+                          value={form.crm_board_or_list_id || ''}
+                          onChange={e => set('crm_board_or_list_id', e.target.value)}
+                          placeholder={NATIVE_CRM_LABELS[crmType].boardIdPlaceholder || ''}
+                          className="z-input font-mono"
+                        />
                       </div>
                     )}
-                  </div>
-                )}
 
-                {/* Instructions accordion */}
-                {CRM_INSTRUCTIONS[crmType] && (
-                  <div className="border border-z-border rounded-lg overflow-hidden">
-                    <button
-                      type="button"
-                      onClick={() => setCrmAccordionOpen(o => !o)}
-                      className="w-full flex items-center justify-between px-4 py-3 text-sm text-slate-400 hover:text-slate-200 hover:bg-white/[0.02] transition-colors"
-                    >
-                      <span>Instrucciones para {crmLabel}</span>
-                      <span className="text-slate-600 text-xs">{crmAccordionOpen ? '▲' : '▼'}</span>
-                    </button>
-                    {crmAccordionOpen && (
-                      <div className="px-4 pb-4 border-t border-z-border pt-3">
-                        <pre className="text-xs text-slate-400 whitespace-pre-wrap font-sans leading-relaxed">
-                          {CRM_INSTRUCTIONS[crmType]}
-                        </pre>
+                    {crmType === 'salesforce' && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">Instance URL</label>
+                        <input
+                          type="text"
+                          value={form.crm_extra_config?.instance_url || ''}
+                          onChange={e => setCrmExtra('instance_url', e.target.value)}
+                          placeholder="https://miempresa.salesforce.com"
+                          className="z-input font-mono text-xs"
+                        />
                       </div>
                     )}
-                  </div>
+                  </>
+                ) : (
+                  /* ── Generic webhook fields (unchanged) ─────────────────── */
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">URL del Webhook</label>
+                      <input
+                        value={form.crm_webhook_url || ''}
+                        onChange={e => { set('crm_webhook_url', e.target.value); setTestResult(null) }}
+                        placeholder={CRM_PLACEHOLDERS[crmType] || 'https://...'}
+                        className="z-input font-mono text-xs"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">
+                        Secreto de firma{' '}
+                        <span className="text-slate-500 font-normal">(opcional)</span>
+                      </label>
+                      <input
+                        type="password"
+                        value={form.crm_webhook_secret || ''}
+                        onChange={e => set('crm_webhook_secret', e.target.value)}
+                        placeholder="Clave para verificar firma HMAC SHA-256"
+                        className="z-input font-mono"
+                      />
+                      <p className="text-xs text-slate-600 mt-1">
+                        Tu CRM puede verificar el header <code className="text-slate-500">X-ZyraVoice-Signature</code>
+                      </p>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">Enviar datos cuando:</label>
+                      <div className="space-y-1.5">
+                        {CRM_EVENTS_OPTIONS.map(ev => (
+                          <label key={ev.value} className="flex items-center gap-2 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={ev.always || getCrmEvents().includes(ev.value)}
+                              disabled={ev.always}
+                              onChange={() => !ev.always && toggleCrmEvent(ev.value)}
+                              className="w-4 h-4 accent-blue-500 disabled:opacity-60"
+                            />
+                            <span className="text-sm text-slate-300">{ev.label}</span>
+                            {ev.always && <span className="text-xs text-slate-600">(siempre)</span>}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Test connection */}
+                    {form.crm_webhook_url && org?.id && (
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={handleTestWebhook}
+                          disabled={testLoading}
+                          className="z-btn-ghost border border-z-border text-sm disabled:opacity-50"
+                        >
+                          {testLoading ? 'Enviando prueba...' : 'Probar conexión'}
+                        </button>
+                        {testResult && (
+                          <div className={`text-xs rounded-lg px-3 py-2 ${
+                            testResult.success
+                              ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                              : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                          }`}>
+                            {testResult.success
+                              ? `✓ Conexión exitosa (HTTP ${testResult.status_code}) — webhook recibido correctamente`
+                              : `✗ Error ${testResult.status_code || ''}: ${testResult.response}`
+                            }
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Instructions accordion */}
+                    {CRM_INSTRUCTIONS[crmType] && (
+                      <div className="border border-z-border rounded-lg overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => setCrmAccordionOpen(o => !o)}
+                          className="w-full flex items-center justify-between px-4 py-3 text-sm text-slate-400 hover:text-slate-200 hover:bg-white/[0.02] transition-colors"
+                        >
+                          <span>Instrucciones para {crmLabel}</span>
+                          <span className="text-slate-600 text-xs">{crmAccordionOpen ? '▲' : '▼'}</span>
+                        </button>
+                        {crmAccordionOpen && (
+                          <div className="px-4 pb-4 border-t border-z-border pt-3">
+                            <pre className="text-xs text-slate-400 whitespace-pre-wrap font-sans leading-relaxed">
+                              {CRM_INSTRUCTIONS[crmType]}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </>
                 )}
               </>
             )}

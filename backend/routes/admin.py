@@ -25,6 +25,9 @@ class OrgCreate(BaseModel):
     crm_webhook_secret: Optional[str] = None
     crm_type: Optional[str] = None
     crm_events: str = '["call_ended","interested"]'
+    crm_api_key: Optional[str] = None
+    crm_board_or_list_id: Optional[str] = None
+    crm_extra_config: Optional[str] = None
 
 
 class UserCreate(BaseModel):
