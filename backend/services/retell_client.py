@@ -184,7 +184,7 @@ async def sync_to_retell(
         "agent_name": agent_config.name,
         **base_agent_settings,
         "voicemail_option": {
-            "type": "leave_voicemail",
+            "action": "leave_voicemail",
             "voicemail_message": default_voicemail_msg,
         },
     }
@@ -325,7 +325,7 @@ async def create_call_direct(
             "company_name": prospect_company or "",
         },
         "voicemail_option": {
-            "type": "leave_voicemail",
+            "action": "leave_voicemail",
             "voicemail_message": voicemail_message or "Hola, le llamaremos de nuevo en otro momento. ¡Que tenga un buen día!",
         },
     }
