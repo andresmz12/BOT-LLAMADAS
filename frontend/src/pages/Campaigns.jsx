@@ -65,7 +65,11 @@ export default function Campaigns() {
                   <td className="px-6 py-4 text-slate-300">{c.total_calls}</td>
                   <td className="px-6 py-4 text-slate-300">{c.interested}</td>
                   <td className="px-6 py-4 text-slate-300">{c.appointments_scheduled}</td>
-                  <td className="px-6 py-4 text-slate-400 text-xs">{c.calls_per_minute ?? 10}/min</td>
+                  <td className="px-6 py-4 text-slate-400 text-xs">
+                    {c.sequential_calls
+                      ? <span className="px-2 py-0.5 bg-purple-500/15 text-purple-400 rounded-full font-medium">Secuencial</span>
+                      : `${c.calls_per_minute ?? 10}/min`}
+                  </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       {(c.status === 'draft' || c.status === 'paused') && (
@@ -107,7 +111,7 @@ export default function Campaigns() {
 }
 
 function NewCampaignModal({ agents, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: '', description: '', agent_config_id: agents[0]?.id || '', calls_per_minute: 10 })
+  const [form, setForm] = useState({ name: '', description: '', agent_config_id: agents[0]?.id || '', calls_per_minute: 10, sequential_calls: false })
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -121,7 +125,7 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
     if (!form.agent_config_id) return alert('Selecciona un agente')
     setLoading(true)
     try {
-      await createCampaign({ ...form, agent_config_id: Number(form.agent_config_id), calls_per_minute: Number(form.calls_per_minute) })
+      await createCampaign({ ...form, agent_config_id: Number(form.agent_config_id), calls_per_minute: Number(form.calls_per_minute), sequential_calls: form.sequential_calls })
       onSaved()
     } catch (err) {
       alert(err.response?.data?.detail || 'Error al crear campaña')
@@ -157,9 +161,18 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
             <label className="block text-sm font-medium text-slate-300 mb-1">Llamadas por minuto</label>
             <input type="number" min="1" max="60" value={form.calls_per_minute}
               onChange={e => setForm(f => ({ ...f, calls_per_minute: e.target.value }))}
-              className="z-input" />
+              className={`z-input ${form.sequential_calls ? 'opacity-40 pointer-events-none' : ''}`} />
             <p className="text-xs text-slate-500 mt-1">Intervalo entre llamadas: {(60 / (form.calls_per_minute || 10)).toFixed(1)}s</p>
           </div>
+          <label className="flex items-center gap-3 p-3 rounded-lg border border-z-border hover:bg-white/[0.02] cursor-pointer">
+            <input type="checkbox" checked={form.sequential_calls}
+              onChange={e => setForm(f => ({ ...f, sequential_calls: e.target.checked }))}
+              className="rounded border-slate-600 bg-slate-800 text-z-blue w-4 h-4 cursor-pointer" />
+            <div>
+              <p className="text-sm font-medium text-slate-200">Llamadas secuenciales</p>
+              <p className="text-xs text-slate-500">Esperar a que cada llamada termine antes de iniciar la siguiente</p>
+            </div>
+          </label>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="z-btn-ghost">Cancelar</button>
             <button type="submit" disabled={loading} className="z-btn-primary">

@@ -68,6 +68,9 @@ def run_migrations():
                 if "calls_per_minute" not in camp_cols:
                     conn.execute(text("ALTER TABLE campaign ADD COLUMN calls_per_minute INTEGER DEFAULT 10"))
                     log.info("Migration: added campaign.calls_per_minute")
+                if "sequential_calls" not in camp_cols:
+                    conn.execute(text("ALTER TABLE campaign ADD COLUMN sequential_calls BOOLEAN DEFAULT FALSE"))
+                    log.info("Migration: added campaign.sequential_calls")
 
         if "organization" in tables:
             org_cols = {c["name"] for c in insp.get_columns("organization")}

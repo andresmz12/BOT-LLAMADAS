@@ -84,6 +84,7 @@ class Campaign(SQLModel, table=True):
     failed: int = Field(default=0)
     organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
     calls_per_minute: int = Field(default=10)
+    sequential_calls: bool = Field(default=False)
 
     agent_config: Optional[AgentConfig] = Relationship(back_populates="campaigns")
     prospects: List["Prospect"] = Relationship(back_populates="campaign")

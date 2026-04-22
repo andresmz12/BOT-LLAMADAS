@@ -143,6 +143,7 @@ async def _run_campaign_loop(campaign_id: int):
                 "agent_name": agent_config.name,
                 "voice_id": agent_config.voice_id or "retell-Andrea",
                 "calls_per_minute": max(1, campaign.calls_per_minute or 10),
+                "sequential_calls": bool(campaign.sequential_calls),
             }
             logger.info(
                 f"[Campaign {campaign_id}] Dialing {prospect.phone} "
@@ -196,7 +197,23 @@ async def _run_campaign_loop(campaign_id: int):
                     session.add(prospect_obj)
                 session.commit()
 
-        # Space calls to respect calls_per_minute limit
-        sleep_seconds = 60.0 / call_info["calls_per_minute"]
-        logger.info(f"[Campaign {campaign_id}] Sleeping {sleep_seconds:.1f}s ({call_info['calls_per_minute']} calls/min)")
-        await asyncio.sleep(sleep_seconds)
+        # Wait strategy: sequential (poll until ended) or rate-limited (fixed sleep)
+        if call_info["sequential_calls"]:
+            max_wait_seconds = 900  # 15 min hard ceiling
+            elapsed = 0
+            poll_interval = 5
+            logger.info(f"[Campaign {campaign_id}] Sequential mode — waiting for call {call_info['call_id']} to end")
+            while elapsed < max_wait_seconds:
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+                with Session(engine) as s:
+                    finished = s.get(Call, call_info["call_id"])
+                    if finished and finished.status in ("ended", "failed"):
+                        logger.info(f"[Campaign {campaign_id}] Call {call_info['call_id']} finished ({finished.status}) after {elapsed}s")
+                        break
+            else:
+                logger.warning(f"[Campaign {campaign_id}] Call {call_info['call_id']} exceeded max wait — continuing anyway")
+        else:
+            sleep_seconds = 60.0 / call_info["calls_per_minute"]
+            logger.info(f"[Campaign {campaign_id}] Sleeping {sleep_seconds:.1f}s ({call_info['calls_per_minute']} calls/min)")
+            await asyncio.sleep(sleep_seconds)
