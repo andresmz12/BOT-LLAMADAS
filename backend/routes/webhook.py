@@ -286,15 +286,15 @@ async def retell_webhook(request: Request, background_tasks: BackgroundTasks, se
     elif event == "call_failed":
         disconnect_reason = call_data.get("disconnection_reason", "")
         logger.info(f"[WEBHOOK] call_failed: call_id={call.id} reason={disconnect_reason}")
-        call.status = "failed"
+        call.status = "ended"
         call.outcome = "failed"
         call.ended_at = datetime.utcnow()
-        call.notes = f"Llamada fallida: {disconnect_reason}" if disconnect_reason else "Llamada fallida"
+        call.notes = f"No se pudo conectar: {disconnect_reason}" if disconnect_reason else "Llamada no conectada"
         session.add(call)
         if call.prospect_id:
             prospect = session.get(Prospect, call.prospect_id)
             if prospect:
-                prospect.status = "failed"
+                prospect.status = "pending"
                 session.add(prospect)
         session.commit()
 

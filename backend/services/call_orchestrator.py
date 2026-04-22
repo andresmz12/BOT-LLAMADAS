@@ -208,8 +208,8 @@ async def _run_campaign_loop(campaign_id: int):
                 elapsed += poll_interval
                 with Session(engine) as s:
                     finished = s.get(Call, call_info["call_id"])
-                    if finished and finished.status in ("ended", "failed"):
-                        logger.info(f"[Campaign {campaign_id}] Call {call_info['call_id']} finished ({finished.status}) after {elapsed}s")
+                    if finished and finished.status == "ended":
+                        logger.info(f"[Campaign {campaign_id}] Call {call_info['call_id']} ended after {elapsed}s")
                         break
             else:
                 logger.warning(f"[Campaign {campaign_id}] Call {call_info['call_id']} exceeded max wait — continuing anyway")
