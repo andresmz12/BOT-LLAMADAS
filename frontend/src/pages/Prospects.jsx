@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon } from '@heroicons/react/24/outline'
+import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
-import { getProspects, deleteProspect, deleteAllProspects, getCampaigns, createProspect, callProspect } from '../api/client'
+import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect } from '../api/client'
 
 const STATUSES = ['', 'pending', 'calling', 'answered', 'voicemail', 'failed', 'do_not_call']
 
@@ -97,6 +97,21 @@ export default function Prospects() {
     catch (err) { alert(err.response?.data?.detail || 'Error') }
   }
 
+  const handleRetry = async () => {
+    const label = filterStatus
+      ? `los ${prospects.length} prospectos con estado "${filterStatus}"`
+      : `todos los prospectos fallidos y con buzón de voz`
+    if (!confirm(`¿Reintentar llamadas para ${label}?\n\nSe resetearán a "pending" para la próxima ejecución de campaña.`)) return
+    try {
+      const params = {}
+      if (filterCampaign) params.campaign_id = filterCampaign
+      if (filterStatus) params.status = filterStatus
+      const res = await retryProspects(params)
+      alert(`${res.reset} prospectos marcados para reintento.`)
+      load()
+    } catch (err) { alert(err.response?.data?.detail || 'Error') }
+  }
+
   const handleDeleteAll = async () => {
     const scope = filterCampaign
       ? `los ${prospects.length} prospectos de esta campaña`
@@ -138,11 +153,18 @@ export default function Prospects() {
         </select>
         <span className="text-sm text-slate-500 self-center">{prospects.length} prospectos</span>
         {prospects.length > 0 && (
-          <button onClick={handleDeleteAll}
-            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-lg transition-colors">
-            <TrashIcon className="w-3.5 h-3.5" />
-            Eliminar {filterCampaign ? 'campaña' : 'todos'}
-          </button>
+          <div className="ml-auto flex gap-2">
+            <button onClick={handleRetry}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-z-blue-light border border-z-blue/30 hover:bg-z-blue/10 rounded-lg transition-colors">
+              <ArrowPathIcon className="w-3.5 h-3.5" />
+              Reintentar {filterStatus ? `"${filterStatus}"` : 'fallidas'}
+            </button>
+            <button onClick={handleDeleteAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-lg transition-colors">
+              <TrashIcon className="w-3.5 h-3.5" />
+              Eliminar {filterCampaign ? 'campaña' : 'todos'}
+            </button>
+          </div>
         )}
       </div>
 

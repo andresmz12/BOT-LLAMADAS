@@ -190,6 +190,33 @@ async def call_prospect(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.post("/retry")
+def retry_prospects(
+    campaign_id: int | None = None,
+    status: str | None = None,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    """Reset prospects to 'pending' so they get dialed again on the next campaign run."""
+    query = select(Prospect)
+    if current_user.role != "superadmin":
+        query = query.where(Prospect.organization_id == current_user.organization_id)
+    if campaign_id:
+        query = query.where(Prospect.campaign_id == campaign_id)
+    if status:
+        query = query.where(Prospect.status == status)
+    else:
+        # Default: retry failed and voicemail
+        query = query.where(Prospect.status.in_(["failed", "voicemail"]))
+    prospects = session.exec(query).all()
+    for p in prospects:
+        p.status = "pending"
+        p.call_attempts = 0
+        session.add(p)
+    session.commit()
+    return {"reset": len(prospects)}
+
+
 @router.delete("")
 def delete_all_prospects(
     campaign_id: int | None = None,
