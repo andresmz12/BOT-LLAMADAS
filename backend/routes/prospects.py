@@ -190,6 +190,24 @@ async def call_prospect(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.delete("")
+def delete_all_prospects(
+    campaign_id: int | None = None,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    query = select(Prospect)
+    if current_user.role != "superadmin":
+        query = query.where(Prospect.organization_id == current_user.organization_id)
+    if campaign_id:
+        query = query.where(Prospect.campaign_id == campaign_id)
+    prospects = session.exec(query).all()
+    for p in prospects:
+        session.delete(p)
+    session.commit()
+    return {"deleted": len(prospects)}
+
+
 @router.delete("/{prospect_id}")
 def delete_prospect(
     prospect_id: int,

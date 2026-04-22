@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
-import { getProspects, deleteProspect, getCampaigns, createProspect, callProspect } from '../api/client'
+import { getProspects, deleteProspect, deleteAllProspects, getCampaigns, createProspect, callProspect } from '../api/client'
 
 const STATUSES = ['', 'pending', 'calling', 'answered', 'voicemail', 'failed', 'do_not_call']
 
@@ -97,6 +97,19 @@ export default function Prospects() {
     catch (err) { alert(err.response?.data?.detail || 'Error') }
   }
 
+  const handleDeleteAll = async () => {
+    const scope = filterCampaign
+      ? `los ${prospects.length} prospectos de esta campaña`
+      : `TODOS los ${prospects.length} prospectos`
+    if (!confirm(`¿Eliminar ${scope}? Esta acción no se puede deshacer.`)) return
+    try {
+      const params = filterCampaign ? { campaign_id: filterCampaign } : {}
+      const res = await deleteAllProspects(params)
+      alert(`${res.deleted} prospectos eliminados.`)
+      load()
+    } catch (err) { alert(err.response?.data?.detail || 'Error') }
+  }
+
   const campaignName = (id) => campaigns.find(c => c.id === id)?.name || `#${id}`
   const noCampaigns = campaigns.length === 0
 
@@ -123,7 +136,14 @@ export default function Prospects() {
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="z-input w-auto">
           {STATUSES.map(s => <option key={s} value={s}>{s || 'Todos los estados'}</option>)}
         </select>
-        <span className="ml-auto text-sm text-slate-500 self-center">{prospects.length} prospectos</span>
+        <span className="text-sm text-slate-500 self-center">{prospects.length} prospectos</span>
+        {prospects.length > 0 && (
+          <button onClick={handleDeleteAll}
+            className="ml-auto flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-lg transition-colors">
+            <TrashIcon className="w-3.5 h-3.5" />
+            Eliminar {filterCampaign ? 'campaña' : 'todos'}
+          </button>
+        )}
       </div>
 
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
