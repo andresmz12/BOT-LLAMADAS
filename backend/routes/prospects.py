@@ -76,11 +76,11 @@ async def import_file(
 
     imported = 0
     for row in rows:
-        name = row.get("name", "").strip()
-        phone = row.get("phone", "").strip()
-        company = row.get("company", "").strip()
-        email = row.get("email", "").strip()
-        if not name or not phone:
+        phone = row.get("phone", "").strip() or row.get("telefono", "").strip() or row.get("teléfono", "").strip()
+        name = row.get("name", "").strip() or row.get("nombre", "").strip() or phone
+        company = row.get("company", "").strip() or row.get("empresa", "").strip()
+        email = row.get("email", "").strip() or row.get("correo", "").strip()
+        if not phone:
             continue
         session.add(Prospect(
             campaign_id=campaign_id,
