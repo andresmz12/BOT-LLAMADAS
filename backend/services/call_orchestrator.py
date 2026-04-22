@@ -144,6 +144,7 @@ async def _run_campaign_loop(campaign_id: int):
                 "voice_id": agent_config.voice_id or "retell-Andrea",
                 "calls_per_minute": max(1, campaign.calls_per_minute or 10),
                 "sequential_calls": bool(campaign.sequential_calls),
+                "voicemail_message": agent_config.voicemail_message or "",
             }
             logger.info(
                 f"[Campaign {campaign_id}] Dialing {prospect.phone} "
@@ -164,6 +165,7 @@ async def _run_campaign_loop(campaign_id: int):
                 prospect_company=call_info["company"],
                 api_key=call_info["api_key"],
                 from_number=call_info["from_number"],
+                voicemail_message=call_info["voicemail_message"],
             )
             retell_call_id = result.get("call_id", "")
             logger.info(

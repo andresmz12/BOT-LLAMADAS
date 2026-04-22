@@ -175,9 +175,18 @@ async def sync_to_retell(
     }
     if agent_config.retell_knowledge_base_id:
         outbound_llm_payload["knowledge_base_ids"] = [agent_config.retell_knowledge_base_id]
+    default_voicemail_msg = (
+        agent_config.voicemail_message
+        or f"Hola, le llama {agent_config.agent_name} de {agent_config.company_name}. "
+           "Le llamaremos de nuevo en otro momento. ¡Que tenga un buen día!"
+    )
     outbound_agent_payload = {
         "agent_name": agent_config.name,
         **base_agent_settings,
+        "voicemail_option": {
+            "type": "leave_voicemail",
+            "voicemail_message": default_voicemail_msg,
+        },
     }
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -296,6 +305,7 @@ async def create_call_direct(
     prospect_company: str = "",
     api_key: str = "",
     from_number: str = "",
+    voicemail_message: str = "",
 ) -> dict:
     """Like create_call but takes individual values — avoids detached SQLModel instance issues."""
     if not api_key or not from_number:
@@ -313,6 +323,10 @@ async def create_call_direct(
         "retell_llm_dynamic_variables": {
             "customer_name": prospect_name or "cliente",
             "company_name": prospect_company or "",
+        },
+        "voicemail_option": {
+            "type": "leave_voicemail",
+            "voicemail_message": voicemail_message or "Hola, le llamaremos de nuevo en otro momento. ¡Que tenga un buen día!",
         },
     }
 
