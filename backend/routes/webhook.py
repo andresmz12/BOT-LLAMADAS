@@ -119,6 +119,7 @@ async def _bg_analyze_and_sync(
                 crm_agent = s.get(AgentConfig, crm_camp.agent_config_id) if crm_camp else None
                 call_data_crm = {
                     "phone": crm_prospect.phone if crm_prospect else None,
+                    "prospect_name": crm_prospect.name if crm_prospect else None,
                     "email": getattr(crm_prospect, "email", "") or "" if crm_prospect else "",
                     "call_result": call.outcome,
                     "duration_seconds": call.duration_seconds,

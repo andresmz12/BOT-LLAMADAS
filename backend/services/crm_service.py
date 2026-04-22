@@ -58,6 +58,7 @@ async def _send_monday(org: Organization, call_data: dict) -> None:
         return
 
     phone = call_data.get("phone") or ""
+    prospect_name = call_data.get("prospect_name") or ""
     call_result = call_data.get("call_result") or ""
     duration = call_data.get("duration_seconds") or 0
     summary = call_data.get("summary") or ""
@@ -65,12 +66,15 @@ async def _send_monday(org: Organization, call_data: dict) -> None:
     ts = call_data.get("timestamp") or datetime.utcnow().isoformat()
     date_only = ts[:10]  # YYYY-MM-DD
 
-    STATUS_INDEX = {
-        "interested": 1, "appointment_scheduled": 1,
-        "not_interested": 2,
-        "callback_requested": 0, "voicemail": 0, "failed": 0,
+    STATUS_LABEL = {
+        "interested": "INTERESADO",
+        "appointment_scheduled": "INTERESADO",
+        "not_interested": "NO INTERESADO",
+        "callback_requested": "Working on it",
+        "voicemail": "Working on it",
+        "failed": "Working on it",
     }
-    status_index = STATUS_INDEX.get(call_result, 0)
+    status_label = STATUS_LABEL.get(call_result, "Working on it")
 
     try:
         board_id = int(org.crm_board_or_list_id)
@@ -104,7 +108,7 @@ async def _send_monday(org: Organization, call_data: dict) -> None:
         if ctype == "color":
             # Status — only first one
             if "color" not in seen_types:
-                col_values[cid] = {"index": status_index}
+                col_values[cid] = {"label": status_label}
                 seen_types.add("color")
         elif ctype == "date":
             if "date" not in seen_types:
@@ -141,7 +145,7 @@ async def _send_monday(org: Organization, call_data: dict) -> None:
     if not col_values:
         logger.warning(f"[CRM_MONDAY] org={org.id} no columns mapped — using generic fallback IDs")
         col_values = {
-            "status": {"index": status_index},
+            "status": {"label": status_label},
             "date": {"date": date_only},
             "numbers": str(duration),
             "long_text": {"text": summary},
@@ -150,7 +154,7 @@ async def _send_monday(org: Organization, call_data: dict) -> None:
 
     logger.info(f"[CRM_MONDAY] org={org.id} board={board_id} phone={phone} result={call_result} col_ids={list(col_values.keys())}")
 
-    item_name = (phone or "ZyraVoice Lead").replace('"', '\\"')
+    item_name = (prospect_name or phone or "ZyraVoice Lead").replace('"', '\\"')
     col_values_str = json.dumps(col_values, ensure_ascii=False)
     col_values_escaped = col_values_str.replace('\\', '\\\\').replace('"', '\\"')
 
