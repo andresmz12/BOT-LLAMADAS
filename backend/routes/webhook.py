@@ -201,21 +201,22 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
         session.commit()
         logger.info(
             f"[WEBHOOK] Saved call_id={call.id}: outcome={call.outcome} "
-            f"sentiment={call.sentiment} duration={call.duration_seconds}s "
-            f"client_said={len(json.loads(call.client_said or '[]'))} items"
+            f"sentiment={call.sentiment} duration={call.duration_seconds}s"
         )
 
         # ── CRM dispatch (native APIs + generic webhooks) ──────────────────────
-        logger.info(
-            f"[CRM] org={org.id if org else None} "
-            f"crm_type={org.crm_type if org else None} "
-            f"crm_webhook_enabled={org.crm_webhook_enabled if org else None} "
-            f"crm_api_key={'SET' if (org and org.crm_api_key) else 'MISSING'} "
-            f"crm_board_or_list_id={org.crm_board_or_list_id if org else None}"
-        )
-        if org and org.crm_webhook_enabled and org.crm_type and org.crm_type != "none":
-            logger.info(f"[CRM] Dispatching to CRM type={org.crm_type} for call_id={call.id}")
-            try:
+        # Log before touching any org attribute (org may be expired after commit)
+        logger.info(f"[CRM_BLOCK] event={event} call_id={call.id} call_org_id={call.organization_id} org_loaded={org is not None}")
+        try:
+            if org:
+                logger.info(
+                    f"[CRM_DEBUG] org_id={org.id} crm_type={org.crm_type} "
+                    f"enabled={org.crm_webhook_enabled} "
+                    f"key={'SET' if org.crm_api_key else 'NULL'} "
+                    f"board={org.crm_board_or_list_id}"
+                )
+            if org and org.crm_webhook_enabled and org.crm_type and org.crm_type != "none":
+                logger.info(f"[CRM_DISPATCH] type={org.crm_type} call_id={call.id}")
                 from services.crm_service import send_call_to_crm
                 crm_prospect = session.get(Prospect, call.prospect_id) if call.prospect_id else None
                 crm_camp = None
@@ -233,17 +234,17 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
                     "transcript": call.raw_transcript,
                     "timestamp": (call.ended_at or datetime.utcnow()).isoformat(),
                 }
-                logger.info(f"[CRM] call_data_crm phone={call_data_crm['phone']} result={call_data_crm['call_result']} duration={call_data_crm['duration_seconds']}")
+                logger.info(f"[CRM_DATA] phone={call_data_crm['phone']} result={call_data_crm['call_result']} duration={call_data_crm['duration_seconds']}")
                 await send_call_to_crm(org, call_data_crm, call, crm_prospect, crm_agent, session)
-            except Exception as e:
-                logger.error(f"[CRM] sync failed for call_id={call.id}: {e}", exc_info=True)
-                # NO re-raise — Retell must always receive 200
-        else:
-            logger.info(
-                f"[CRM] Skipping — org={bool(org)} "
-                f"enabled={org.crm_webhook_enabled if org else None} "
-                f"type={org.crm_type if org else None}"
-            )
+            else:
+                logger.info(
+                    f"[CRM_SKIP] org={org.id if org else None} "
+                    f"enabled={org.crm_webhook_enabled if org else None} "
+                    f"type={org.crm_type if org else None}"
+                )
+        except Exception as _crm_ex:
+            logger.error(f"[CRM_FATAL] call_id={call.id}: {_crm_ex}", exc_info=True)
+            # NO re-raise — Retell must always receive 200
 
         if ws_manager and call.campaign_id:
             await ws_manager.broadcast(call.campaign_id, {
