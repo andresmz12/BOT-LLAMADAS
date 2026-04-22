@@ -82,6 +82,7 @@ export const callProspect = (id) => api.post(`/prospects/${id}/call`).then(r => 
 // Calls
 export const getCalls = (params) => api.get('/calls', { params }).then(r => r.data)
 export const getCallDetail = (id) => api.get(`/calls/${id}`).then(r => r.data)
+export const deleteCalls = (params) => api.delete('/calls', { params }).then(r => r.data)
 export const makeDemoCall = (phone, agentId) =>
   api.post('/calls/demo', { phone, agent_id: agentId }).then(r => r.data)
 

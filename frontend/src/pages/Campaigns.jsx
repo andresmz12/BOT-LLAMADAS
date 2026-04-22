@@ -80,7 +80,7 @@ export default function Campaigns() {
                           <PauseIcon className="w-3.5 h-3.5" /> Pausar
                         </button>
                       )}
-                      {c.status === 'draft' && (
+                      {c.status !== 'running' && (
                         <button onClick={() => handleDelete(c)}
                           className="flex items-center gap-1 px-2.5 py-1 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs font-medium rounded-lg">
                           <TrashIcon className="w-3.5 h-3.5" /> Eliminar

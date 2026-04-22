@@ -112,8 +112,10 @@ def delete_campaign(
         raise HTTPException(status_code=404, detail="Campaign not found")
     if current_user.role != "superadmin" and campaign.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
-    if campaign.status != "draft":
-        raise HTTPException(status_code=400, detail="Only draft campaigns can be deleted")
+    # Stop if running
+    task = call_orchestrator.running_tasks.pop(campaign_id, None)
+    if task:
+        task.cancel()
     session.delete(campaign)
     session.commit()
     return {"ok": True}

@@ -114,6 +114,32 @@ def list_calls(
     return result
 
 
+@router.delete("")
+def delete_calls(
+    campaign_id: int | None = None,
+    outcome: str | None = None,
+    ids: str | None = None,  # comma-separated call IDs
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    query = select(Call)
+    if current_user.role != "superadmin":
+        query = query.where(Call.organization_id == current_user.organization_id)
+    if ids:
+        id_list = [int(i) for i in ids.split(",") if i.strip().isdigit()]
+        query = query.where(Call.id.in_(id_list))
+    else:
+        if campaign_id:
+            query = query.where(Call.campaign_id == campaign_id)
+        if outcome:
+            query = query.where(Call.outcome == outcome)
+    calls = session.exec(query).all()
+    for c in calls:
+        session.delete(c)
+    session.commit()
+    return {"deleted": len(calls)}
+
+
 @router.get("/{call_id}")
 def get_call(
     call_id: int,
