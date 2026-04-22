@@ -52,9 +52,21 @@ async def _send_monday(org: Organization, call_data: dict) -> None:
     ts = call_data.get("timestamp") or datetime.utcnow().isoformat()
     date_only = ts[:10]  # YYYY-MM-DD
 
+    # Map outcome to Monday status index (board-agnostic numeric codes)
+    # 0 = Working on it, 1 = Done, 2 = Stuck
+    STATUS_INDEX = {
+        "interested": 1,
+        "appointment_scheduled": 1,
+        "not_interested": 2,
+        "callback_requested": 0,
+        "voicemail": 0,
+        "failed": 0,
+    }
+    status_index = STATUS_INDEX.get(call_result, 0)
+
     # column_values must be a JSON-encoded string (not a nested object) per Monday API
     col_values_str = json.dumps({
-        "status": {"label": call_result},
+        "status": {"index": status_index},
         "date": {"date": date_only},
         "numbers": str(duration),
         "long_text": {"text": summary},
