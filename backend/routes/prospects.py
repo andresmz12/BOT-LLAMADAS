@@ -79,12 +79,14 @@ async def import_file(
         name = row.get("name", "").strip()
         phone = row.get("phone", "").strip()
         company = row.get("company", "").strip()
+        email = row.get("email", "").strip()
         if not name or not phone:
             continue
         session.add(Prospect(
             campaign_id=campaign_id,
             name=name,
             phone=phone,
+            email=email or None,
             company=company or None,
             organization_id=current_user.organization_id,
         ))

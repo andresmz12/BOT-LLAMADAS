@@ -102,6 +102,8 @@ async def _send_monday(org: Organization, call_data: dict) -> None:
             col_values[cid] = str(duration)
         elif ctype == "long_text":
             col_values[cid] = {"text": summary}
+        elif ctype == "email":
+            col_values[cid] = {"email": call_data.get("email", ""), "text": call_data.get("email", "")}
         elif ctype == "phone":
             col_values[cid] = {"phone": phone, "countryShortName": "US"}
         elif ctype == "text":

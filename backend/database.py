@@ -45,6 +45,13 @@ def run_migrations():
                         conn.execute(text(f"ALTER TABLE agentconfig ADD COLUMN {col} {col_type}"))
                         log.info(f"Migration: added agentconfig.{col}")
 
+        if "prospect" in tables:
+            prospect_cols = {c["name"] for c in insp.get_columns("prospect")}
+            with engine.begin() as conn:
+                if "email" not in prospect_cols:
+                    conn.execute(text("ALTER TABLE prospect ADD COLUMN email VARCHAR(255)"))
+                    log.info("Migration: added prospect.email")
+
         if "call" in tables:
             call_cols = {c["name"] for c in insp.get_columns("call")}
             with engine.begin() as conn:

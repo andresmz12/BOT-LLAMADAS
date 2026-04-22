@@ -94,6 +94,7 @@ class Prospect(SQLModel, table=True):
     campaign_id: int = Field(foreign_key="campaign.id")
     name: str
     phone: str
+    email: Optional[str] = None
     company: Optional[str] = None
     status: str = Field(default="pending")
     call_attempts: int = Field(default=0)
