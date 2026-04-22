@@ -49,6 +49,7 @@ webhook_module.ws_manager = ws_manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("=== ZYRAVOICE BACKEND v6 STARTING ===")
     try:
         create_db_and_tables()
         run_migrations()

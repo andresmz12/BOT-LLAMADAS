@@ -37,7 +37,7 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
     retell_call_id = call_data.get("call_id", "")
     call_type_retell = call_data.get("call_type", "outbound_api")
 
-    logger.info(f"[WEBHOOK] event={event} call_id={retell_call_id} type={call_type_retell}")
+    logger.info(f"[WHv6] event={event} call_id={retell_call_id} type={call_type_retell}")
     logger.info(f"[WEBHOOK] call_data keys: {list(call_data.keys())}")
 
     call = session.exec(select(Call).where(Call.retell_call_id == retell_call_id)).first()
