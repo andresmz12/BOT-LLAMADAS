@@ -85,7 +85,7 @@ async def _bg_analyze_and_sync(
                 elif outcome in ("interested", "callback_requested", "appointment_scheduled", "not_interested"):
                     prospect.status = "answered"
                 elif outcome == "no_answer":
-                    prospect.status = "pending"
+                    prospect.status = "no_answer"
                 else:
                     prospect.status = "answered"
                 s.add(prospect)
@@ -295,7 +295,7 @@ async def retell_webhook(request: Request, background_tasks: BackgroundTasks, se
         if call.prospect_id:
             prospect = session.get(Prospect, call.prospect_id)
             if prospect:
-                prospect.status = "pending"
+                prospect.status = "no_answer"
                 session.add(prospect)
         session.commit()
 
