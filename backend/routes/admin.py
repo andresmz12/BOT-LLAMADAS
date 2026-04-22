@@ -84,6 +84,36 @@ def update_org(
     return org
 
 
+@router.get("/organizations/{org_id}/crm-debug")
+def debug_org_crm(
+    org_id: int,
+    _: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    """Raw-SQL diagnostic — safe even when ORM columns are missing from DB."""
+    from sqlalchemy import text, inspect as sa_inspect
+    from database import engine
+    try:
+        insp = sa_inspect(engine)
+        cols = [c["name"] for c in insp.get_columns("organization")]
+        safe_cols = [
+            c for c in [
+                "id", "name", "crm_type", "crm_webhook_enabled",
+                "crm_webhook_url", "crm_board_or_list_id",
+                "crm_events",
+            ] if c in cols
+        ]
+        has_api_key_expr = "crm_api_key IS NOT NULL AND crm_api_key != '' AS has_crm_api_key" if "crm_api_key" in cols else "'?' AS has_crm_api_key"
+        col_list = ", ".join(safe_cols) + ", " + has_api_key_expr
+        row = session.execute(
+            text(f"SELECT {col_list} FROM organization WHERE id = :id"),
+            {"id": org_id},
+        ).mappings().first()
+        return {"db_columns": cols, "org": dict(row) if row else None}
+    except Exception as e:
+        return {"error": str(e)}
+
+
 @router.post("/organizations/{org_id}/crm/test")
 async def test_org_crm_webhook(
     org_id: int,

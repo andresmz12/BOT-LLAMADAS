@@ -120,10 +120,14 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
         if duration_ms:
             call.duration_seconds = int(duration_ms / 1000)
 
-        # Get org Anthropic key
-        org = session.get(Organization, call.organization_id) if call.organization_id else None
+        # Get org (resilient — schema mismatches must not kill the webhook handler)
+        org = None
+        try:
+            org = session.get(Organization, call.organization_id) if call.organization_id else None
+        except Exception as _org_err:
+            logger.error(f"[WEBHOOK] Could not load org {call.organization_id}: {_org_err}")
         org_api_key = (org.anthropic_api_key if org else "") or ""
-        logger.info(f"[WEBHOOK] Anthropic key available: {bool(org_api_key)}")
+        logger.info(f"[WEBHOOK] org_id={call.organization_id} loaded={org is not None} anthropic_key={bool(org_api_key)}")
 
         if in_voicemail:
             call.outcome = "voicemail"
