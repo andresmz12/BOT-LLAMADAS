@@ -86,28 +86,56 @@ async def _send_monday(org: Organization, call_data: dict) -> None:
         logger.error(f"[CRM_MONDAY] org={org.id} failed to fetch columns: {exc}")
         columns = []
 
-    # Build column_values using real IDs — first column of each type wins
+    # Build column_values using real IDs.
+    # Match by type; for text columns use title keywords to assign phone vs email.
+    email = call_data.get("email", "") or ""
+    _email_keywords = {"email", "correo", "mail", "e-mail"}
+    _phone_keywords = {"phone", "telefono", "teléfono", "tel", "celular", "movil", "móvil"}
+    _date_keywords = {"fecha", "date", "dia", "día"}
+    _duration_keywords = {"duracion", "duración", "duration", "dur", "segundos", "tiempo"}
+    _summary_keywords = {"resumen", "summary", "notas", "notes", "observ", "detalle"}
+
     seen_types: set = set()
     col_values: dict = {}
     for col in columns:
         cid, ctype = col["id"], col["type"]
-        if ctype in seen_types:
-            continue
-        seen_types.add(ctype)
+        title_lower = col["title"].lower()
+
         if ctype == "color":
-            col_values[cid] = {"index": status_index}
+            # Status — only first one
+            if "color" not in seen_types:
+                col_values[cid] = {"index": status_index}
+                seen_types.add("color")
         elif ctype == "date":
-            col_values[cid] = {"date": date_only}
+            if "date" not in seen_types:
+                col_values[cid] = {"date": date_only}
+                seen_types.add("date")
         elif ctype == "numeric":
-            col_values[cid] = str(duration)
+            if "numeric" not in seen_types:
+                col_values[cid] = str(duration)
+                seen_types.add("numeric")
         elif ctype == "long_text":
-            col_values[cid] = {"text": summary}
+            if "long_text" not in seen_types:
+                col_values[cid] = {"text": summary}
+                seen_types.add("long_text")
         elif ctype == "email":
-            col_values[cid] = {"email": call_data.get("email", ""), "text": call_data.get("email", "")}
+            col_values[cid] = {"email": email, "text": email}
         elif ctype == "phone":
             col_values[cid] = {"phone": phone, "countryShortName": "US"}
         elif ctype == "text":
-            col_values[cid] = phone
+            # Use title keywords to decide what goes in each text column
+            if any(k in title_lower for k in _email_keywords):
+                col_values[cid] = email
+            elif any(k in title_lower for k in _phone_keywords):
+                col_values[cid] = phone
+            elif any(k in title_lower for k in _duration_keywords):
+                col_values[cid] = str(duration)
+            elif any(k in title_lower for k in _summary_keywords):
+                col_values[cid] = summary
+            elif "text_first" not in seen_types:
+                # First unrecognized text column → phone (backward compat)
+                col_values[cid] = phone
+                seen_types.add("text_first")
 
     # Fallback: if no columns found, use generic IDs
     if not col_values:
