@@ -87,8 +87,36 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
         session.commit()
         logger.info(f"[WEBHOOK] call_started: call_id={call.id}")
 
-    # ── call_ended / call_analyzed ─────────────────────────────────────────────
-    elif event in ("call_ended", "call_analyzed"):
+    # ── call_ended — save metadata only, analysis runs on call_analyzed ──────
+    elif event == "call_ended":
+        recording_url = call_data.get("recording_url")
+        duration_ms = call_data.get("duration_ms") or call_data.get("call_length_ms") or 0
+        start_ts = call_data.get("start_timestamp")
+        end_ts = call_data.get("end_timestamp")
+        transcript = call_data.get("transcript", "") or ""
+
+        logger.info(f"[WEBHOOK] call_ended: call_id={call.id} duration_ms={duration_ms} recording={bool(recording_url)}")
+
+        call.status = "ended"
+        call.call_type = "inbound" if call_type_retell == "inbound" else "outbound"
+        if end_ts:
+            call.ended_at = datetime.fromtimestamp(end_ts / 1000)
+        else:
+            call.ended_at = datetime.utcnow()
+        if start_ts:
+            call.started_at = datetime.fromtimestamp(start_ts / 1000)
+        if transcript:
+            call.raw_transcript = transcript
+        if recording_url:
+            call.recording_url = recording_url
+        if duration_ms:
+            call.duration_seconds = int(duration_ms / 1000)
+        session.add(call)
+        session.commit()
+        logger.info(f"[WEBHOOK] call_ended saved call_id={call.id}")
+
+    # ── call_analyzed — full analysis + prospect/campaign update + CRM ────────
+    elif event == "call_analyzed":
         transcript = call_data.get("transcript", "") or ""
         recording_url = call_data.get("recording_url")
         duration_ms = call_data.get("duration_ms") or call_data.get("call_length_ms") or 0
@@ -98,21 +126,16 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
         in_voicemail = call_analysis.get("in_voicemail", False)
 
         logger.info(
-            f"[WEBHOOK] {event}: call_id={call.id} transcript_len={len(transcript)} "
+            f"[WEBHOOK] call_analyzed: call_id={call.id} transcript_len={len(transcript)} "
             f"duration_ms={duration_ms} voicemail={in_voicemail} recording={bool(recording_url)}"
         )
 
         call.status = "ended"
         call.call_type = "inbound" if call_type_retell == "inbound" else "outbound"
-
         if end_ts:
             call.ended_at = datetime.fromtimestamp(end_ts / 1000)
-        else:
-            call.ended_at = datetime.utcnow()
-
         if start_ts:
             call.started_at = datetime.fromtimestamp(start_ts / 1000)
-
         if transcript:
             call.raw_transcript = transcript
         if recording_url:
@@ -120,7 +143,7 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
         if duration_ms:
             call.duration_seconds = int(duration_ms / 1000)
 
-        # Get org (resilient — schema mismatches must not kill the webhook handler)
+        # Load org for Claude API key
         org = None
         try:
             org = session.get(Organization, call.organization_id) if call.organization_id else None
@@ -204,9 +227,8 @@ async def retell_webhook(request: Request, session: Session = Depends(get_sessio
             f"sentiment={call.sentiment} duration={call.duration_seconds}s"
         )
 
-        # ── CRM dispatch (native APIs + generic webhooks) ──────────────────────
-        # Log before touching any org attribute (org may be expired after commit)
-        logger.info(f"[CRM_BLOCK] event={event} call_id={call.id} call_org_id={call.organization_id} org_loaded={org is not None}")
+        # ── CRM dispatch ───────────────────────────────────────────────────────
+        logger.info(f"[CRM_BLOCK] call_id={call.id} call_org_id={call.organization_id} org_loaded={org is not None}")
         try:
             if org:
                 logger.info(
