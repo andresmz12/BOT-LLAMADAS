@@ -79,20 +79,22 @@ async def _bg_analyze_and_sync(
         if prospect_id:
             prospect = s.get(Prospect, prospect_id)
             if prospect:
-                outcome = call.outcome or "failed"
+                outcome = call.outcome or "no_answer"
                 if outcome == "voicemail":
                     prospect.status = "voicemail"
                 elif outcome in ("interested", "callback_requested", "appointment_scheduled", "not_interested"):
                     prospect.status = "answered"
+                elif outcome == "no_answer":
+                    prospect.status = "pending"
                 else:
-                    prospect.status = "failed"
+                    prospect.status = "answered"
                 s.add(prospect)
 
         if campaign_id:
             campaign = s.get(Campaign, campaign_id)
             if campaign:
                 campaign.total_calls += 1
-                outcome = call.outcome or "failed"
+                outcome = call.outcome or "no_answer"
                 if outcome == "voicemail":
                     campaign.voicemail += 1
                 elif outcome == "interested":
@@ -103,8 +105,7 @@ async def _bg_analyze_and_sync(
                 elif outcome == "appointment_scheduled":
                     campaign.appointments_scheduled += 1
                     campaign.answered += 1
-                else:
-                    campaign.failed += 1
+                # no_answer and anything else: just total_calls, no failed counter
                 s.add(campaign)
 
         s.commit()
@@ -287,7 +288,7 @@ async def retell_webhook(request: Request, background_tasks: BackgroundTasks, se
         disconnect_reason = call_data.get("disconnection_reason", "")
         logger.info(f"[WEBHOOK] call_failed: call_id={call.id} reason={disconnect_reason}")
         call.status = "ended"
-        call.outcome = "failed"
+        call.outcome = "no_answer"
         call.ended_at = datetime.utcnow()
         call.notes = f"No se pudo conectar: {disconnect_reason}" if disconnect_reason else "Llamada no conectada"
         session.add(call)

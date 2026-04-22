@@ -4,7 +4,7 @@ import StatusBadge from '../components/StatusBadge'
 import CallDetailModal from '../components/CallDetailModal'
 import { getCalls, getCallDetail, getCampaigns, deleteCalls } from '../api/client'
 
-const OUTCOMES = ['', 'interested', 'not_interested', 'callback_requested', 'appointment_scheduled', 'voicemail', 'wrong_number', 'failed']
+const OUTCOMES = ['', 'interested', 'not_interested', 'callback_requested', 'appointment_scheduled', 'voicemail', 'no_answer', 'wrong_number']
 const SENTIMENT_EMOJI = { positive: '😊', neutral: '😐', negative: '😞' }
 
 export default function Calls() {
