@@ -35,6 +35,19 @@ async def send_call_to_crm(org: Organization, call_data: dict, call=None, prospe
             await send_crm_webhook(org, call, prospect, agent_config, "appointment_scheduled", session)
 
 
+async def _get_monday_board_columns(api_key: str, board_id: int) -> list:
+    """Fetch column id/title/type for a Monday board."""
+    query = f'{{ boards(ids: [{board_id}]) {{ columns {{ id title type }} }} }}'
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(
+            "https://api.monday.com/v2",
+            json={"query": query},
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "API-Version": "2024-01"},
+        )
+    data = resp.json()
+    return data.get("data", {}).get("boards", [{}])[0].get("columns", [])
+
+
 async def _send_monday(org: Organization, call_data: dict) -> None:
     if not org.crm_api_key or not org.crm_board_or_list_id:
         logger.warning(
@@ -52,31 +65,63 @@ async def _send_monday(org: Organization, call_data: dict) -> None:
     ts = call_data.get("timestamp") or datetime.utcnow().isoformat()
     date_only = ts[:10]  # YYYY-MM-DD
 
-    # Map outcome to Monday status index (board-agnostic numeric codes)
-    # 0 = Working on it, 1 = Done, 2 = Stuck
     STATUS_INDEX = {
-        "interested": 1,
-        "appointment_scheduled": 1,
+        "interested": 1, "appointment_scheduled": 1,
         "not_interested": 2,
-        "callback_requested": 0,
-        "voicemail": 0,
-        "failed": 0,
+        "callback_requested": 0, "voicemail": 0, "failed": 0,
     }
     status_index = STATUS_INDEX.get(call_result, 0)
 
-    # column_values must be a JSON-encoded string (not a nested object) per Monday API
-    col_values_str = json.dumps({
-        "status": {"index": status_index},
-        "date": {"date": date_only},
-        "numbers": str(duration),
-        "long_text": {"text": summary},
-        "text": campaign,
-    }, ensure_ascii=False)
+    try:
+        board_id = int(org.crm_board_or_list_id)
+    except ValueError as exc:
+        logger.error(f"[CRM_MONDAY] org={org.id} board_id not integer: {org.crm_board_or_list_id!r} — {exc}")
+        return
 
-    # Inline mutation — Monday.com requires board_id as integer literal and
-    # column_values as a JSON string literal (not a GraphQL variable of type JSON)
-    board_id = int(org.crm_board_or_list_id)
+    # Fetch real column IDs from Monday board
+    try:
+        columns = await _get_monday_board_columns(org.crm_api_key, board_id)
+        logger.info(f"[CRM_MONDAY] org={org.id} board={board_id} columns={[(c['id'], c['type'], c['title']) for c in columns]}")
+    except Exception as exc:
+        logger.error(f"[CRM_MONDAY] org={org.id} failed to fetch columns: {exc}")
+        columns = []
+
+    # Build column_values using real IDs — first column of each type wins
+    seen_types: set = set()
+    col_values: dict = {}
+    for col in columns:
+        cid, ctype = col["id"], col["type"]
+        if ctype in seen_types:
+            continue
+        seen_types.add(ctype)
+        if ctype == "color":
+            col_values[cid] = {"index": status_index}
+        elif ctype == "date":
+            col_values[cid] = {"date": date_only}
+        elif ctype == "numeric":
+            col_values[cid] = str(duration)
+        elif ctype == "long_text":
+            col_values[cid] = {"text": summary}
+        elif ctype == "phone":
+            col_values[cid] = {"phone": phone, "countryShortName": "US"}
+        elif ctype == "text":
+            col_values[cid] = phone
+
+    # Fallback: if no columns found, use generic IDs
+    if not col_values:
+        logger.warning(f"[CRM_MONDAY] org={org.id} no columns mapped — using generic fallback IDs")
+        col_values = {
+            "status": {"index": status_index},
+            "date": {"date": date_only},
+            "numbers": str(duration),
+            "long_text": {"text": summary},
+            "text": phone,
+        }
+
+    logger.info(f"[CRM_MONDAY] org={org.id} board={board_id} phone={phone} result={call_result} col_ids={list(col_values.keys())}")
+
     item_name = (phone or "ZyraVoice Lead").replace('"', '\\"')
+    col_values_str = json.dumps(col_values, ensure_ascii=False)
     col_values_escaped = col_values_str.replace('\\', '\\\\').replace('"', '\\"')
 
     mutation = (
@@ -88,8 +133,6 @@ async def _send_monday(org: Organization, call_data: dict) -> None:
         f'  ) {{ id }}'
         f'}}'
     )
-
-    logger.info(f"[CRM_MONDAY] org={org.id} board={board_id} phone={phone} result={call_result}")
 
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT) as client:
@@ -116,8 +159,6 @@ async def _send_monday(org: Organization, call_data: dict) -> None:
                 logger.info(f"[CRM_MONDAY] org={org.id} item created id={item_id} status={resp.status_code}")
         else:
             logger.error(f"[CRM_MONDAY] org={org.id} HTTP error status={resp.status_code} body={body[:400]}")
-    except ValueError as exc:
-        logger.error(f"[CRM_MONDAY] org={org.id} board_id is not an integer: {org.crm_board_or_list_id!r} — {exc}")
     except Exception as exc:
         logger.error(f"[CRM_MONDAY] org={org.id} request error: {exc}", exc_info=True)
 
