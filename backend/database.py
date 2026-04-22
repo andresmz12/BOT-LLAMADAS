@@ -62,6 +62,13 @@ def run_migrations():
                     conn.execute(text("ALTER TABLE call ADD COLUMN organization_id INTEGER"))
                     log.info("Migration: added call.organization_id")
 
+        if "campaign" in tables:
+            camp_cols = {c["name"] for c in insp.get_columns("campaign")}
+            with engine.begin() as conn:
+                if "calls_per_minute" not in camp_cols:
+                    conn.execute(text("ALTER TABLE campaign ADD COLUMN calls_per_minute INTEGER DEFAULT 10"))
+                    log.info("Migration: added campaign.calls_per_minute")
+
         if "organization" in tables:
             org_cols = {c["name"] for c in insp.get_columns("organization")}
             org_new = {

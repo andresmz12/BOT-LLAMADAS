@@ -39,7 +39,7 @@ export default function Campaigns() {
         <table className="w-full text-sm">
           <thead className="bg-black/20">
             <tr>
-              {['Nombre', 'Estado', 'Prospectos', 'Llamadas', 'Interesados', 'Citas', 'Acciones'].map(h => (
+              {['Nombre', 'Estado', 'Prospectos', 'Llamadas', 'Interesados', 'Citas', 'Ritmo', 'Acciones'].map(h => (
                 <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
               ))}
             </tr>
@@ -65,6 +65,7 @@ export default function Campaigns() {
                   <td className="px-6 py-4 text-slate-300">{c.total_calls}</td>
                   <td className="px-6 py-4 text-slate-300">{c.interested}</td>
                   <td className="px-6 py-4 text-slate-300">{c.appointments_scheduled}</td>
+                  <td className="px-6 py-4 text-slate-400 text-xs">{c.calls_per_minute ?? 10}/min</td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       {(c.status === 'draft' || c.status === 'paused') && (
@@ -91,7 +92,7 @@ export default function Campaigns() {
               )
             })}
             {campaigns.length === 0 && (
-              <tr><td colSpan={7} className="px-6 py-12 text-center text-slate-500">No hay campañas creadas</td></tr>
+              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-500">No hay campañas creadas</td></tr>
             )}
           </tbody>
         </table>
@@ -106,7 +107,7 @@ export default function Campaigns() {
 }
 
 function NewCampaignModal({ agents, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: '', description: '', agent_config_id: agents[0]?.id || '' })
+  const [form, setForm] = useState({ name: '', description: '', agent_config_id: agents[0]?.id || '', calls_per_minute: 10 })
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -120,7 +121,7 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
     if (!form.agent_config_id) return alert('Selecciona un agente')
     setLoading(true)
     try {
-      await createCampaign({ ...form, agent_config_id: Number(form.agent_config_id) })
+      await createCampaign({ ...form, agent_config_id: Number(form.agent_config_id), calls_per_minute: Number(form.calls_per_minute) })
       onSaved()
     } catch (err) {
       alert(err.response?.data?.detail || 'Error al crear campaña')
@@ -151,6 +152,13 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
               className="z-input">
               {agents.map(a => <option key={a.id} value={a.id}>{a.agent_name} — {a.company_name}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Llamadas por minuto</label>
+            <input type="number" min="1" max="60" value={form.calls_per_minute}
+              onChange={e => setForm(f => ({ ...f, calls_per_minute: e.target.value }))}
+              className="z-input" />
+            <p className="text-xs text-slate-500 mt-1">Intervalo entre llamadas: {(60 / (form.calls_per_minute || 10)).toFixed(1)}s</p>
           </div>
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="z-btn-ghost">Cancelar</button>

@@ -142,6 +142,7 @@ async def _run_campaign_loop(campaign_id: int):
                 "retell_agent_id": agent_config.retell_agent_id,
                 "agent_name": agent_config.name,
                 "voice_id": agent_config.voice_id or "retell-Andrea",
+                "calls_per_minute": max(1, campaign.calls_per_minute or 10),
             }
             logger.info(
                 f"[Campaign {campaign_id}] Dialing {prospect.phone} "
@@ -195,5 +196,7 @@ async def _run_campaign_loop(campaign_id: int):
                     session.add(prospect_obj)
                 session.commit()
 
-        # Wait between calls to avoid rate limiting
-        await asyncio.sleep(30)
+        # Space calls to respect calls_per_minute limit
+        sleep_seconds = 60.0 / call_info["calls_per_minute"]
+        logger.info(f"[Campaign {campaign_id}] Sleeping {sleep_seconds:.1f}s ({call_info['calls_per_minute']} calls/min)")
+        await asyncio.sleep(sleep_seconds)
