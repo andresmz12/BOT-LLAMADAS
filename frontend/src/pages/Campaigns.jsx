@@ -28,15 +28,16 @@ export default function Campaigns() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-100">Campañas</h1>
-        <button onClick={() => setShowModal(true)} className="z-btn-primary flex items-center gap-2">
+        <button onClick={() => setShowModal(true)} className="z-btn-primary flex items-center gap-2 self-start sm:self-auto">
           <PlusIcon className="w-4 h-4" /> Nueva Campaña
         </button>
       </div>
 
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[700px]">
           <thead className="bg-black/20">
             <tr>
               {['Nombre', 'Estado', 'Prospectos', 'Llamadas', 'Interesados', 'Citas', 'Ritmo', 'Acciones'].map(h => (
@@ -100,6 +101,7 @@ export default function Campaigns() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showModal && (

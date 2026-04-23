@@ -54,7 +54,8 @@ export default function Dashboard() {
         <div className="p-6 border-b border-z-border">
           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Campañas Activas</h2>
         </div>
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[480px]">
           <thead className="bg-black/20">
             <tr>
               {['Nombre', 'Estado', 'Progreso', 'Interesados'].map(h => (
@@ -84,6 +85,7 @@ export default function Dashboard() {
             {campaigns.length === 0 && <tr><td colSpan={4} className="px-6 py-8 text-center text-slate-500">No hay campañas</td></tr>}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   )

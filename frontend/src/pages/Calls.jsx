@@ -68,10 +68,10 @@ export default function Calls() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-100">Llamadas</h1>
         {calls.length > 0 && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             {selected.size > 0 && (
               <button onClick={handleDeleteSelected}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-lg transition-colors">
@@ -89,18 +89,19 @@ export default function Calls() {
       </div>
 
       <div className="flex gap-3 flex-wrap items-center">
-        <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-auto">
+        <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-full sm:w-auto">
           <option value="">Todas las campañas</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select value={filterOutcome} onChange={e => setFilterOutcome(e.target.value)} className="z-input w-auto">
+        <select value={filterOutcome} onChange={e => setFilterOutcome(e.target.value)} className="z-input w-full sm:w-auto">
           {OUTCOMES.map(o => <option key={o} value={o}>{o || 'Todos los outcomes'}</option>)}
         </select>
         <span className="text-sm text-slate-500">{calls.length} llamadas</span>
       </div>
 
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[700px]">
           <thead className="bg-black/20">
             <tr>
               <th className="px-4 py-3 w-10">
@@ -142,6 +143,7 @@ export default function Calls() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
       {selectedCall && <CallDetailModal call={selectedCall} onClose={() => setSelectedCall(null)} />}
     </div>

@@ -130,9 +130,9 @@ export default function Prospects() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-100">Prospectos</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <button onClick={() => setShowNew(true)}
             className="flex items-center gap-2 px-4 py-2 border border-z-blue text-z-blue-light hover:bg-z-blue/10 font-semibold rounded-lg text-sm transition-colors">
             <PlusIcon className="w-4 h-4" /> Nuevo prospecto
@@ -143,17 +143,17 @@ export default function Prospects() {
         </div>
       </div>
 
-      <div className="flex gap-3">
-        <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-auto">
+      <div className="flex gap-3 flex-wrap items-center">
+        <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-full sm:w-auto">
           <option value="">Todas las campañas</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="z-input w-auto">
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="z-input w-full sm:w-auto">
           {STATUSES.map(s => <option key={s} value={s}>{s || 'Todos los estados'}</option>)}
         </select>
-        <span className="text-sm text-slate-500 self-center">{prospects.length} prospectos</span>
+        <span className="text-sm text-slate-500">{prospects.length} prospectos</span>
         {prospects.length > 0 && (
-          <div className="ml-auto flex gap-2">
+          <div className="flex flex-wrap gap-2 sm:ml-auto">
             <button onClick={handleRetry}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-z-blue-light border border-z-blue/30 hover:bg-z-blue/10 rounded-lg transition-colors">
               <ArrowPathIcon className="w-3.5 h-3.5" />
@@ -169,7 +169,8 @@ export default function Prospects() {
       </div>
 
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-black/20">
             <tr>
               {['Nombre', 'Empresa', 'Teléfono', 'Campaña', 'Estado', 'Intentos', 'Última llamada', 'Acciones'].map(h => (
@@ -207,6 +208,7 @@ export default function Prospects() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showNew && (

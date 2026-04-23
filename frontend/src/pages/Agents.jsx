@@ -41,9 +41,9 @@ export default function Agents() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-100">Agentes de Voz</h1>
-        <button onClick={() => setModal('new')} className="z-btn-primary flex items-center gap-2">
+        <button onClick={() => setModal('new')} className="z-btn-primary flex items-center gap-2 self-start sm:self-auto">
           <PlusIcon className="w-4 h-4" /> Nuevo Agente
         </button>
       </div>

@@ -56,7 +56,7 @@ function WaveformIcon({ className }) {
   )
 }
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const [collapsed, setCollapsed] = useState(false)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const role = user.role || 'viewer'
@@ -64,7 +64,18 @@ export default function Sidebar() {
   const initials = (user.full_name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
   return (
-    <aside className={`${collapsed ? 'w-16' : 'w-60'} bg-sidebar flex flex-col h-screen sticky top-0 transition-all duration-200 flex-shrink-0 border-r border-z-border`}>
+    <>
+      {/* Overlay — mobile only */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={onClose} />
+      )}
+    <aside className={`
+      fixed md:sticky top-0 inset-y-0 left-0 z-50
+      ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
+      ${collapsed ? 'md:w-16' : 'md:w-60'} w-60
+      bg-sidebar flex flex-col h-screen
+      transition-transform md:transition-all duration-200 flex-shrink-0 border-r border-z-border
+    `}>
       {/* Logo */}
       <div className={`flex items-center ${collapsed ? 'justify-center px-0' : 'gap-2.5 px-5'} py-4 border-b border-z-border min-h-[60px]`}>
         <WaveformIcon className="w-7 h-7 text-z-blue flex-shrink-0" />
@@ -86,6 +97,7 @@ export default function Sidebar() {
             to={to}
             end={to === '/'}
             title={collapsed ? label : undefined}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive
@@ -132,5 +144,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   )
 }
