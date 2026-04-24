@@ -145,13 +145,19 @@ async def sync_to_retell(
     voice_id = agent_config.voice_id or "retell-Andrea"
     lang = (agent_config.language or "español").lower()
     retell_language = "en-US" if ("english" in lang or lang == "en") else "es-ES"
+    backchannel_words = (
+        ["uh-huh", "I see", "right", "got it"] if retell_language == "en-US"
+        else ["ajá", "claro", "entiendo", "sí"]
+    )
 
     base_agent_settings = {
         "voice_id": voice_id,
         "language": retell_language,
         "responsiveness": 1,
-        "interruption_sensitivity": 1,
+        "interruption_sensitivity": 0.8,
         "enable_backchannel": True,
+        "backchannel_frequency": 0.7,
+        "backchannel_words": backchannel_words,
         "ambient_sound": "coffee-shop",
     }
 
@@ -170,7 +176,7 @@ async def sync_to_retell(
     )
 
     outbound_llm_payload = {
-        "model": "claude-4.6-sonnet",
+        "model": "claude-4.5-haiku",
         "general_prompt": outbound_prompt,
         "begin_message": outbound_begin,
         "general_tools": [],
@@ -217,7 +223,7 @@ async def sync_to_retell(
             )
 
             inbound_llm_payload = {
-                "model": "claude-4.6-sonnet",
+                "model": "claude-4.5-haiku",
                 "general_prompt": inbound_prompt,
                 "begin_message": inbound_begin,
                 "general_tools": [],
