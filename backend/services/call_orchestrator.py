@@ -13,7 +13,23 @@ running_tasks: dict[int, asyncio.Task] = {}
 
 
 def build_system_prompt(agent_config: AgentConfig) -> str:
-    return f"""IDIOMA: Habla SIEMPRE en español. Never respond in English under any circumstances.
+    lang = (agent_config.language or "español").lower()
+    if "english" in lang or "en" == lang:
+        lang_instruction = "LANGUAGE: Always respond in English. Never switch to another language."
+        rules = (
+            "- Never invent prices or services not listed in your information\n"
+            "- If no one answers, leave a brief and friendly voicemail\n"
+            "- At the end of the call, say goodbye cordially"
+        )
+    else:
+        lang_instruction = "IDIOMA: Habla SIEMPRE en español. Never respond in English under any circumstances."
+        rules = (
+            "- Nunca inventes precios ni servicios que no están en tu información\n"
+            "- Si no contestan, deja un mensaje de voz breve y amable\n"
+            "- Al finalizar la llamada, despídete cordialmente"
+        )
+
+    return f"""{lang_instruction}
 
 Eres {agent_config.agent_name}, asesora virtual de {agent_config.company_name}.
 
@@ -27,9 +43,7 @@ INSTRUCCIONES DE COMPORTAMIENTO:
 {agent_config.instructions}
 
 REGLAS IMPORTANTES:
-- Nunca inventes precios ni servicios que no están en tu información
-- Si no contestan, deja un mensaje de voz breve y amable
-- Al finalizar la llamada, despídete cordialmente
+{rules}
 """
 
 

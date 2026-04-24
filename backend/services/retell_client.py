@@ -143,10 +143,12 @@ async def sync_to_retell(
 
     headers = {"Authorization": f"Bearer {api_key}"}
     voice_id = agent_config.voice_id or "retell-Andrea"
+    lang = (agent_config.language or "español").lower()
+    retell_language = "en-US" if ("english" in lang or lang == "en") else "es-ES"
 
     base_agent_settings = {
         "voice_id": voice_id,
-        "language": "es-ES",
+        "language": retell_language,
         "responsiveness": 1,
         "interruption_sensitivity": 1,
         "enable_backchannel": True,
