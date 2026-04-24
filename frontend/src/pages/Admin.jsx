@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import {
-  getOrganizations, createOrganization, updateOrganization,
+  getOrganizations, createOrganization, updateOrganization, deleteOrganization,
   getUsers, createUser, updateUser, deleteUser,
   testCRMWebhook, upgradeOrg,
 } from '../api/client'
@@ -113,9 +113,15 @@ export default function Admin() {
   useEffect(() => { loadOrgs(); loadUsers() }, [])
 
   const handleDeleteUser = async (user) => {
-    if (!confirm(`¿Desactivar a "${user.full_name}"?`)) return
+    if (!confirm(`¿Eliminar permanentemente a "${user.full_name}" (${user.email})?`)) return
     try { await deleteUser(user.id); loadUsers() }
     catch (err) { alert(err.response?.data?.detail || 'Error') }
+  }
+
+  const handleDeleteOrg = async (org) => {
+    if (!confirm(`¿Eliminar la organización "${org.name}"? Esta acción no se puede deshacer.`)) return
+    try { await deleteOrganization(org.id); loadOrgs() }
+    catch (err) { alert(err.response?.data?.detail || 'Error al eliminar') }
   }
 
   const handleUpgrade = async (org) => {
@@ -199,6 +205,10 @@ export default function Admin() {
                         <button onClick={() => setModal({ type: 'org', data: org })}
                           className="text-slate-500 hover:text-slate-300">
                           <PencilIcon className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDeleteOrg(org)}
+                          className="text-slate-500 hover:text-red-400">
+                          <TrashIcon className="w-4 h-4" />
                         </button>
                       </div>
                     </td>

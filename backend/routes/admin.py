@@ -1,6 +1,6 @@
 import json
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from sqlalchemy import desc
 from pydantic import BaseModel
 from typing import Optional
@@ -176,6 +176,28 @@ def get_org_crm_logs(
     return logs
 
 
+@router.delete("/organizations/{org_id}")
+def delete_org(
+    org_id: int,
+    _: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    from models import Campaign, Call, Prospect
+    org = session.get(Organization, org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    user_count = session.exec(select(func.count(User.id)).where(User.organization_id == org_id)).one() or 0
+    campaign_count = session.exec(select(func.count(Campaign.id)).where(Campaign.organization_id == org_id)).one() or 0
+    if user_count or campaign_count:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La organización tiene {user_count} usuario(s) y {campaign_count} campaña(s). Elimínalos primero."
+        )
+    session.delete(org)
+    session.commit()
+    return {"ok": True}
+
+
 @router.post("/users")
 def create_user(
     data: UserCreate,
@@ -235,7 +257,7 @@ def update_user(
 
 
 @router.delete("/users/{user_id}")
-def deactivate_user(
+def delete_user(
     user_id: int,
     _: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
@@ -243,7 +265,6 @@ def deactivate_user(
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    user.is_active = False
-    session.add(user)
+    session.delete(user)
     session.commit()
     return {"ok": True}

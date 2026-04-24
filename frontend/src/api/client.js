@@ -40,6 +40,7 @@ export const getMe = () => api.get('/auth/me').then(r => r.data)
 export const getOrganizations = () => api.get('/admin/organizations').then(r => r.data)
 export const createOrganization = (data) => api.post('/admin/organizations', data).then(r => r.data)
 export const updateOrganization = (id, data) => api.put(`/admin/organizations/${id}`, data).then(r => r.data)
+export const deleteOrganization = (id) => api.delete(`/admin/organizations/${id}`).then(r => r.data)
 export const getUsers = () => api.get('/admin/users').then(r => r.data)
 export const createUser = (data) => api.post('/admin/users', data).then(r => r.data)
 export const updateUser = (id, data) => api.put(`/admin/users/${id}`, data).then(r => r.data)
@@ -93,7 +94,7 @@ export const getDemoStatus = () => api.get('/demo/status').then(r => r.data)
 export const startDemoCall = () => api.post('/demo/start-call').then(r => r.data)
 
 // Stats
-export const getStats = () => api.get('/stats').then(r => r.data)
+export const getStats = (params) => api.get('/stats', { params }).then(r => r.data)
 export const getCampaignStats = (id) => api.get(`/stats/${id}`).then(r => r.data)
 
 // Settings

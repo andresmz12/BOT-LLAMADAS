@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends
+from typing import Optional
+from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, func
 from sqlalchemy import true as sql_true
 from database import get_session
@@ -13,14 +14,14 @@ _CONTACTED_OUTCOMES = ("interested", "not_interested", "callback_requested", "ap
 
 @router.get("")
 def global_stats(
+    organization_id: Optional[int] = Query(None),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
-    org_filter = (
-        sql_true()
-        if current_user.role == "superadmin"
-        else (Call.organization_id == current_user.organization_id)
-    )
+    if current_user.role == "superadmin":
+        org_filter = (Call.organization_id == organization_id) if organization_id else sql_true()
+    else:
+        org_filter = Call.organization_id == current_user.organization_id
     real = Call.is_demo == False  # noqa: E712
     base = real & org_filter
 

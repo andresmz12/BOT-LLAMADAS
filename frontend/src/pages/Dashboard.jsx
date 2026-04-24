@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieC
 import { UserGroupIcon, StarIcon, CalendarIcon, XCircleIcon, ClockIcon, PhoneArrowDownLeftIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { WaveformIcon } from '../components/Sidebar'
 import StatusBadge from '../components/StatusBadge'
-import { getStats, getCampaigns } from '../api/client'
+import { getStats, getCampaigns, getOrganizations } from '../api/client'
 
 const PIE_COLORS = ['#2563EB', '#10b981', '#8b5cf6', '#ef4444', '#f97316', '#3b82f6']
 
@@ -25,19 +25,40 @@ function KPI({ title, value, sub, color = 'text-slate-100', icon: Icon, iconColo
 }
 
 export default function Dashboard() {
+  const isSuperAdmin = JSON.parse(localStorage.getItem('user') || '{}').role === 'superadmin'
+
   const [stats, setStats] = useState(null)
   const [campaigns, setCampaigns] = useState([])
+  const [orgs, setOrgs] = useState([])
+  const [selectedOrg, setSelectedOrg] = useState('')
 
   useEffect(() => {
-    getStats().then(setStats).catch(() => {})
     getCampaigns().then(setCampaigns).catch(() => {})
+    if (isSuperAdmin) getOrganizations().then(setOrgs).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    const params = selectedOrg ? { organization_id: selectedOrg } : undefined
+    getStats(params).then(setStats).catch(() => {})
+  }, [selectedOrg])
 
   const fmtDur = (s) => s ? (s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`) : '—'
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-slate-100">Dashboard</h1>
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <h1 className="text-2xl font-bold text-slate-100">Dashboard</h1>
+        {isSuperAdmin && orgs.length > 0 && (
+          <select
+            value={selectedOrg}
+            onChange={e => setSelectedOrg(e.target.value)}
+            className="z-input w-auto text-sm"
+          >
+            <option value="">Todas las organizaciones</option>
+            {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+          </select>
+        )}
+      </div>
 
       {/* KPI Cards — 8 metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
