@@ -57,14 +57,21 @@ async def lifespan(app: FastAPI):
         logger.info("Database initialized")
     except Exception as e:
         logger.error(f"Database initialization error: {e}")
+    if not os.getenv("RETELL_WEBHOOK_SECRET"):
+        logger.warning("⚠️  RETELL_WEBHOOK_SECRET not set — webhook signature verification is DISABLED")
+    if not os.getenv("JWT_SECRET"):
+        logger.warning("⚠️  JWT_SECRET not set — using insecure development key")
     yield
 
 
 app = FastAPI(title="Voice Agent API", lifespan=lifespan)
 
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+_allowed_origins = [o.strip() for o in _raw_origins.split(",")] if _raw_origins != "*" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

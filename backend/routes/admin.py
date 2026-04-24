@@ -11,6 +11,20 @@ from routes.auth import require_superadmin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+_SENSITIVE = {"retell_api_key", "anthropic_api_key", "crm_api_key", "crm_webhook_secret"}
+
+def _mask(key: str | None) -> str:
+    if not key:
+        return ""
+    return f"{'*' * max(0, len(key) - 4)}{key[-4:]}" if len(key) > 4 else "****"
+
+def _safe_org(org: Organization) -> dict:
+    d = org.dict()
+    for field in _SENSITIVE:
+        if d.get(field):
+            d[field] = _mask(d[field])
+    return d
+
 
 class OrgCreate(BaseModel):
     name: str
@@ -63,7 +77,7 @@ def list_orgs(
     _: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
 ):
-    return session.exec(select(Organization)).all()
+    return [_safe_org(org) for org in session.exec(select(Organization)).all()]
 
 
 @router.put("/organizations/{org_id}")

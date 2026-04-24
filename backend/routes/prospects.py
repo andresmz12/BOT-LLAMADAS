@@ -56,6 +56,8 @@ async def import_file(
     session: Session = Depends(get_session),
 ):
     content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="El archivo no puede superar 10 MB")
     filename = (file.filename or "").lower()
     rows = []
 

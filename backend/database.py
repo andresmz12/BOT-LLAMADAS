@@ -90,6 +90,23 @@ def run_migrations():
                         conn.execute(text(f"ALTER TABLE organization ADD COLUMN {col} {col_type}"))
                         log.info(f"Migration: added organization.{col}")
 
+        # Indexes for performance on frequently filtered columns
+        is_pg = not DATABASE_URL.startswith("sqlite")
+        if is_pg:
+            indexes = [
+                ("ix_call_organization_id",   "call",     "organization_id"),
+                ("ix_call_campaign_id",        "call",     "campaign_id"),
+                ("ix_prospect_organization_id","prospect", "organization_id"),
+                ("ix_prospect_campaign_id",    "prospect", "campaign_id"),
+                ("ix_campaign_organization_id","campaign", "organization_id"),
+                ("ix_user_organization_id",    "user",     "organization_id"),
+            ]
+            with engine.begin() as conn:
+                for idx_name, tbl, col in indexes:
+                    conn.execute(text(
+                        f"CREATE INDEX IF NOT EXISTS {idx_name} ON \"{tbl}\" ({col})"
+                    ))
+
     except Exception as e:
         log.error(f"Migration FAILED: {e}", exc_info=True)
 
