@@ -34,7 +34,7 @@ const NAV_BY_ROLE = {
   ],
 }
 
-function WaveformIcon({ className }) {
+export function WaveformIcon({ className }) {
   // Vertical audio bars matching ZyraVoice logo — tallest in center, tapering outward
   const bars = [
     { x: 1.5,  h: 8,  y: 12 },

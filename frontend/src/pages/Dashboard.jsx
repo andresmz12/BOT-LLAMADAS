@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts'
-import { PhoneIcon, UserGroupIcon, StarIcon, CalendarIcon, XCircleIcon, ClockIcon, PhoneArrowDownLeftIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
+import { UserGroupIcon, StarIcon, CalendarIcon, XCircleIcon, ClockIcon, PhoneArrowDownLeftIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
+import { WaveformIcon } from '../components/Sidebar'
 import StatusBadge from '../components/StatusBadge'
 import { getStats, getCampaigns } from '../api/client'
 
@@ -40,7 +41,7 @@ export default function Dashboard() {
 
       {/* KPI Cards — 8 metrics */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <KPI title="Total llamadas" value={stats?.total_calls ?? 0} icon={PhoneIcon} iconColor="text-slate-400" />
+        <KPI title="Total llamadas" value={stats?.total_calls ?? 0} icon={WaveformIcon} iconColor="text-z-blue" />
         <KPI title="Contactados" value={stats?.contacted ?? 0} icon={UserGroupIcon} iconColor="text-blue-400"
           sub={`${stats?.contact_rate ?? 0}% tasa de contacto`} />
         <KPI title="Interesados" value={stats?.interested ?? 0} icon={StarIcon}
