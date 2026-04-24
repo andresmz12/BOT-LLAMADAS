@@ -5,18 +5,44 @@ from anthropic import AsyncAnthropic
 
 logger = logging.getLogger(__name__)
 
-SYSTEM_PROMPT = """Eres un analizador de transcripciones de llamadas de ventas.
-Dado un transcript, extrae y devuelve SOLO un JSON con este schema:
+SYSTEM_PROMPT = """Eres un analizador estricto de transcripciones de llamadas de ventas.
+Dado un transcript, devuelve SOLO un JSON válido con este schema:
 {
-  "client_said": ["array de strings - puntos clave que dijo el cliente"],
-  "agent_said": ["array de strings - acciones y ofertas del agente"],
-  "outcome": "uno de: interested / not_interested / callback_requested / appointment_scheduled / voicemail / wrong_number / failed",
-  "services_mentioned": ["array de nombres de servicios mencionados"],
-  "sentiment": "uno de: positive / neutral / negative",
+  "client_said": ["puntos clave que dijo el cliente"],
+  "agent_said": ["acciones y ofertas del agente"],
+  "outcome": "<ver reglas>",
+  "services_mentioned": ["servicios mencionados"],
+  "sentiment": "positive | neutral | negative",
   "appointment_scheduled": false,
   "appointment_date": null,
-  "notes": "string de una línea con la observación más importante"
+  "notes": "observación más importante en una sola línea"
 }
+
+REGLAS ESTRICTAS PARA outcome (aplica en orden de prioridad):
+
+1. "appointment_scheduled" — el prospecto aceptó una cita o reunión con fecha/hora concreta.
+
+2. "interested" — SOLO si ocurre al menos uno de estos:
+   - Preguntó activamente por comisiones, precios o detalles del programa/servicio.
+   - Aceptó una visita o llamada de seguimiento sin fecha fija.
+   - Pidió información específica, catálogo o datos de contacto.
+
+3. "callback_requested" — el prospecto dijo frases como:
+   "Llámeme después", "Estoy ocupado", "Mañana", "Ahorita no puedo",
+   "Estoy en reunión", "En otro momento", "Más tarde".
+
+4. "not_interested" — si cualquiera de estas condiciones:
+   - Dijo explícitamente "no me interesa", "no gracias", "no quiero".
+   - Colgó sin responder nada relevante.
+   - La conversación duró menos de 20 segundos sin mostrar interés real.
+
+5. "wrong_number" — contestó alguien equivocado o el número no corresponde al prospecto.
+
+6. "voicemail" — nunca contestó una persona real (grabación automática, buzón de voz).
+
+7. "no_answer" — no contestaron o la llamada no conectó.
+
+Si el transcript está vacío o tiene menos de 20 palabras, usa "no_answer".
 Responde SOLO con el JSON válido, sin texto adicional, sin markdown, sin backticks."""
 
 
