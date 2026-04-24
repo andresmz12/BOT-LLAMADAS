@@ -22,6 +22,8 @@ const NATIVE_CRM_TYPES = ['monday', 'hubspot', 'gohighlevel', 'zoho', 'salesforc
 
 export default function Settings() {
   const navigate = useNavigate()
+  const isSuperAdmin = JSON.parse(localStorage.getItem('user') || '{}').role === 'superadmin'
+
   const [form, setForm] = useState({
     retell_api_key: '',
     retell_phone_number: '',
@@ -99,7 +101,7 @@ export default function Settings() {
     <div className="p-6 space-y-6 max-w-2xl">
       <h1 className="text-2xl font-bold text-slate-100">Configuración</h1>
 
-      <form onSubmit={submit} className="space-y-6">
+      {isSuperAdmin && <form onSubmit={submit} className="space-y-6">
         <div className="bg-z-card rounded-xl p-6 border border-z-border space-y-5">
           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Credenciales Retell AI</h2>
 
@@ -177,7 +179,7 @@ export default function Settings() {
             </span>
           )}
         </div>
-      </form>
+      </form>}
 
       <form onSubmit={handleDemoCall} className="bg-z-card rounded-xl p-6 border border-z-border space-y-5">
         <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Llamada Demo</h2>

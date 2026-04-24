@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from sqlalchemy import desc
 from database import get_session
 from models import User, Organization, WebhookLog
-from routes.auth import get_current_user, require_write_access
+from routes.auth import get_current_user, require_write_access, require_superadmin
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -38,7 +38,7 @@ def get_settings(
 @router.post("")
 def save_settings(
     data: dict,
-    current_user: User = Depends(require_write_access),
+    current_user: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
 ):
     if current_user.organization_id:
