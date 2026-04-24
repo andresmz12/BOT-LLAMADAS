@@ -4,7 +4,7 @@ from sqlmodel import Session, select
 from database import get_session
 from models import Campaign, Prospect, User
 from services import call_orchestrator
-from routes.auth import get_current_user, require_write_access
+from routes.auth import get_current_user, require_write_access, require_pro_plan
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -12,7 +12,7 @@ router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 @router.post("")
 def create_campaign(
     campaign: Campaign,
-    current_user: User = Depends(require_write_access),
+    current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
     campaign.status = "draft"
@@ -63,7 +63,7 @@ def get_campaign(
 async def start_campaign(
     campaign_id: int,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(require_write_access),
+    current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
     campaign = session.get(Campaign, campaign_id)

@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Outlet, Navigate, useNavigate } from 'rea
 import { Bars3Icon } from '@heroicons/react/24/outline'
 import Sidebar from './components/Sidebar'
 import Login from './pages/Login'
+import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
 import Agents from './pages/Agents'
 import Campaigns from './pages/Campaigns'
@@ -10,6 +11,7 @@ import Prospects from './pages/Prospects'
 import Calls from './pages/Calls'
 import Settings from './pages/Settings'
 import Admin from './pages/Admin'
+import DemoCall from './pages/DemoCall'
 
 const IDLE_MS = 10 * 60 * 1000 // 10 minutes
 
@@ -66,6 +68,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/agents" element={<Agents />} />
@@ -74,6 +77,7 @@ export default function App() {
           <Route path="/calls" element={<Calls />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />
+          <Route path="/demo" element={<DemoCall />} />
         </Route>
       </Routes>
     </BrowserRouter>

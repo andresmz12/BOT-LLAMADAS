@@ -25,6 +25,7 @@ api.interceptors.response.use(
 )
 
 // Auth
+export const register = (data) => api.post('/auth/register', data).then(r => r.data)
 export const login = (email, password) =>
   api.post('/auth/login', { email, password }).then(r => r.data)
 export const logout = () => {
@@ -43,6 +44,7 @@ export const getUsers = () => api.get('/admin/users').then(r => r.data)
 export const createUser = (data) => api.post('/admin/users', data).then(r => r.data)
 export const updateUser = (id, data) => api.put(`/admin/users/${id}`, data).then(r => r.data)
 export const deleteUser = (id) => api.delete(`/admin/users/${id}`).then(r => r.data)
+export const upgradeOrg = (id) => api.post(`/admin/organizations/${id}/upgrade`).then(r => r.data)
 
 // Agents
 export const getAgents = () => api.get('/agents').then(r => r.data)
@@ -85,6 +87,10 @@ export const getCallDetail = (id) => api.get(`/calls/${id}`).then(r => r.data)
 export const deleteCalls = (params) => api.delete('/calls', { params }).then(r => r.data)
 export const makeDemoCall = (phone, agentId) =>
   api.post('/calls/demo', { phone, agent_id: agentId }).then(r => r.data)
+
+// Demo
+export const getDemoStatus = () => api.get('/demo/status').then(r => r.data)
+export const startDemoCall = () => api.post('/demo/start-call').then(r => r.data)
 
 // Stats
 export const getStats = () => api.get('/stats').then(r => r.data)

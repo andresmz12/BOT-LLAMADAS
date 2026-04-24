@@ -11,6 +11,7 @@ load_dotenv()
 from database import create_db_and_tables, run_migrations, seed_initial_data, engine
 from routes import agents, campaigns, prospects, calls, stats, webhook, settings
 from routes import auth, admin
+from routes import demo
 from routes import webhook as webhook_module
 
 logging.basicConfig(level=logging.INFO)
@@ -79,6 +80,7 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(demo.router)
 app.include_router(agents.router)
 app.include_router(campaigns.router)
 app.include_router(prospects.router)

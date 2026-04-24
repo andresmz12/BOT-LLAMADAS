@@ -23,6 +23,7 @@ def _safe_org(org: Organization) -> dict:
     for field in _SENSITIVE:
         if d.get(field):
             d[field] = _mask(d[field])
+    d.setdefault("demo_calls_used", 0)
     return d
 
 
@@ -126,6 +127,22 @@ def debug_org_crm(
         return {"db_columns": cols, "org": dict(row) if row else None}
     except Exception as e:
         return {"error": str(e)}
+
+
+@router.post("/organizations/{org_id}/upgrade")
+def upgrade_org(
+    org_id: int,
+    _: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    """Upgrade an organization from free to pro plan."""
+    org = session.get(Organization, org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    org.plan = "pro"
+    session.add(org)
+    session.commit()
+    return {"ok": True, "plan": org.plan}
 
 
 @router.post("/organizations/{org_id}/crm/test")

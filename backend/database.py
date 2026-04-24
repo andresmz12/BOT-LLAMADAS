@@ -83,6 +83,7 @@ def run_migrations():
                 "crm_api_key": "VARCHAR(500)",
                 "crm_board_or_list_id": "VARCHAR(255)",
                 "crm_extra_config": "TEXT",
+                "demo_calls_used": "INTEGER DEFAULT 0",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():

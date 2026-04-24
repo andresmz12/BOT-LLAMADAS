@@ -20,6 +20,7 @@ class Organization(SQLModel, table=True):
     crm_api_key: Optional[str] = None
     crm_board_or_list_id: Optional[str] = None
     crm_extra_config: Optional[str] = None  # JSON string, e.g. {"instance_url": "https://..."}
+    demo_calls_used: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")

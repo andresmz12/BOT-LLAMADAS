@@ -60,7 +60,13 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const [collapsed, setCollapsed] = useState(false)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const role = user.role || 'viewer'
-  const navItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer
+  const plan = user.plan || 'basic'
+  const baseItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer
+  const navItems = plan === 'free' && (role === 'admin' || role === 'agent')
+    ? [...baseItems.filter(i => i.to !== '/campaigns' && i.to !== '/prospects'),
+       { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon },
+       ...baseItems.filter(i => i.to === '/campaigns' || i.to === '/prospects')]
+    : baseItems
   const initials = (user.full_name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
   return (

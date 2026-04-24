@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react'
 import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
-import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect } from '../api/client'
+import UpgradeBanner from '../components/UpgradeBanner'
+import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus } from '../api/client'
 
 const STATUSES = ['', 'pending', 'calling', 'answered', 'voicemail', 'failed', 'do_not_call']
 
@@ -72,6 +73,9 @@ export default function Prospects() {
   const [showImport, setShowImport] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [callingId, setCallingId] = useState(null)
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const isFree = user.plan === 'free'
+  const [demoStatus, setDemoStatus] = useState(null)
 
   const handleCall = async (p) => {
     if (callingId) return
@@ -88,7 +92,10 @@ export default function Prospects() {
     getProspects(params).then(setProspects).catch(() => {})
   }
 
-  useEffect(() => { getCampaigns().then(setCampaigns).catch(() => {}) }, [])
+  useEffect(() => {
+    getCampaigns().then(setCampaigns).catch(() => {})
+    if (isFree) getDemoStatus().then(setDemoStatus).catch(() => {})
+  }, [])
   useEffect(() => { load() }, [filterCampaign, filterStatus])
 
   const handleDelete = async (p) => {
@@ -132,16 +139,22 @@ export default function Prospects() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-100">Prospectos</h1>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => setShowNew(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-z-blue text-z-blue-light hover:bg-z-blue/10 font-semibold rounded-lg text-sm transition-colors">
-            <PlusIcon className="w-4 h-4" /> Nuevo prospecto
-          </button>
-          <button onClick={() => setShowImport(true)} className="z-btn-primary flex items-center gap-2">
-            <ArrowUpTrayIcon className="w-4 h-4" /> Importar Excel / CSV
-          </button>
-        </div>
+        {!isFree && (
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setShowNew(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-z-blue text-z-blue-light hover:bg-z-blue/10 font-semibold rounded-lg text-sm transition-colors">
+              <PlusIcon className="w-4 h-4" /> Nuevo prospecto
+            </button>
+            <button onClick={() => setShowImport(true)} className="z-btn-primary flex items-center gap-2">
+              <ArrowUpTrayIcon className="w-4 h-4" /> Importar Excel / CSV
+            </button>
+          </div>
+        )}
       </div>
+
+      {isFree && (
+        <UpgradeBanner compact demosUsed={demoStatus?.demo_calls_used ?? 0} />
+      )}
 
       <div className="flex gap-3 flex-wrap items-center">
         <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-full sm:w-auto">

@@ -3,7 +3,7 @@ import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/
 import {
   getOrganizations, createOrganization, updateOrganization,
   getUsers, createUser, updateUser, deleteUser,
-  testCRMWebhook,
+  testCRMWebhook, upgradeOrg,
 } from '../api/client'
 
 const ROLES = ['superadmin', 'admin', 'agent', 'viewer']
@@ -118,6 +118,12 @@ export default function Admin() {
     catch (err) { alert(err.response?.data?.detail || 'Error') }
   }
 
+  const handleUpgrade = async (org) => {
+    if (!confirm(`¿Actualizar "${org.name}" a plan Pro?`)) return
+    try { await upgradeOrg(org.id); loadOrgs() }
+    catch (err) { alert(err.response?.data?.detail || 'Error') }
+  }
+
   return (
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold text-slate-100">Panel de Administración</h1>
@@ -146,7 +152,7 @@ export default function Admin() {
             <table className="w-full text-sm">
               <thead className="bg-black/20">
                 <tr>
-                  {['ID', 'Nombre', 'Plan', 'CRM', 'Activa', 'Acciones'].map(h => (
+                  {['ID', 'Nombre', 'Plan', 'Demos', 'CRM', 'Activa', 'Acciones'].map(h => (
                     <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                   ))}
                 </tr>
@@ -157,7 +163,14 @@ export default function Admin() {
                     <td className="px-6 py-3 text-slate-500 text-xs">{org.id}</td>
                     <td className="px-6 py-3 font-medium text-slate-200">{org.name}</td>
                     <td className="px-6 py-3">
-                      <span className="px-2 py-0.5 bg-z-blue/15 text-z-blue-light text-xs rounded-full font-medium">{org.plan}</span>
+                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                        org.plan === 'free' ? 'bg-amber-500/15 text-amber-400' :
+                        org.plan === 'pro'  ? 'bg-green-500/15 text-green-400' :
+                                              'bg-z-blue/15 text-z-blue-light'
+                      }`}>{org.plan}</span>
+                    </td>
+                    <td className="px-6 py-3 text-slate-400 text-xs">
+                      {org.plan === 'free' ? `${org.demo_calls_used ?? 0}/10` : '—'}
                     </td>
                     <td className="px-6 py-3">
                       {org.crm_type && org.crm_type !== 'none' ? (
@@ -176,15 +189,23 @@ export default function Admin() {
                       </span>
                     </td>
                     <td className="px-6 py-3">
-                      <button onClick={() => setModal({ type: 'org', data: org })}
-                        className="text-slate-500 hover:text-slate-300">
-                        <PencilIcon className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {org.plan === 'free' && (
+                          <button onClick={() => handleUpgrade(org)}
+                            className="px-2 py-0.5 bg-green-500/15 hover:bg-green-500/25 text-green-400 text-xs font-medium rounded-lg transition-colors">
+                            ⬆ Pro
+                          </button>
+                        )}
+                        <button onClick={() => setModal({ type: 'org', data: org })}
+                          className="text-slate-500 hover:text-slate-300">
+                          <PencilIcon className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {orgs.length === 0 && (
-                  <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-500">No hay organizaciones</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-10 text-center text-slate-500">No hay organizaciones</td></tr>
                 )}
               </tbody>
             </table>

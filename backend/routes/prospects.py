@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing import Optional
 from database import get_session
 from models import Prospect, Campaign, AgentConfig, Call, User, Organization
-from routes.auth import get_current_user, require_write_access
+from routes.auth import get_current_user, require_write_access, require_pro_plan
 
 router = APIRouter(prefix="/prospects", tags=["prospects"])
 
@@ -31,7 +31,7 @@ class ProspectUpdate(BaseModel):
 @router.post("")
 def create_prospect(
     data: ProspectCreate,
-    current_user: User = Depends(require_write_access),
+    current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
     prospect = Prospect(
@@ -52,7 +52,7 @@ def create_prospect(
 async def import_file(
     campaign_id: int = Form(...),
     file: UploadFile = File(...),
-    current_user: User = Depends(require_write_access),
+    current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
     content = await file.read()

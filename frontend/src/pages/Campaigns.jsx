@@ -1,16 +1,24 @@
 import { useState, useEffect } from 'react'
 import { PlusIcon, PlayIcon, PauseIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
-import { getCampaigns, createCampaign, startCampaign, pauseCampaign, deleteCampaign, getAgents } from '../api/client'
+import UpgradeBanner from '../components/UpgradeBanner'
+import { getCampaigns, createCampaign, startCampaign, pauseCampaign, deleteCampaign, getAgents, getDemoStatus } from '../api/client'
 
 export default function Campaigns() {
   const [campaigns, setCampaigns] = useState([])
   const [agents, setAgents] = useState([])
   const [showModal, setShowModal] = useState(false)
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const isFree = user.plan === 'free'
+  const [demoStatus, setDemoStatus] = useState(null)
 
   const load = () => getCampaigns().then(setCampaigns).catch(() => {})
 
-  useEffect(() => { load(); getAgents().then(setAgents).catch(() => {}) }, [])
+  useEffect(() => {
+    load()
+    getAgents().then(setAgents).catch(() => {})
+    if (isFree) getDemoStatus().then(setDemoStatus).catch(() => {})
+  }, [])
 
   const handleStart = async (id) => {
     try { await startCampaign(id); load() }
@@ -30,10 +38,16 @@ export default function Campaigns() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-100">Campañas</h1>
-        <button onClick={() => setShowModal(true)} className="z-btn-primary flex items-center gap-2 self-start sm:self-auto">
-          <PlusIcon className="w-4 h-4" /> Nueva Campaña
-        </button>
+        {!isFree && (
+          <button onClick={() => setShowModal(true)} className="z-btn-primary flex items-center gap-2 self-start sm:self-auto">
+            <PlusIcon className="w-4 h-4" /> Nueva Campaña
+          </button>
+        )}
       </div>
+
+      {isFree && (
+        <UpgradeBanner compact demosUsed={demoStatus?.demo_calls_used ?? 0} />
+      )}
 
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
         <div className="overflow-x-auto">
