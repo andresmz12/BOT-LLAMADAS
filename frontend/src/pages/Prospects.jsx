@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
-import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon } from '@heroicons/react/24/outline'
+import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
-import { getProspects, deleteProspect, getCampaigns, createProspect, callProspect } from '../api/client'
+import UpgradeBanner from '../components/UpgradeBanner'
+import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus } from '../api/client'
+import { fmtDate } from '../utils/date'
 
 const STATUSES = ['', 'pending', 'calling', 'answered', 'voicemail', 'failed', 'do_not_call']
 
@@ -72,6 +74,9 @@ export default function Prospects() {
   const [showImport, setShowImport] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [callingId, setCallingId] = useState(null)
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const isFree = user.plan === 'free'
+  const [demoStatus, setDemoStatus] = useState(null)
 
   const handleCall = async (p) => {
     if (callingId) return
@@ -88,7 +93,10 @@ export default function Prospects() {
     getProspects(params).then(setProspects).catch(() => {})
   }
 
-  useEffect(() => { getCampaigns().then(setCampaigns).catch(() => {}) }, [])
+  useEffect(() => {
+    getCampaigns().then(setCampaigns).catch(() => {})
+    if (isFree) getDemoStatus().then(setDemoStatus).catch(() => {})
+  }, [])
   useEffect(() => { load() }, [filterCampaign, filterStatus])
 
   const handleDelete = async (p) => {
@@ -97,37 +105,86 @@ export default function Prospects() {
     catch (err) { alert(err.response?.data?.detail || 'Error') }
   }
 
+  const handleRetry = async () => {
+    const label = filterStatus
+      ? `los ${prospects.length} prospectos con estado "${filterStatus}"`
+      : `todos los prospectos fallidos y con buzón de voz`
+    if (!confirm(`¿Reintentar llamadas para ${label}?\n\nSe resetearán a "pending" para la próxima ejecución de campaña.`)) return
+    try {
+      const params = {}
+      if (filterCampaign) params.campaign_id = filterCampaign
+      if (filterStatus) params.status = filterStatus
+      const res = await retryProspects(params)
+      alert(`${res.reset} prospectos marcados para reintento.`)
+      load()
+    } catch (err) { alert(err.response?.data?.detail || 'Error') }
+  }
+
+  const handleDeleteAll = async () => {
+    const scope = filterCampaign
+      ? `los ${prospects.length} prospectos de esta campaña`
+      : `TODOS los ${prospects.length} prospectos`
+    if (!confirm(`¿Eliminar ${scope}? Esta acción no se puede deshacer.`)) return
+    try {
+      const params = filterCampaign ? { campaign_id: filterCampaign } : {}
+      const res = await deleteAllProspects(params)
+      alert(`${res.deleted} prospectos eliminados.`)
+      load()
+    } catch (err) { alert(err.response?.data?.detail || 'Error') }
+  }
+
   const campaignName = (id) => campaigns.find(c => c.id === id)?.name || `#${id}`
   const noCampaigns = campaigns.length === 0
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-100">Prospectos</h1>
-        <div className="flex gap-2">
-          <button onClick={() => setShowNew(true)}
-            className="flex items-center gap-2 px-4 py-2 border border-z-blue text-z-blue-light hover:bg-z-blue/10 font-semibold rounded-lg text-sm transition-colors">
-            <PlusIcon className="w-4 h-4" /> Nuevo prospecto
-          </button>
-          <button onClick={() => setShowImport(true)} className="z-btn-primary flex items-center gap-2">
-            <ArrowUpTrayIcon className="w-4 h-4" /> Importar Excel / CSV
-          </button>
-        </div>
+        {!isFree && (
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => setShowNew(true)}
+              className="flex items-center gap-2 px-4 py-2 border border-z-blue text-z-blue-light hover:bg-z-blue/10 font-semibold rounded-lg text-sm transition-colors">
+              <PlusIcon className="w-4 h-4" /> Nuevo prospecto
+            </button>
+            <button onClick={() => setShowImport(true)} className="z-btn-primary flex items-center gap-2">
+              <ArrowUpTrayIcon className="w-4 h-4" /> Importar Excel / CSV
+            </button>
+          </div>
+        )}
       </div>
 
-      <div className="flex gap-3">
-        <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-auto">
+      {isFree && (
+        <UpgradeBanner compact demosUsed={demoStatus?.demo_calls_used ?? 0} />
+      )}
+
+      <div className="flex gap-3 flex-wrap items-center">
+        <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-full sm:w-auto">
           <option value="">Todas las campañas</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="z-input w-auto">
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="z-input w-full sm:w-auto">
           {STATUSES.map(s => <option key={s} value={s}>{s || 'Todos los estados'}</option>)}
         </select>
-        <span className="ml-auto text-sm text-slate-500 self-center">{prospects.length} prospectos</span>
+        <span className="text-sm text-slate-500">{prospects.length} prospectos</span>
+        {prospects.length > 0 && (
+          <div className="flex flex-wrap gap-2 sm:ml-auto">
+            <button onClick={handleRetry}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-z-blue-light border border-z-blue/30 hover:bg-z-blue/10 rounded-lg transition-colors">
+              <ArrowPathIcon className="w-3.5 h-3.5" />
+              Reintentar {filterStatus ? `"${filterStatus}"` : 'fallidas'}
+            </button>
+            <button onClick={handleDeleteAll}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-lg transition-colors">
+              <TrashIcon className="w-3.5 h-3.5" />
+              Eliminar {filterCampaign ? 'campaña' : 'todos'}
+            </button>
+          </div>
+        )}
       </div>
 
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
-        <table className="w-full text-sm">
+        <div className="overflow-x-auto">
+        <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-black/20">
             <tr>
               {['Nombre', 'Empresa', 'Teléfono', 'Campaña', 'Estado', 'Intentos', 'Última llamada', 'Acciones'].map(h => (
@@ -145,7 +202,7 @@ export default function Prospects() {
                 <td className="px-6 py-3"><StatusBadge status={p.status} /></td>
                 <td className="px-6 py-3 text-slate-400">{p.call_attempts}</td>
                 <td className="px-6 py-3 text-slate-500 text-xs">
-                  {p.last_called_at ? new Date(p.last_called_at).toLocaleString() : '—'}
+                  {fmtDate(p.last_called_at)}
                 </td>
                 <td className="px-6 py-3">
                   <div className="flex items-center gap-2">
@@ -165,6 +222,7 @@ export default function Prospects() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {showNew && (

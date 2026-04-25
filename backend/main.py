@@ -8,9 +8,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from database import create_db_and_tables, run_migrations, seed_initial_data
+from database import create_db_and_tables, run_migrations, seed_initial_data, engine
 from routes import agents, campaigns, prospects, calls, stats, webhook, settings
 from routes import auth, admin
+from routes import demo
+from routes import whatsapp_webhook
+from routes import whatsapp
+from routes import team
 from routes import webhook as webhook_module
 
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +53,7 @@ webhook_module.ws_manager = ws_manager
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    logger.info("=== ZYRAVOICE BACKEND v6 STARTING ===")
     try:
         create_db_and_tables()
         run_migrations()
@@ -56,14 +61,21 @@ async def lifespan(app: FastAPI):
         logger.info("Database initialized")
     except Exception as e:
         logger.error(f"Database initialization error: {e}")
+    if not os.getenv("RETELL_WEBHOOK_SECRET"):
+        logger.warning("⚠️  RETELL_WEBHOOK_SECRET not set — webhook signature verification is DISABLED")
+    if not os.getenv("JWT_SECRET"):
+        logger.warning("⚠️  JWT_SECRET not set — using insecure development key")
     yield
 
 
 app = FastAPI(title="Voice Agent API", lifespan=lifespan)
 
+_raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+_allowed_origins = [o.strip() for o in _raw_origins.split(",")] if _raw_origins != "*" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allowed_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -71,12 +83,16 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(demo.router)
 app.include_router(agents.router)
 app.include_router(campaigns.router)
 app.include_router(prospects.router)
 app.include_router(calls.router)
 app.include_router(stats.router)
 app.include_router(webhook.router)
+app.include_router(whatsapp_webhook.router)
+app.include_router(whatsapp.router)
+app.include_router(team.router)
 app.include_router(settings.router)
 
 
@@ -93,3 +109,18 @@ async def websocket_endpoint(websocket: WebSocket, campaign_id: int):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/health/db")
+def health_db():
+    from sqlalchemy import text, inspect as sa_inspect
+    try:
+        insp = sa_inspect(engine)
+        org_cols = {c["name"] for c in insp.get_columns("organization")}
+        required = {"crm_api_key", "crm_board_or_list_id", "crm_extra_config"}
+        missing = list(required - org_cols)
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return {"db": "ok", "org_columns_missing": missing, "migration_needed": bool(missing)}
+    except Exception as e:
+        return {"db": "error", "detail": str(e)}

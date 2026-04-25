@@ -1,6 +1,6 @@
 import json
 from fastapi import APIRouter, Depends, HTTPException
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from sqlalchemy import desc
 from pydantic import BaseModel
 from typing import Optional
@@ -11,11 +11,26 @@ from routes.auth import require_superadmin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
+_SENSITIVE = {"retell_api_key", "anthropic_api_key", "crm_api_key", "crm_webhook_secret", "whatsapp_access_token"}
+
+def _mask(key: str | None) -> str:
+    if not key:
+        return ""
+    return f"{'*' * max(0, len(key) - 4)}{key[-4:]}" if len(key) > 4 else "****"
+
+def _safe_org(org: Organization) -> dict:
+    d = org.dict()
+    for field in _SENSITIVE:
+        if d.get(field):
+            d[field] = _mask(d[field])
+    d.setdefault("demo_calls_used", 0)
+    return d
+
 
 class OrgCreate(BaseModel):
     name: str
     logo_url: Optional[str] = None
-    plan: str = "basic"
+    plan: str = "pro"
     retell_api_key: str = ""
     retell_phone_number: str = ""
     anthropic_api_key: str = ""
@@ -28,6 +43,10 @@ class OrgCreate(BaseModel):
     crm_api_key: Optional[str] = None
     crm_board_or_list_id: Optional[str] = None
     crm_extra_config: Optional[str] = None
+    whatsapp_enabled: bool = False
+    whatsapp_phone_number_id: Optional[str] = None
+    whatsapp_access_token: Optional[str] = None
+    whatsapp_verify_token: Optional[str] = None
 
 
 class UserCreate(BaseModel):
@@ -63,7 +82,7 @@ def list_orgs(
     _: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
 ):
-    return session.exec(select(Organization)).all()
+    return [_safe_org(org) for org in session.exec(select(Organization)).all()]
 
 
 @router.put("/organizations/{org_id}")
@@ -82,6 +101,69 @@ def update_org(
     session.commit()
     session.refresh(org)
     return org
+
+
+@router.get("/organizations/{org_id}/secrets")
+def get_org_secrets(
+    org_id: int,
+    _: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    org = session.get(Organization, org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    return {
+        "retell_api_key": org.retell_api_key or "",
+        "anthropic_api_key": org.anthropic_api_key or "",
+        "crm_api_key": org.crm_api_key or "",
+        "crm_webhook_secret": org.crm_webhook_secret or "",
+    }
+
+
+@router.get("/organizations/{org_id}/crm-debug")
+def debug_org_crm(
+    org_id: int,
+    _: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    """Raw-SQL diagnostic — safe even when ORM columns are missing from DB."""
+    from sqlalchemy import text, inspect as sa_inspect
+    from database import engine
+    try:
+        insp = sa_inspect(engine)
+        cols = [c["name"] for c in insp.get_columns("organization")]
+        safe_cols = [
+            c for c in [
+                "id", "name", "crm_type", "crm_webhook_enabled",
+                "crm_webhook_url", "crm_board_or_list_id",
+                "crm_events",
+            ] if c in cols
+        ]
+        has_api_key_expr = "crm_api_key IS NOT NULL AND crm_api_key != '' AS has_crm_api_key" if "crm_api_key" in cols else "'?' AS has_crm_api_key"
+        col_list = ", ".join(safe_cols) + ", " + has_api_key_expr
+        row = session.execute(
+            text(f"SELECT {col_list} FROM organization WHERE id = :id"),
+            {"id": org_id},
+        ).mappings().first()
+        return {"db_columns": cols, "org": dict(row) if row else None}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@router.post("/organizations/{org_id}/upgrade")
+def upgrade_org(
+    org_id: int,
+    _: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    """Upgrade an organization from free to pro plan."""
+    org = session.get(Organization, org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    org.plan = "pro"
+    session.add(org)
+    session.commit()
+    return {"ok": True, "plan": org.plan}
 
 
 @router.post("/organizations/{org_id}/crm/test")
@@ -113,6 +195,28 @@ def get_org_crm_logs(
         .limit(20)
     ).all()
     return logs
+
+
+@router.delete("/organizations/{org_id}")
+def delete_org(
+    org_id: int,
+    _: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    from models import Campaign, Call, Prospect
+    org = session.get(Organization, org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    user_count = session.exec(select(func.count(User.id)).where(User.organization_id == org_id)).one() or 0
+    campaign_count = session.exec(select(func.count(Campaign.id)).where(Campaign.organization_id == org_id)).one() or 0
+    if user_count or campaign_count:
+        raise HTTPException(
+            status_code=400,
+            detail=f"La organización tiene {user_count} usuario(s) y {campaign_count} campaña(s). Elimínalos primero."
+        )
+    session.delete(org)
+    session.commit()
+    return {"ok": True}
 
 
 @router.post("/users")
@@ -174,7 +278,7 @@ def update_user(
 
 
 @router.delete("/users/{user_id}")
-def deactivate_user(
+def delete_user(
     user_id: int,
     _: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
@@ -182,7 +286,6 @@ def deactivate_user(
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    user.is_active = False
-    session.add(user)
+    session.delete(user)
     session.commit()
     return {"ok": True}

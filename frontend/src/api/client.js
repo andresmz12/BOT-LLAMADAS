@@ -25,6 +25,7 @@ api.interceptors.response.use(
 )
 
 // Auth
+export const register = (data) => api.post('/auth/register', data).then(r => r.data)
 export const login = (email, password) =>
   api.post('/auth/login', { email, password }).then(r => r.data)
 export const logout = () => {
@@ -39,10 +40,15 @@ export const getMe = () => api.get('/auth/me').then(r => r.data)
 export const getOrganizations = () => api.get('/admin/organizations').then(r => r.data)
 export const createOrganization = (data) => api.post('/admin/organizations', data).then(r => r.data)
 export const updateOrganization = (id, data) => api.put(`/admin/organizations/${id}`, data).then(r => r.data)
+export const deleteOrganization = (id) => api.delete(`/admin/organizations/${id}`).then(r => r.data)
+export const getOrgSecrets = (id) => api.get(`/admin/organizations/${id}/secrets`).then(r => r.data)
+export const getWhatsappSettings = () => api.get('/settings/whatsapp').then(r => r.data)
+export const saveWhatsappSettings = (data) => api.post('/settings/whatsapp', data).then(r => r.data)
 export const getUsers = () => api.get('/admin/users').then(r => r.data)
 export const createUser = (data) => api.post('/admin/users', data).then(r => r.data)
 export const updateUser = (id, data) => api.put(`/admin/users/${id}`, data).then(r => r.data)
 export const deleteUser = (id) => api.delete(`/admin/users/${id}`).then(r => r.data)
+export const upgradeOrg = (id) => api.post(`/admin/organizations/${id}/upgrade`).then(r => r.data)
 
 // Agents
 export const getAgents = () => api.get('/agents').then(r => r.data)
@@ -75,16 +81,23 @@ export const importProspects = (campaignId, file) => {
 }
 export const updateProspect = (id, data) => api.put(`/prospects/${id}`, data).then(r => r.data)
 export const deleteProspect = (id) => api.delete(`/prospects/${id}`).then(r => r.data)
+export const deleteAllProspects = (params) => api.delete('/prospects', { params }).then(r => r.data)
+export const retryProspects = (params) => api.post('/prospects/retry', null, { params }).then(r => r.data)
 export const callProspect = (id) => api.post(`/prospects/${id}/call`).then(r => r.data)
 
 // Calls
 export const getCalls = (params) => api.get('/calls', { params }).then(r => r.data)
 export const getCallDetail = (id) => api.get(`/calls/${id}`).then(r => r.data)
+export const deleteCalls = (params) => api.delete('/calls', { params }).then(r => r.data)
 export const makeDemoCall = (phone, agentId) =>
   api.post('/calls/demo', { phone, agent_id: agentId }).then(r => r.data)
 
+// Demo
+export const getDemoStatus = () => api.get('/demo/status').then(r => r.data)
+export const startDemoCall = () => api.post('/demo/start-call').then(r => r.data)
+
 // Stats
-export const getStats = () => api.get('/stats').then(r => r.data)
+export const getStats = (params) => api.get('/stats', { params }).then(r => r.data)
 export const getCampaignStats = (id) => api.get(`/stats/${id}`).then(r => r.data)
 
 // Settings
@@ -101,5 +114,15 @@ export const getCRMWebhookLogs = (orgId) =>
 export const getCRMSettings = () => api.get('/settings/crm').then(r => r.data)
 export const testMyCRMWebhook = () => api.post('/settings/crm/test').then(r => r.data)
 export const getMyCRMLogs = () => api.get('/settings/crm/logs').then(r => r.data)
+
+// WhatsApp conversations
+export const getWaConversations = () => api.get('/whatsapp/conversations').then(r => r.data)
+export const getWaMessages = (id) => api.get(`/whatsapp/conversations/${id}/messages`).then(r => r.data)
+
+// Team management (admin)
+export const getTeam = () => api.get('/team').then(r => r.data)
+export const createTeamMember = (data) => api.post('/team', data).then(r => r.data)
+export const updateTeamMember = (id, data) => api.put(`/team/${id}`, data).then(r => r.data)
+export const deleteTeamMember = (id) => api.delete(`/team/${id}`).then(r => r.data)
 
 export default api

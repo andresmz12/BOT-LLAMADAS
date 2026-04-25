@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, EyeIcon } from '@heroicons/react/24/outline'
 import {
-  getOrganizations, createOrganization, updateOrganization,
+  getOrganizations, createOrganization, updateOrganization, deleteOrganization,
   getUsers, createUser, updateUser, deleteUser,
-  testCRMWebhook,
+  testCRMWebhook, upgradeOrg, getOrgSecrets,
 } from '../api/client'
+import SecretInput from '../components/SecretInput'
 
-const ROLES = ['superadmin', 'admin', 'agent', 'viewer']
-const PLANS = ['free', 'basic', 'pro']
+const ROLES = ['superadmin', 'admin', 'agent']
+const PLANS = ['free', 'pro']
 
 const CRM_TYPES = [
   { value: 'none', label: 'Sin integración' },
@@ -113,8 +114,20 @@ export default function Admin() {
   useEffect(() => { loadOrgs(); loadUsers() }, [])
 
   const handleDeleteUser = async (user) => {
-    if (!confirm(`¿Desactivar a "${user.full_name}"?`)) return
+    if (!confirm(`¿Eliminar permanentemente a "${user.full_name}" (${user.email})?`)) return
     try { await deleteUser(user.id); loadUsers() }
+    catch (err) { alert(err.response?.data?.detail || 'Error') }
+  }
+
+  const handleDeleteOrg = async (org) => {
+    if (!confirm(`¿Eliminar la organización "${org.name}"? Esta acción no se puede deshacer.`)) return
+    try { await deleteOrganization(org.id); loadOrgs() }
+    catch (err) { alert(err.response?.data?.detail || 'Error al eliminar') }
+  }
+
+  const handleUpgrade = async (org) => {
+    if (!confirm(`¿Actualizar "${org.name}" a plan Pro?`)) return
+    try { await upgradeOrg(org.id); loadOrgs() }
     catch (err) { alert(err.response?.data?.detail || 'Error') }
   }
 
@@ -146,7 +159,7 @@ export default function Admin() {
             <table className="w-full text-sm">
               <thead className="bg-black/20">
                 <tr>
-                  {['ID', 'Nombre', 'Plan', 'CRM', 'Activa', 'Acciones'].map(h => (
+                  {['ID', 'Nombre', 'Plan', 'Demos', 'CRM', 'Activa', 'Acciones'].map(h => (
                     <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                   ))}
                 </tr>
@@ -157,7 +170,12 @@ export default function Admin() {
                     <td className="px-6 py-3 text-slate-500 text-xs">{org.id}</td>
                     <td className="px-6 py-3 font-medium text-slate-200">{org.name}</td>
                     <td className="px-6 py-3">
-                      <span className="px-2 py-0.5 bg-z-blue/15 text-z-blue-light text-xs rounded-full font-medium">{org.plan}</span>
+                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                        org.plan === 'free' ? 'bg-amber-500/15 text-amber-400' : 'bg-green-500/15 text-green-400'
+                      }`}>{org.plan}</span>
+                    </td>
+                    <td className="px-6 py-3 text-slate-400 text-xs">
+                      {org.plan === 'free' ? `${org.demo_calls_used ?? 0}/10` : '—'}
                     </td>
                     <td className="px-6 py-3">
                       {org.crm_type && org.crm_type !== 'none' ? (
@@ -176,15 +194,27 @@ export default function Admin() {
                       </span>
                     </td>
                     <td className="px-6 py-3">
-                      <button onClick={() => setModal({ type: 'org', data: org })}
-                        className="text-slate-500 hover:text-slate-300">
-                        <PencilIcon className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center gap-2">
+                        {org.plan === 'free' && (
+                          <button onClick={() => handleUpgrade(org)}
+                            className="px-2 py-0.5 bg-green-500/15 hover:bg-green-500/25 text-green-400 text-xs font-medium rounded-lg transition-colors">
+                            ⬆ Pro
+                          </button>
+                        )}
+                        <button onClick={() => setModal({ type: 'org', data: org })}
+                          className="text-slate-500 hover:text-slate-300">
+                          <PencilIcon className="w-4 h-4" />
+                        </button>
+                        <button onClick={() => handleDeleteOrg(org)}
+                          className="text-slate-500 hover:text-red-400">
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
                 {orgs.length === 0 && (
-                  <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-500">No hay organizaciones</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-10 text-center text-slate-500">No hay organizaciones</td></tr>
                 )}
               </tbody>
             </table>
@@ -273,17 +303,24 @@ function OrgModal({ org, onClose, onSaved }) {
       try { return org.crm_extra_config ? JSON.parse(org.crm_extra_config) : null }
       catch { return null }
     })(),
+    whatsapp_enabled: org.whatsapp_enabled || false,
+    whatsapp_phone_number_id: org.whatsapp_phone_number_id || '',
+    whatsapp_access_token: org.whatsapp_access_token || '',
+    whatsapp_verify_token: org.whatsapp_verify_token || '',
   } : {
-    name: '', plan: 'basic', retell_api_key: '', retell_phone_number: '',
+    name: '', plan: 'pro', retell_api_key: '', retell_phone_number: '',
     anthropic_api_key: '', is_active: true,
     crm_type: 'none', crm_webhook_url: '', crm_webhook_enabled: false,
     crm_webhook_secret: '', crm_events: '["call_ended","interested"]',
     crm_api_key: '', crm_board_or_list_id: '', crm_extra_config: null,
+    whatsapp_enabled: false, whatsapp_phone_number_id: '',
+    whatsapp_access_token: '', whatsapp_verify_token: '',
   })
   const [loading, setLoading] = useState(false)
   const [crmAccordionOpen, setCrmAccordionOpen] = useState(false)
   const [testResult, setTestResult] = useState(null)
   const [testLoading, setTestLoading] = useState(false)
+  const [revealLoading, setRevealLoading] = useState(false)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const setCrmExtra = (key, value) => set('crm_extra_config', { ...(form.crm_extra_config || {}), [key]: value })
@@ -337,6 +374,16 @@ function OrgModal({ org, onClose, onSaved }) {
     }
   }
 
+  const handleReveal = async () => {
+    if (!org?.id) return
+    setRevealLoading(true)
+    try {
+      const secrets = await getOrgSecrets(org.id)
+      setForm(f => ({ ...f, ...secrets }))
+    } catch { alert('No se pudieron obtener las claves') }
+    finally { setRevealLoading(false) }
+  }
+
   const crmType = form.crm_type || 'none'
   const crmLabel = CRM_TYPES.find(c => c.value === crmType)?.label || crmType
 
@@ -345,7 +392,20 @@ function OrgModal({ org, onClose, onSaved }) {
       <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-z-border">
           <h2 className="text-lg font-bold text-slate-100">{org ? 'Editar Organización' : 'Nueva Organización'}</h2>
-          <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
+          <div className="flex items-center gap-2">
+            {org?.id && (
+              <button
+                type="button"
+                onClick={handleReveal}
+                disabled={revealLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-400 border border-amber-500/30 hover:bg-amber-500/10 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <EyeIcon className="w-3.5 h-3.5" />
+                {revealLoading ? 'Cargando...' : 'Revelar claves'}
+              </button>
+            )}
+            <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
+          </div>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
           <div>
@@ -358,23 +418,41 @@ function OrgModal({ org, onClose, onSaved }) {
               {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Retell API Key</label>
-            <input value={form.retell_api_key || ''} onChange={e => set('retell_api_key', e.target.value)} className="z-input font-mono" />
-          </div>
+          <SecretInput label="Retell API Key" value={form.retell_api_key} onChange={e => set('retell_api_key', e.target.value)} />
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Retell Phone Number</label>
             <input value={form.retell_phone_number || ''} onChange={e => set('retell_phone_number', e.target.value)}
               placeholder="+12345678901" className="z-input font-mono" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Anthropic API Key</label>
-            <input value={form.anthropic_api_key || ''} onChange={e => set('anthropic_api_key', e.target.value)} className="z-input font-mono" />
-          </div>
+          <SecretInput label="Anthropic API Key" value={form.anthropic_api_key} onChange={e => set('anthropic_api_key', e.target.value)} />
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} className="w-4 h-4 accent-blue-500" />
             <span className="text-sm text-slate-300">Organización activa</span>
           </label>
+
+          {/* ── WhatsApp Bot ─────────────────────────────────────────────────── */}
+          <div className="border-t border-z-border pt-4 space-y-4">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">WhatsApp Bot</h3>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={!!form.whatsapp_enabled} onChange={e => set('whatsapp_enabled', e.target.checked)} className="w-4 h-4 accent-blue-500" />
+              <span className="text-sm text-slate-300">Activar bot conversacional</span>
+            </label>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Phone Number ID</label>
+              <input value={form.whatsapp_phone_number_id || ''} onChange={e => set('whatsapp_phone_number_id', e.target.value)}
+                placeholder="123456789012345" className="z-input font-mono" />
+              <p className="text-xs text-slate-600 mt-1">Meta for Developers → WhatsApp → API Setup</p>
+            </div>
+            <SecretInput label="WhatsApp Access Token" value={form.whatsapp_access_token || ''}
+              onChange={e => set('whatsapp_access_token', e.target.value)}
+              placeholder="Token permanente de Meta" />
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Verify Token</label>
+              <input value={form.whatsapp_verify_token || ''} onChange={e => set('whatsapp_verify_token', e.target.value)}
+                placeholder="zyra-wa-secreto-2025" className="z-input font-mono" />
+              <p className="text-xs text-slate-600 mt-1">String secreto que eliges tú — úsalo al registrar el webhook en Meta</p>
+            </div>
+          </div>
 
           {/* ── CRM Integration ─────────────────────────────────────────────── */}
           <div className="border-t border-z-border pt-4 space-y-4">
@@ -408,18 +486,11 @@ function OrgModal({ org, onClose, onSaved }) {
                 {NATIVE_CRM_TYPES.includes(crmType) ? (
                   /* ── Native CRM fields ──────────────────────────────────── */
                   <>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">
-                        {NATIVE_CRM_LABELS[crmType]?.apiKey || 'API Key'}
-                      </label>
-                      <input
-                        type="password"
-                        value={form.crm_api_key || ''}
-                        onChange={e => set('crm_api_key', e.target.value)}
-                        placeholder="••••••••••••••••"
-                        className="z-input font-mono"
-                      />
-                    </div>
+                    <SecretInput
+                      label={NATIVE_CRM_LABELS[crmType]?.apiKey || 'API Key'}
+                      value={form.crm_api_key}
+                      onChange={e => set('crm_api_key', e.target.value)}
+                    />
 
                     {NATIVE_CRM_LABELS[crmType]?.boardId && (
                       <div>
@@ -462,22 +533,13 @@ function OrgModal({ org, onClose, onSaved }) {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">
-                        Secreto de firma{' '}
-                        <span className="text-slate-500 font-normal">(opcional)</span>
-                      </label>
-                      <input
-                        type="password"
-                        value={form.crm_webhook_secret || ''}
-                        onChange={e => set('crm_webhook_secret', e.target.value)}
-                        placeholder="Clave para verificar firma HMAC SHA-256"
-                        className="z-input font-mono"
-                      />
-                      <p className="text-xs text-slate-600 mt-1">
-                        Tu CRM puede verificar el header <code className="text-slate-500">X-ZyraVoice-Signature</code>
-                      </p>
-                    </div>
+                    <SecretInput
+                      label="Secreto de firma (opcional)"
+                      value={form.crm_webhook_secret}
+                      onChange={e => set('crm_webhook_secret', e.target.value)}
+                      placeholder="Clave para verificar firma HMAC SHA-256"
+                      hint={<>Tu CRM puede verificar el header <code className="text-slate-500">X-ZyraVoice-Signature</code></>}
+                    />
 
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-2">Enviar datos cuando:</label>
@@ -599,10 +661,13 @@ function UserModal({ user, orgs, onClose, onSaved }) {
               <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
               <input type="email" value={form.email} onChange={e => set('email', e.target.value)} required className="z-input" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Contraseña</label>
-              <input type="password" value={form.password} onChange={e => set('password', e.target.value)} required className="z-input" />
-            </div>
+            <SecretInput
+              label="Contraseña"
+              value={form.password}
+              onChange={e => set('password', e.target.value)}
+              placeholder="Contraseña del usuario"
+              required
+            />
           </>}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Rol</label>

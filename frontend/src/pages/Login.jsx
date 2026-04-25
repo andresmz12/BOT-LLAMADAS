@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { login, getMe } from '../api/client'
 import api from '../api/client'
 
@@ -135,6 +135,13 @@ export default function Login() {
             {loading ? 'Entrando...' : 'Iniciar sesión'}
           </button>
         </form>
+
+        <p className="text-center text-sm text-slate-500 mt-4">
+          ¿No tienes cuenta?{' '}
+          <Link to="/register" className="text-z-blue-light hover:underline font-medium">
+            Crear cuenta gratis
+          </Link>
+        </p>
       </div>
     </div>
   )

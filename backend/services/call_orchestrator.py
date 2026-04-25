@@ -13,7 +13,23 @@ running_tasks: dict[int, asyncio.Task] = {}
 
 
 def build_system_prompt(agent_config: AgentConfig) -> str:
-    return f"""IDIOMA: Habla SIEMPRE en español. Never respond in English under any circumstances.
+    lang = (agent_config.language or "español").lower()
+    if "english" in lang or "en" == lang:
+        lang_instruction = "LANGUAGE: Always respond in English. Never switch to another language."
+        rules = (
+            "- Never invent prices or services not listed in your information\n"
+            "- If no one answers, leave a brief and friendly voicemail\n"
+            "- At the end of the call, say goodbye cordially"
+        )
+    else:
+        lang_instruction = "IDIOMA: Habla SIEMPRE en español. Never respond in English under any circumstances."
+        rules = (
+            "- Nunca inventes precios ni servicios que no están en tu información\n"
+            "- Si no contestan, deja un mensaje de voz breve y amable\n"
+            "- Al finalizar la llamada, despídete cordialmente"
+        )
+
+    return f"""{lang_instruction}
 
 Eres {agent_config.agent_name}, asesora virtual de {agent_config.company_name}.
 
@@ -27,9 +43,7 @@ INSTRUCCIONES DE COMPORTAMIENTO:
 {agent_config.instructions}
 
 REGLAS IMPORTANTES:
-- Nunca inventes precios ni servicios que no están en tu información
-- Si no contestan, deja un mensaje de voz breve y amable
-- Al finalizar la llamada, despídete cordialmente
+{rules}
 """
 
 
@@ -142,6 +156,9 @@ async def _run_campaign_loop(campaign_id: int):
                 "retell_agent_id": agent_config.retell_agent_id,
                 "agent_name": agent_config.name,
                 "voice_id": agent_config.voice_id or "retell-Andrea",
+                "calls_per_minute": max(1, campaign.calls_per_minute or 10),
+                "sequential_calls": bool(campaign.sequential_calls),
+                "voicemail_message": agent_config.voicemail_message or "",
             }
             logger.info(
                 f"[Campaign {campaign_id}] Dialing {prospect.phone} "
@@ -162,6 +179,7 @@ async def _run_campaign_loop(campaign_id: int):
                 prospect_company=call_info["company"],
                 api_key=call_info["api_key"],
                 from_number=call_info["from_number"],
+                voicemail_message=call_info["voicemail_message"],
             )
             retell_call_id = result.get("call_id", "")
             logger.info(
@@ -195,5 +213,23 @@ async def _run_campaign_loop(campaign_id: int):
                     session.add(prospect_obj)
                 session.commit()
 
-        # Wait between calls to avoid rate limiting
-        await asyncio.sleep(30)
+        # Wait strategy: sequential (poll until ended) or rate-limited (fixed sleep)
+        if call_info["sequential_calls"]:
+            max_wait_seconds = 900  # 15 min hard ceiling
+            elapsed = 0
+            poll_interval = 5
+            logger.info(f"[Campaign {campaign_id}] Sequential mode — waiting for call {call_info['call_id']} to end")
+            while elapsed < max_wait_seconds:
+                await asyncio.sleep(poll_interval)
+                elapsed += poll_interval
+                with Session(engine) as s:
+                    finished = s.get(Call, call_info["call_id"])
+                    if finished and finished.status == "ended":
+                        logger.info(f"[Campaign {campaign_id}] Call {call_info['call_id']} ended after {elapsed}s")
+                        break
+            else:
+                logger.warning(f"[Campaign {campaign_id}] Call {call_info['call_id']} exceeded max wait — continuing anyway")
+        else:
+            sleep_seconds = 60.0 / call_info["calls_per_minute"]
+            logger.info(f"[Campaign {campaign_id}] Sleeping {sleep_seconds:.1f}s ({call_info['calls_per_minute']} calls/min)")
+            await asyncio.sleep(sleep_seconds)

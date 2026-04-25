@@ -45,6 +45,13 @@ def run_migrations():
                         conn.execute(text(f"ALTER TABLE agentconfig ADD COLUMN {col} {col_type}"))
                         log.info(f"Migration: added agentconfig.{col}")
 
+        if "prospect" in tables:
+            prospect_cols = {c["name"] for c in insp.get_columns("prospect")}
+            with engine.begin() as conn:
+                if "email" not in prospect_cols:
+                    conn.execute(text("ALTER TABLE prospect ADD COLUMN email VARCHAR(255)"))
+                    log.info("Migration: added prospect.email")
+
         if "call" in tables:
             call_cols = {c["name"] for c in insp.get_columns("call")}
             with engine.begin() as conn:
@@ -54,6 +61,16 @@ def run_migrations():
                 if "organization_id" not in call_cols:
                     conn.execute(text("ALTER TABLE call ADD COLUMN organization_id INTEGER"))
                     log.info("Migration: added call.organization_id")
+
+        if "campaign" in tables:
+            camp_cols = {c["name"] for c in insp.get_columns("campaign")}
+            with engine.begin() as conn:
+                if "calls_per_minute" not in camp_cols:
+                    conn.execute(text("ALTER TABLE campaign ADD COLUMN calls_per_minute INTEGER DEFAULT 10"))
+                    log.info("Migration: added campaign.calls_per_minute")
+                if "sequential_calls" not in camp_cols:
+                    conn.execute(text("ALTER TABLE campaign ADD COLUMN sequential_calls BOOLEAN DEFAULT FALSE"))
+                    log.info("Migration: added campaign.sequential_calls")
 
         if "organization" in tables:
             org_cols = {c["name"] for c in insp.get_columns("organization")}
@@ -66,6 +83,11 @@ def run_migrations():
                 "crm_api_key": "VARCHAR(500)",
                 "crm_board_or_list_id": "VARCHAR(255)",
                 "crm_extra_config": "TEXT",
+                "demo_calls_used": "INTEGER DEFAULT 0",
+                "whatsapp_phone_number_id": "VARCHAR(255)",
+                "whatsapp_access_token": "TEXT",
+                "whatsapp_verify_token": "VARCHAR(255)",
+                "whatsapp_enabled": "BOOLEAN DEFAULT FALSE",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():
@@ -73,8 +95,29 @@ def run_migrations():
                         conn.execute(text(f"ALTER TABLE organization ADD COLUMN {col} {col_type}"))
                         log.info(f"Migration: added organization.{col}")
 
+        # Migrate legacy "basic" plan → "pro"
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE organization SET plan = 'pro' WHERE plan = 'basic'"))
+
+        # Indexes for performance on frequently filtered columns
+        is_pg = not DATABASE_URL.startswith("sqlite")
+        if is_pg:
+            indexes = [
+                ("ix_call_organization_id",   "call",     "organization_id"),
+                ("ix_call_campaign_id",        "call",     "campaign_id"),
+                ("ix_prospect_organization_id","prospect", "organization_id"),
+                ("ix_prospect_campaign_id",    "prospect", "campaign_id"),
+                ("ix_campaign_organization_id","campaign", "organization_id"),
+                ("ix_user_organization_id",    "user",     "organization_id"),
+            ]
+            with engine.begin() as conn:
+                for idx_name, tbl, col in indexes:
+                    conn.execute(text(
+                        f"CREATE INDEX IF NOT EXISTS {idx_name} ON \"{tbl}\" ({col})"
+                    ))
+
     except Exception as e:
-        log.warning(f"Migration warning (non-fatal): {e}")
+        log.error(f"Migration FAILED: {e}", exc_info=True)
 
 
 def get_session():

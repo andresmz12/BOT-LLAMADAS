@@ -5,6 +5,7 @@ import {
   UsersIcon, PhoneIcon, Cog6ToothIcon,
   KeyIcon, ArrowRightOnRectangleIcon,
   ChevronLeftIcon, ChevronRightIcon,
+  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline'
 import { logout } from '../api/client'
 
@@ -20,6 +21,8 @@ const NAV_BY_ROLE = {
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
+    { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
+    { to: '/team', label: 'Mi equipo', Icon: UsersIcon },
     { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
   ],
   agent: [
@@ -28,13 +31,9 @@ const NAV_BY_ROLE = {
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
   ],
-  viewer: [
-    { to: '/', label: 'Dashboard', Icon: HomeIcon },
-    { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
-  ],
 }
 
-function WaveformIcon({ className }) {
+export function WaveformIcon({ className }) {
   // Vertical audio bars matching ZyraVoice logo — tallest in center, tapering outward
   const bars = [
     { x: 1.5,  h: 8,  y: 12 },
@@ -56,15 +55,34 @@ function WaveformIcon({ className }) {
   )
 }
 
-export default function Sidebar() {
+export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const [collapsed, setCollapsed] = useState(false)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const role = user.role || 'viewer'
-  const navItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer
+  const plan = user.plan || 'pro'
+  const baseItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.agent
+  const navItems = (role === 'admin' || role === 'agent')
+    ? plan === 'free'
+      ? [...baseItems.filter(i => i.to !== '/campaigns' && i.to !== '/prospects'),
+         { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon },
+         ...baseItems.filter(i => i.to === '/campaigns' || i.to === '/prospects')]
+      : [...baseItems, { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon }]
+    : baseItems
   const initials = (user.full_name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
   return (
-    <aside className={`${collapsed ? 'w-16' : 'w-60'} bg-sidebar flex flex-col h-screen sticky top-0 transition-all duration-200 flex-shrink-0 border-r border-z-border`}>
+    <>
+      {/* Overlay — mobile only */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={onClose} />
+      )}
+    <aside className={`
+      fixed md:sticky top-0 inset-y-0 left-0 z-50
+      ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} md:translate-x-0
+      ${collapsed ? 'md:w-16' : 'md:w-60'} w-60
+      bg-sidebar flex flex-col h-screen
+      transition-transform md:transition-all duration-200 flex-shrink-0 border-r border-z-border
+    `}>
       {/* Logo */}
       <div className={`flex items-center ${collapsed ? 'justify-center px-0' : 'gap-2.5 px-5'} py-4 border-b border-z-border min-h-[60px]`}>
         <WaveformIcon className="w-7 h-7 text-z-blue flex-shrink-0" />
@@ -86,6 +104,7 @@ export default function Sidebar() {
             to={to}
             end={to === '/'}
             title={collapsed ? label : undefined}
+            onClick={onClose}
             className={({ isActive }) =>
               `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                 isActive
@@ -132,5 +151,6 @@ export default function Sidebar() {
         </button>
       </div>
     </aside>
+    </>
   )
 }

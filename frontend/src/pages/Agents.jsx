@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PencilIcon, TrashIcon, StarIcon, ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon, PhoneArrowDownLeftIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, TrashIcon, StarIcon, ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon, PhoneArrowDownLeftIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { getAgents, deleteAgent, setDefaultAgent, syncAgent } from '../api/client'
 import AgentFormModal from '../components/AgentFormModal'
@@ -16,6 +16,11 @@ export default function Agents() {
     if (!confirm(`¿Eliminar "${agent.agent_name}"?`)) return
     try { await deleteAgent(agent.id); load() }
     catch (err) { alert(err.response?.data?.detail || 'Error') }
+  }
+
+  const handleDuplicate = (agent) => {
+    const { id, retell_agent_id, retell_llm_id, inbound_retell_agent_id, inbound_retell_llm_id, is_default, ...rest } = agent
+    setModal({ ...rest, agent_name: `Copia de ${agent.agent_name}`, name: `Copia de ${agent.name}` })
   }
 
   const handleSync = async (agent) => {
@@ -36,9 +41,9 @@ export default function Agents() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-100">Agentes de Voz</h1>
-        <button onClick={() => setModal('new')} className="z-btn-primary flex items-center gap-2">
+        <button onClick={() => setModal('new')} className="z-btn-primary flex items-center gap-2 self-start sm:self-auto">
           <PlusIcon className="w-4 h-4" /> Nuevo Agente
         </button>
       </div>
@@ -94,6 +99,10 @@ export default function Agents() {
               <button onClick={() => setModal(agent)}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-400 border border-z-border rounded-lg hover:bg-white/[0.04]">
                 <PencilIcon className="w-3.5 h-3.5" /> Editar
+              </button>
+              <button onClick={() => handleDuplicate(agent)}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-400 border border-z-border rounded-lg hover:bg-white/[0.04]">
+                <DocumentDuplicateIcon className="w-3.5 h-3.5" /> Duplicar
               </button>
               <button onClick={() => handleDelete(agent)}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-400 border border-red-500/20 rounded-lg hover:bg-red-500/10">

@@ -143,13 +143,21 @@ async def sync_to_retell(
 
     headers = {"Authorization": f"Bearer {api_key}"}
     voice_id = agent_config.voice_id or "retell-Andrea"
+    lang = (agent_config.language or "español").lower()
+    retell_language = "en-US" if ("english" in lang or lang == "en") else "es-ES"
+    backchannel_words = (
+        ["uh-huh", "I see", "right", "got it"] if retell_language == "en-US"
+        else ["ajá", "claro", "entiendo", "sí"]
+    )
 
     base_agent_settings = {
         "voice_id": voice_id,
-        "language": "es-ES",
+        "language": retell_language,
         "responsiveness": 1,
-        "interruption_sensitivity": 1,
+        "interruption_sensitivity": 0.8,
         "enable_backchannel": True,
+        "backchannel_frequency": 0.7,
+        "backchannel_words": backchannel_words,
         "ambient_sound": "coffee-shop",
     }
 
@@ -168,16 +176,27 @@ async def sync_to_retell(
     )
 
     outbound_llm_payload = {
-        "model": "claude-4.6-sonnet",
+        "model": "claude-4.5-haiku",
         "general_prompt": outbound_prompt,
         "begin_message": outbound_begin,
         "general_tools": [],
     }
     if agent_config.retell_knowledge_base_id:
         outbound_llm_payload["knowledge_base_ids"] = [agent_config.retell_knowledge_base_id]
+    default_voicemail_msg = (
+        agent_config.voicemail_message
+        or f"Hola, le llama {agent_config.agent_name} de {agent_config.company_name}. "
+           "Le llamaremos de nuevo en otro momento. ¡Que tenga un buen día!"
+    )
     outbound_agent_payload = {
         "agent_name": agent_config.name,
         **base_agent_settings,
+        "voicemail_option": {
+            "action": {
+                "type": "static_text",
+                "text": default_voicemail_msg,
+            },
+        },
     }
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -204,7 +223,7 @@ async def sync_to_retell(
             )
 
             inbound_llm_payload = {
-                "model": "claude-4.6-sonnet",
+                "model": "claude-4.5-haiku",
                 "general_prompt": inbound_prompt,
                 "begin_message": inbound_begin,
                 "general_tools": [],
@@ -296,6 +315,7 @@ async def create_call_direct(
     prospect_company: str = "",
     api_key: str = "",
     from_number: str = "",
+    voicemail_message: str = "",
 ) -> dict:
     """Like create_call but takes individual values — avoids detached SQLModel instance issues."""
     if not api_key or not from_number:
@@ -313,6 +333,12 @@ async def create_call_direct(
         "retell_llm_dynamic_variables": {
             "customer_name": prospect_name or "cliente",
             "company_name": prospect_company or "",
+        },
+        "voicemail_option": {
+            "action": {
+                "type": "static_text",
+                "text": voicemail_message or "Hola, le llamaremos de nuevo en otro momento. ¡Que tenga un buen día!",
+            },
         },
     }
 

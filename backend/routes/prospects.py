@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from typing import Optional
 from database import get_session
 from models import Prospect, Campaign, AgentConfig, Call, User, Organization
-from routes.auth import get_current_user, require_write_access
+from routes.auth import get_current_user, require_write_access, require_pro_plan
 
 router = APIRouter(prefix="/prospects", tags=["prospects"])
 
@@ -31,7 +31,7 @@ class ProspectUpdate(BaseModel):
 @router.post("")
 def create_prospect(
     data: ProspectCreate,
-    current_user: User = Depends(require_write_access),
+    current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
     prospect = Prospect(
@@ -52,11 +52,15 @@ def create_prospect(
 async def import_file(
     campaign_id: int = Form(...),
     file: UploadFile = File(...),
-    current_user: User = Depends(require_write_access),
+    current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
     content = await file.read()
+    if len(content) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="El archivo no puede superar 10 MB")
     filename = (file.filename or "").lower()
+    if not (filename.endswith(".xlsx") or filename.endswith(".xls") or filename.endswith(".csv")):
+        raise HTTPException(status_code=400, detail="Solo se permiten archivos CSV, XLS o XLSX")
     rows = []
 
     if filename.endswith(".xlsx") or filename.endswith(".xls"):
@@ -76,15 +80,17 @@ async def import_file(
 
     imported = 0
     for row in rows:
-        name = row.get("name", "").strip()
-        phone = row.get("phone", "").strip()
-        company = row.get("company", "").strip()
-        if not name or not phone:
+        phone = row.get("phone", "").strip() or row.get("telefono", "").strip() or row.get("teléfono", "").strip()
+        name = row.get("name", "").strip() or row.get("nombre", "").strip() or phone
+        company = row.get("company", "").strip() or row.get("empresa", "").strip()
+        email = row.get("email", "").strip() or row.get("correo", "").strip()
+        if not phone:
             continue
         session.add(Prospect(
             campaign_id=campaign_id,
             name=name,
             phone=phone,
+            email=email or None,
             company=company or None,
             organization_id=current_user.organization_id,
         ))
@@ -186,6 +192,51 @@ async def call_prospect(
         session.add(call)
         session.commit()
         raise HTTPException(status_code=400, detail=str(e))
+
+
+@router.post("/retry")
+def retry_prospects(
+    campaign_id: int | None = None,
+    status: str | None = None,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    """Reset prospects to 'pending' so they get dialed again on the next campaign run."""
+    query = select(Prospect)
+    if current_user.role != "superadmin":
+        query = query.where(Prospect.organization_id == current_user.organization_id)
+    if campaign_id:
+        query = query.where(Prospect.campaign_id == campaign_id)
+    if status:
+        query = query.where(Prospect.status == status)
+    else:
+        # Default: retry failed and voicemail
+        query = query.where(Prospect.status.in_(["failed", "voicemail"]))
+    prospects = session.exec(query).all()
+    for p in prospects:
+        p.status = "pending"
+        p.call_attempts = 0
+        session.add(p)
+    session.commit()
+    return {"reset": len(prospects)}
+
+
+@router.delete("")
+def delete_all_prospects(
+    campaign_id: int | None = None,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    query = select(Prospect)
+    if current_user.role != "superadmin":
+        query = query.where(Prospect.organization_id == current_user.organization_id)
+    if campaign_id:
+        query = query.where(Prospect.campaign_id == campaign_id)
+    prospects = session.exec(query).all()
+    for p in prospects:
+        session.delete(p)
+    session.commit()
+    return {"deleted": len(prospects)}
 
 
 @router.delete("/{prospect_id}")

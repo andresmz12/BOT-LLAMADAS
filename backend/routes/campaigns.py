@@ -1,23 +1,39 @@
 import asyncio
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select
+from pydantic import BaseModel, Field
+from typing import Optional
 from database import get_session
 from models import Campaign, Prospect, User
 from services import call_orchestrator
-from routes.auth import get_current_user, require_write_access
+from routes.auth import get_current_user, require_write_access, require_pro_plan
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
 
+class CampaignCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    agent_config_id: int
+    calls_per_minute: int = Field(default=10, ge=1, le=100)
+    sequential_calls: bool = False
+
+
 @router.post("")
 def create_campaign(
-    campaign: Campaign,
-    current_user: User = Depends(require_write_access),
+    data: CampaignCreate,
+    current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
-    campaign.status = "draft"
-    if current_user.role != "superadmin":
-        campaign.organization_id = current_user.organization_id
+    campaign = Campaign(
+        name=data.name,
+        description=data.description,
+        agent_config_id=data.agent_config_id,
+        calls_per_minute=data.calls_per_minute,
+        sequential_calls=data.sequential_calls,
+        status="draft",
+        organization_id=current_user.organization_id if current_user.role != "superadmin" else None,
+    )
     session.add(campaign)
     session.commit()
     session.refresh(campaign)
@@ -63,7 +79,7 @@ def get_campaign(
 async def start_campaign(
     campaign_id: int,
     background_tasks: BackgroundTasks,
-    current_user: User = Depends(require_write_access),
+    current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
     campaign = session.get(Campaign, campaign_id)
@@ -112,8 +128,10 @@ def delete_campaign(
         raise HTTPException(status_code=404, detail="Campaign not found")
     if current_user.role != "superadmin" and campaign.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
-    if campaign.status != "draft":
-        raise HTTPException(status_code=400, detail="Only draft campaigns can be deleted")
+    # Stop if running
+    task = call_orchestrator.running_tasks.pop(campaign_id, None)
+    if task:
+        task.cancel()
     session.delete(campaign)
     session.commit()
     return {"ok": True}

@@ -32,6 +32,13 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class RegisterRequest(BaseModel):
+    full_name: str
+    email: str
+    password: str
+    company_name: str
+
+
 def _decode_or_401(token: str) -> dict:
     try:
         return decode_token(token)
@@ -62,6 +69,49 @@ def require_superadmin(current_user: User = Depends(get_current_user)) -> User:
     if current_user.role != "superadmin":
         raise HTTPException(status_code=403, detail="Solo superadmin puede acceder")
     return current_user
+
+
+def require_pro_plan(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+) -> User:
+    if current_user.role == "superadmin":
+        return current_user
+    org = session.get(Organization, current_user.organization_id)
+    if org and org.plan == "free":
+        raise HTTPException(
+            status_code=403,
+            detail="PLAN_FREE: Esta función requiere el plan Pro. Contacta soporte para activar."
+        )
+    return current_user
+
+
+@router.post("/register")
+def register(data: RegisterRequest, request: Request, session: Session = Depends(get_session)):
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else (request.client.host if request.client else "unknown")
+    _check_rate_limit(client_ip)
+    from services.auth import hash_password
+    existing = session.exec(select(User).where(User.email == data.email)).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Este email ya está registrado.")
+    org = Organization(name=data.company_name, plan="free")
+    session.add(org)
+    session.commit()
+    session.refresh(org)
+    user = User(
+        email=data.email,
+        password_hash=hash_password(data.password),
+        full_name=data.full_name,
+        role="admin",
+        organization_id=org.id,
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    token = create_token(user.id, user.role, user.organization_id)
+    logger.info(f"Register: new org '{org.name}' user '{user.email}' (free plan)")
+    return {"access_token": token, "token_type": "bearer"}
 
 
 @router.post("/login")
@@ -98,6 +148,7 @@ def me(
     org = session.get(Organization, user.organization_id) if user.organization_id else None
     result = user.dict(exclude={"password_hash"})
     result["organization_name"] = org.name if org else ""
+    result["plan"] = org.plan if org else "free"
     return result
 
 
