@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react'
 import { KeyIcon, PhoneIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
-import { getSettings, saveSettings, getCRMSettings, testMyCRMWebhook, getMyCRMLogs } from '../api/client'
-import { fmtDateShort } from '../utils/date'
+import { getSettings, saveSettings, getCRMSettings, testMyCRMWebhook } from '../api/client'
 
 const CRM_TYPE_LABELS = {
   zapier: 'Zapier',
@@ -27,7 +26,6 @@ export default function Settings() {
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [crmConfig, setCrmConfig] = useState(null)
-  const [crmLogs, setCrmLogs] = useState([])
   const [crmTestResult, setCrmTestResult] = useState(null)
   const [crmTestLoading, setCrmTestLoading] = useState(false)
 
@@ -41,7 +39,6 @@ export default function Settings() {
       }))
     }).catch(() => {})
     getCRMSettings().then(setCrmConfig).catch(() => {})
-    getMyCRMLogs().then(setCrmLogs).catch(() => {})
   }, [])
 
   const submit = async (e) => {
@@ -245,54 +242,6 @@ export default function Settings() {
                   <p className="text-xs text-slate-500">
                     No hay ningún CRM conectado a esta organización.
                   </p>
-                )}
-
-                <button
-                  type="button"
-                  onClick={() => window.location.href = '/admin'}
-                  className="text-xs text-z-blue-light hover:underline"
-                >
-                  Editar en Panel de Administración →
-                </button>
-
-                {crmLogs.length > 0 && (
-                  <div>
-                    <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wide mb-2">
-                      Últimos envíos
-                    </h3>
-                    <div className="space-y-0 rounded-lg border border-z-border overflow-hidden">
-                      {crmLogs.map((log, i) => (
-                        <div
-                          key={log.id}
-                          className={`flex items-center justify-between text-xs px-4 py-2.5 ${
-                            i < crmLogs.length - 1 ? 'border-b border-z-border/50' : ''
-                          } hover:bg-white/[0.02]`}
-                        >
-                          <div className="flex items-center gap-3 min-w-0">
-                            <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${
-                              log.success ? 'bg-green-400' : 'bg-red-400'
-                            }`} />
-                            <span className="text-slate-500 font-mono flex-shrink-0">
-                              {fmtDateShort(log.created_at)}
-                            </span>
-                            <span className="text-slate-400 truncate">{log.event_type}</span>
-                          </div>
-                          <div className="flex items-center gap-3 flex-shrink-0 text-slate-500">
-                            {log.status_code && (
-                              <span className={log.success ? 'text-green-500' : 'text-red-500'}>
-                                {log.status_code}
-                              </span>
-                            )}
-                            <span>{log.duration_ms}ms</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {crmLogs.length === 0 && isConfigured && (
-                  <p className="text-xs text-slate-600">No hay envíos registrados aún.</p>
                 )}
               </>
             )

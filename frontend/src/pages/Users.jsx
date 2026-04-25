@@ -21,8 +21,8 @@ export default function Users() {
     <div className="p-4 sm:p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Mi equipo</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Gestiona los agentes de tu organización</p>
+          <h1 className="text-2xl font-bold text-slate-100">Asesores</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Gestiona los asesores de tu organización</p>
         </div>
         <button onClick={() => setModal({ data: null })} className="z-btn-primary flex items-center gap-2 self-start sm:self-auto">
           <PlusIcon className="w-4 h-4" /> Agregar agente

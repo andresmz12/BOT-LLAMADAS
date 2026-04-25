@@ -5,6 +5,9 @@ import { getWhatsappSettings, saveWhatsappSettings, getWaConversations, getWaMes
 import { fmtDate } from '../utils/date'
 
 export default function WhatsApp() {
+  const userRole = JSON.parse(localStorage.getItem('user') || '{}').role || 'agent'
+  const canConfig = userRole === 'admin' || userRole === 'superadmin'
+
   const [config, setConfig] = useState({ whatsapp_enabled: false, whatsapp_phone_number_id: '', whatsapp_access_token: '', whatsapp_verify_token: '' })
   const [webhookUrl, setWebhookUrl] = useState('')
   const [saving, setSaving] = useState(false)
@@ -16,11 +19,13 @@ export default function WhatsApp() {
   const [showConfig, setShowConfig] = useState(false)
 
   useEffect(() => {
-    getWhatsappSettings().then(d => {
-      setConfig({ whatsapp_enabled: d.whatsapp_enabled, whatsapp_phone_number_id: d.whatsapp_phone_number_id || '', whatsapp_access_token: d.whatsapp_access_token || '', whatsapp_verify_token: d.whatsapp_verify_token || '' })
-      setWebhookUrl(d.webhook_url || '')
-      if (!d.whatsapp_phone_number_id) setShowConfig(true)
-    }).catch(() => {})
+    if (canConfig) {
+      getWhatsappSettings().then(d => {
+        setConfig({ whatsapp_enabled: d.whatsapp_enabled, whatsapp_phone_number_id: d.whatsapp_phone_number_id || '', whatsapp_access_token: d.whatsapp_access_token || '', whatsapp_verify_token: d.whatsapp_verify_token || '' })
+        setWebhookUrl(d.webhook_url || '')
+        if (!d.whatsapp_phone_number_id) setShowConfig(true)
+      }).catch(() => {})
+    }
     getWaConversations().then(setConversations).catch(() => {})
   }, [])
 
@@ -60,14 +65,16 @@ export default function WhatsApp() {
           <span className={`px-3 py-1 text-xs font-semibold rounded-full ${config.whatsapp_enabled ? 'bg-green-500/15 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
             {config.whatsapp_enabled ? 'Activo' : 'Inactivo'}
           </span>
-          <button onClick={() => setShowConfig(s => !s)} className="z-btn-ghost text-sm">
-            {showConfig ? 'Ocultar config' : 'Configurar'}
-          </button>
+          {canConfig && (
+            <button onClick={() => setShowConfig(s => !s)} className="z-btn-ghost text-sm">
+              {showConfig ? 'Ocultar config' : 'Configurar'}
+            </button>
+          )}
         </div>
       </div>
 
       {/* Config accordion */}
-      {showConfig && (
+      {canConfig && showConfig && (
         <div className="bg-z-card border border-z-border rounded-xl p-6 space-y-4">
           <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Configuración — Meta WhatsApp Business API</h2>
 

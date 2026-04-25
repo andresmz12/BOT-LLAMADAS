@@ -13,16 +13,17 @@ const NAV_BY_ROLE = {
   superadmin: [
     { to: '/', label: 'Dashboard', Icon: HomeIcon },
     { to: '/admin', label: 'Admin Panel', Icon: KeyIcon },
+    { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
     { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
   ],
   admin: [
     { to: '/', label: 'Dashboard', Icon: HomeIcon },
-    { to: '/agents', label: 'Agentes', Icon: UserGroupIcon },
+    { to: '/agents', label: 'Agentes de Voz', Icon: UserGroupIcon },
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
     { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
-    { to: '/team', label: 'Mi equipo', Icon: UsersIcon },
+    { to: '/team', label: 'Asesores', Icon: UsersIcon },
     { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
   ],
   agent: [
