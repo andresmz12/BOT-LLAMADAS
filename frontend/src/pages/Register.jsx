@@ -23,7 +23,7 @@ export default function Register() {
       localStorage.setItem('token', data.access_token)
       const user = await getMe()
       localStorage.setItem('user', JSON.stringify(user))
-      navigate('/', { replace: true })
+      navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err.response?.data?.detail || 'Error al crear cuenta')
       setLoading(false)

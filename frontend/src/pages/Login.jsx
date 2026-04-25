@@ -34,7 +34,7 @@ export default function Login() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    if (localStorage.getItem('token')) navigate('/', { replace: true })
+    if (localStorage.getItem('token')) navigate('/dashboard', { replace: true })
     api.get('/auth/status').then(r => {
       if (!r.data.initialized) setNeedsSetup(true)
     }).catch(() => {})
@@ -49,7 +49,7 @@ export default function Login() {
       localStorage.setItem('token', data.access_token)
       const user = await getMe()
       localStorage.setItem('user', JSON.stringify(user))
-      navigate('/', { replace: true })
+      navigate('/dashboard', { replace: true })
     } catch (err) {
       setError(err.response?.data?.detail || 'Error al iniciar sesión')
       setLoading(false)

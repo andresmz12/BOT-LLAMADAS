@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Outlet, Navigate, useNavigate } from 'react-router-dom'
 import { Bars3Icon } from '@heroicons/react/24/outline'
 import Sidebar from './components/Sidebar'
+import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Register from './pages/Register'
 import Dashboard from './pages/Dashboard'
@@ -69,10 +70,11 @@ export default function App() {
   return (
     <BrowserRouter>
       <Routes>
+        <Route path="/" element={<Landing />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route element={<ProtectedLayout />}>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/agents" element={<Agents />} />
           <Route path="/campaigns" element={<Campaigns />} />
           <Route path="/prospects" element={<Prospects />} />

@@ -11,13 +11,13 @@ import { logout } from '../api/client'
 
 const NAV_BY_ROLE = {
   superadmin: [
-    { to: '/', label: 'Dashboard', Icon: HomeIcon },
+    { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
     { to: '/admin', label: 'Admin Panel', Icon: KeyIcon },
     { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
     { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
   ],
   admin: [
-    { to: '/', label: 'Dashboard', Icon: HomeIcon },
+    { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
     { to: '/agents', label: 'Agentes de Voz', Icon: UserGroupIcon },
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
@@ -27,7 +27,7 @@ const NAV_BY_ROLE = {
     { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
   ],
   agent: [
-    { to: '/', label: 'Dashboard', Icon: HomeIcon },
+    { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
@@ -104,7 +104,7 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
           <NavLink
             key={to + label}
             to={to}
-            end={to === '/'}
+            end={to === '/dashboard'}
             title={collapsed ? label : undefined}
             onClick={onClose}
             className={({ isActive }) =>
