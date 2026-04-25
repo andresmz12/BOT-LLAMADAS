@@ -99,6 +99,23 @@ def update_org(
     return org
 
 
+@router.get("/organizations/{org_id}/secrets")
+def get_org_secrets(
+    org_id: int,
+    _: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    org = session.get(Organization, org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    return {
+        "retell_api_key": org.retell_api_key or "",
+        "anthropic_api_key": org.anthropic_api_key or "",
+        "crm_api_key": org.crm_api_key or "",
+        "crm_webhook_secret": org.crm_webhook_secret or "",
+    }
+
+
 @router.get("/organizations/{org_id}/crm-debug")
 def debug_org_crm(
     org_id: int,

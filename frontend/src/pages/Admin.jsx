@@ -1,10 +1,38 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline'
 import {
   getOrganizations, createOrganization, updateOrganization, deleteOrganization,
   getUsers, createUser, updateUser, deleteUser,
-  testCRMWebhook, upgradeOrg,
+  testCRMWebhook, upgradeOrg, getOrgSecrets,
 } from '../api/client'
+
+function SecretInput({ label, value, onChange, placeholder = '••••••••••••••••', hint, required }) {
+  const [show, setShow] = useState(false)
+  return (
+    <div>
+      <label className="block text-sm font-medium text-slate-300 mb-1">{label}</label>
+      <div className="relative">
+        <input
+          type={show ? 'text' : 'password'}
+          value={value || ''}
+          onChange={onChange}
+          placeholder={placeholder}
+          required={required}
+          className="z-input font-mono pr-10"
+        />
+        <button
+          type="button"
+          onClick={() => setShow(s => !s)}
+          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+          tabIndex={-1}
+        >
+          {show ? <EyeSlashIcon className="w-4 h-4" /> : <EyeIcon className="w-4 h-4" />}
+        </button>
+      </div>
+      {hint && <p className="text-xs text-slate-600 mt-1">{hint}</p>}
+    </div>
+  )
+}
 
 const ROLES = ['superadmin', 'admin', 'agent', 'viewer']
 const PLANS = ['free', 'pro']
@@ -313,6 +341,7 @@ function OrgModal({ org, onClose, onSaved }) {
   const [crmAccordionOpen, setCrmAccordionOpen] = useState(false)
   const [testResult, setTestResult] = useState(null)
   const [testLoading, setTestLoading] = useState(false)
+  const [revealLoading, setRevealLoading] = useState(false)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const setCrmExtra = (key, value) => set('crm_extra_config', { ...(form.crm_extra_config || {}), [key]: value })
@@ -366,6 +395,16 @@ function OrgModal({ org, onClose, onSaved }) {
     }
   }
 
+  const handleReveal = async () => {
+    if (!org?.id) return
+    setRevealLoading(true)
+    try {
+      const secrets = await getOrgSecrets(org.id)
+      setForm(f => ({ ...f, ...secrets }))
+    } catch { alert('No se pudieron obtener las claves') }
+    finally { setRevealLoading(false) }
+  }
+
   const crmType = form.crm_type || 'none'
   const crmLabel = CRM_TYPES.find(c => c.value === crmType)?.label || crmType
 
@@ -374,7 +413,20 @@ function OrgModal({ org, onClose, onSaved }) {
       <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-z-border">
           <h2 className="text-lg font-bold text-slate-100">{org ? 'Editar Organización' : 'Nueva Organización'}</h2>
-          <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
+          <div className="flex items-center gap-2">
+            {org?.id && (
+              <button
+                type="button"
+                onClick={handleReveal}
+                disabled={revealLoading}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-400 border border-amber-500/30 hover:bg-amber-500/10 rounded-lg transition-colors disabled:opacity-50"
+              >
+                <EyeIcon className="w-3.5 h-3.5" />
+                {revealLoading ? 'Cargando...' : 'Revelar claves'}
+              </button>
+            )}
+            <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
+          </div>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
           <div>
@@ -387,19 +439,13 @@ function OrgModal({ org, onClose, onSaved }) {
               {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Retell API Key</label>
-            <input value={form.retell_api_key || ''} onChange={e => set('retell_api_key', e.target.value)} className="z-input font-mono" />
-          </div>
+          <SecretInput label="Retell API Key" value={form.retell_api_key} onChange={e => set('retell_api_key', e.target.value)} />
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Retell Phone Number</label>
             <input value={form.retell_phone_number || ''} onChange={e => set('retell_phone_number', e.target.value)}
               placeholder="+12345678901" className="z-input font-mono" />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Anthropic API Key</label>
-            <input value={form.anthropic_api_key || ''} onChange={e => set('anthropic_api_key', e.target.value)} className="z-input font-mono" />
-          </div>
+          <SecretInput label="Anthropic API Key" value={form.anthropic_api_key} onChange={e => set('anthropic_api_key', e.target.value)} />
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} className="w-4 h-4 accent-blue-500" />
             <span className="text-sm text-slate-300">Organización activa</span>
@@ -437,18 +483,11 @@ function OrgModal({ org, onClose, onSaved }) {
                 {NATIVE_CRM_TYPES.includes(crmType) ? (
                   /* ── Native CRM fields ──────────────────────────────────── */
                   <>
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">
-                        {NATIVE_CRM_LABELS[crmType]?.apiKey || 'API Key'}
-                      </label>
-                      <input
-                        type="password"
-                        value={form.crm_api_key || ''}
-                        onChange={e => set('crm_api_key', e.target.value)}
-                        placeholder="••••••••••••••••"
-                        className="z-input font-mono"
-                      />
-                    </div>
+                    <SecretInput
+                      label={NATIVE_CRM_LABELS[crmType]?.apiKey || 'API Key'}
+                      value={form.crm_api_key}
+                      onChange={e => set('crm_api_key', e.target.value)}
+                    />
 
                     {NATIVE_CRM_LABELS[crmType]?.boardId && (
                       <div>
@@ -491,22 +530,13 @@ function OrgModal({ org, onClose, onSaved }) {
                       />
                     </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">
-                        Secreto de firma{' '}
-                        <span className="text-slate-500 font-normal">(opcional)</span>
-                      </label>
-                      <input
-                        type="password"
-                        value={form.crm_webhook_secret || ''}
-                        onChange={e => set('crm_webhook_secret', e.target.value)}
-                        placeholder="Clave para verificar firma HMAC SHA-256"
-                        className="z-input font-mono"
-                      />
-                      <p className="text-xs text-slate-600 mt-1">
-                        Tu CRM puede verificar el header <code className="text-slate-500">X-ZyraVoice-Signature</code>
-                      </p>
-                    </div>
+                    <SecretInput
+                      label="Secreto de firma (opcional)"
+                      value={form.crm_webhook_secret}
+                      onChange={e => set('crm_webhook_secret', e.target.value)}
+                      placeholder="Clave para verificar firma HMAC SHA-256"
+                      hint={<>Tu CRM puede verificar el header <code className="text-slate-500">X-ZyraVoice-Signature</code></>}
+                    />
 
                     <div>
                       <label className="block text-sm font-medium text-slate-300 mb-2">Enviar datos cuando:</label>
@@ -628,10 +658,13 @@ function UserModal({ user, orgs, onClose, onSaved }) {
               <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
               <input type="email" value={form.email} onChange={e => set('email', e.target.value)} required className="z-input" />
             </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Contraseña</label>
-              <input type="password" value={form.password} onChange={e => set('password', e.target.value)} required className="z-input" />
-            </div>
+            <SecretInput
+              label="Contraseña"
+              value={form.password}
+              onChange={e => set('password', e.target.value)}
+              placeholder="Contraseña del usuario"
+              required
+            />
           </>}
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Rol</label>
