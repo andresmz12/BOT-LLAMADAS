@@ -59,6 +59,8 @@ async def import_file(
     if len(content) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="El archivo no puede superar 10 MB")
     filename = (file.filename or "").lower()
+    if not (filename.endswith(".xlsx") or filename.endswith(".xls") or filename.endswith(".csv")):
+        raise HTTPException(status_code=400, detail="Solo se permiten archivos CSV, XLS o XLSX")
     rows = []
 
     if filename.endswith(".xlsx") or filename.endswith(".xls"):

@@ -87,8 +87,10 @@ def require_pro_plan(
 
 
 @router.post("/register")
-def register(data: RegisterRequest, session: Session = Depends(get_session)):
-    """Public self-service signup — creates org + admin user with free plan."""
+def register(data: RegisterRequest, request: Request, session: Session = Depends(get_session)):
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else (request.client.host if request.client else "unknown")
+    _check_rate_limit(client_ip)
     from services.auth import hash_password
     existing = session.exec(select(User).where(User.email == data.email)).first()
     if existing:
