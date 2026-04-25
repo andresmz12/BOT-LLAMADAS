@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { RetellWebClient } from 'retell-client-js-sdk'
-import { PhoneIcon, StopIcon, MicrophoneIcon } from '@heroicons/react/24/outline'
+import { PhoneIcon, StopIcon, MicrophoneIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import UpgradeBanner from '../components/UpgradeBanner'
 import { getDemoStatus, startDemoCall } from '../api/client'
 
@@ -66,6 +66,22 @@ export default function DemoCall() {
     setCallState('idle')
     setTranscript([])
     setError('')
+  }
+
+  const downloadTranscript = () => {
+    const lines = transcript.map(t =>
+      `[${t.role === 'agent' ? 'Agente' : 'Tú'}]: ${t.content}`
+    )
+    const text = lines.join('\n\n')
+    const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `transcripcion-demo-${new Date().toISOString().slice(0, 10)}.txt`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
   }
 
   const used = status?.demo_calls_used ?? 0
@@ -136,8 +152,17 @@ export default function DemoCall() {
               </>
             )}
             {callState === 'ended' && (
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3 flex-wrap">
                 <span className="text-slate-400 text-sm">Llamada finalizada</span>
+                {!isFree && transcript.length > 0 && (
+                  <button
+                    onClick={downloadTranscript}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-z-blue/15 hover:bg-z-blue/25 text-z-blue-light text-sm font-medium rounded-lg transition-colors"
+                  >
+                    <ArrowDownTrayIcon className="w-4 h-4" />
+                    Descargar transcripción
+                  </button>
+                )}
                 {!limitReached && (
                   <button onClick={reset} className="px-4 py-2 z-btn-ghost text-sm">
                     Nueva llamada
