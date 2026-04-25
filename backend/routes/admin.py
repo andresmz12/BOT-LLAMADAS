@@ -11,7 +11,7 @@ from routes.auth import require_superadmin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-_SENSITIVE = {"retell_api_key", "anthropic_api_key", "crm_api_key", "crm_webhook_secret"}
+_SENSITIVE = {"retell_api_key", "anthropic_api_key", "crm_api_key", "crm_webhook_secret", "whatsapp_access_token"}
 
 def _mask(key: str | None) -> str:
     if not key:
@@ -43,6 +43,10 @@ class OrgCreate(BaseModel):
     crm_api_key: Optional[str] = None
     crm_board_or_list_id: Optional[str] = None
     crm_extra_config: Optional[str] = None
+    whatsapp_enabled: bool = False
+    whatsapp_phone_number_id: Optional[str] = None
+    whatsapp_access_token: Optional[str] = None
+    whatsapp_verify_token: Optional[str] = None
 
 
 class UserCreate(BaseModel):

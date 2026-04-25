@@ -13,6 +13,8 @@ from routes import agents, campaigns, prospects, calls, stats, webhook, settings
 from routes import auth, admin
 from routes import demo
 from routes import whatsapp_webhook
+from routes import whatsapp
+from routes import team
 from routes import webhook as webhook_module
 
 logging.basicConfig(level=logging.INFO)
@@ -89,6 +91,8 @@ app.include_router(calls.router)
 app.include_router(stats.router)
 app.include_router(webhook.router)
 app.include_router(whatsapp_webhook.router)
+app.include_router(whatsapp.router)
+app.include_router(team.router)
 app.include_router(settings.router)
 
 

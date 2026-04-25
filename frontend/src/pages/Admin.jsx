@@ -7,7 +7,7 @@ import {
 } from '../api/client'
 import SecretInput from '../components/SecretInput'
 
-const ROLES = ['superadmin', 'admin', 'agent', 'viewer']
+const ROLES = ['superadmin', 'admin', 'agent']
 const PLANS = ['free', 'pro']
 
 const CRM_TYPES = [
@@ -303,12 +303,18 @@ function OrgModal({ org, onClose, onSaved }) {
       try { return org.crm_extra_config ? JSON.parse(org.crm_extra_config) : null }
       catch { return null }
     })(),
+    whatsapp_enabled: org.whatsapp_enabled || false,
+    whatsapp_phone_number_id: org.whatsapp_phone_number_id || '',
+    whatsapp_access_token: org.whatsapp_access_token || '',
+    whatsapp_verify_token: org.whatsapp_verify_token || '',
   } : {
     name: '', plan: 'pro', retell_api_key: '', retell_phone_number: '',
     anthropic_api_key: '', is_active: true,
     crm_type: 'none', crm_webhook_url: '', crm_webhook_enabled: false,
     crm_webhook_secret: '', crm_events: '["call_ended","interested"]',
     crm_api_key: '', crm_board_or_list_id: '', crm_extra_config: null,
+    whatsapp_enabled: false, whatsapp_phone_number_id: '',
+    whatsapp_access_token: '', whatsapp_verify_token: '',
   })
   const [loading, setLoading] = useState(false)
   const [crmAccordionOpen, setCrmAccordionOpen] = useState(false)
@@ -423,6 +429,30 @@ function OrgModal({ org, onClose, onSaved }) {
             <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} className="w-4 h-4 accent-blue-500" />
             <span className="text-sm text-slate-300">Organización activa</span>
           </label>
+
+          {/* ── WhatsApp Bot ─────────────────────────────────────────────────── */}
+          <div className="border-t border-z-border pt-4 space-y-4">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">WhatsApp Bot</h3>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={!!form.whatsapp_enabled} onChange={e => set('whatsapp_enabled', e.target.checked)} className="w-4 h-4 accent-blue-500" />
+              <span className="text-sm text-slate-300">Activar bot conversacional</span>
+            </label>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Phone Number ID</label>
+              <input value={form.whatsapp_phone_number_id || ''} onChange={e => set('whatsapp_phone_number_id', e.target.value)}
+                placeholder="123456789012345" className="z-input font-mono" />
+              <p className="text-xs text-slate-600 mt-1">Meta for Developers → WhatsApp → API Setup</p>
+            </div>
+            <SecretInput label="WhatsApp Access Token" value={form.whatsapp_access_token || ''}
+              onChange={e => set('whatsapp_access_token', e.target.value)}
+              placeholder="Token permanente de Meta" />
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Verify Token</label>
+              <input value={form.whatsapp_verify_token || ''} onChange={e => set('whatsapp_verify_token', e.target.value)}
+                placeholder="zyra-wa-secreto-2025" className="z-input font-mono" />
+              <p className="text-xs text-slate-600 mt-1">String secreto que eliges tú — úsalo al registrar el webhook en Meta</p>
+            </div>
+          </div>
 
           {/* ── CRM Integration ─────────────────────────────────────────────── */}
           <div className="border-t border-z-border pt-4 space-y-4">

@@ -115,4 +115,14 @@ export const getCRMSettings = () => api.get('/settings/crm').then(r => r.data)
 export const testMyCRMWebhook = () => api.post('/settings/crm/test').then(r => r.data)
 export const getMyCRMLogs = () => api.get('/settings/crm/logs').then(r => r.data)
 
+// WhatsApp conversations
+export const getWaConversations = () => api.get('/whatsapp/conversations').then(r => r.data)
+export const getWaMessages = (id) => api.get(`/whatsapp/conversations/${id}/messages`).then(r => r.data)
+
+// Team management (admin)
+export const getTeam = () => api.get('/team').then(r => r.data)
+export const createTeamMember = (data) => api.post('/team', data).then(r => r.data)
+export const updateTeamMember = (id, data) => api.put(`/team/${id}`, data).then(r => r.data)
+export const deleteTeamMember = (id) => api.delete(`/team/${id}`).then(r => r.data)
+
 export default api

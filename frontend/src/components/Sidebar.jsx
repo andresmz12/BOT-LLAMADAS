@@ -5,6 +5,7 @@ import {
   UsersIcon, PhoneIcon, Cog6ToothIcon,
   KeyIcon, ArrowRightOnRectangleIcon,
   ChevronLeftIcon, ChevronRightIcon,
+  ChatBubbleLeftRightIcon,
 } from '@heroicons/react/24/outline'
 import { logout } from '../api/client'
 
@@ -20,16 +21,14 @@ const NAV_BY_ROLE = {
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
+    { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
+    { to: '/team', label: 'Mi equipo', Icon: UsersIcon },
     { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
   ],
   agent: [
     { to: '/', label: 'Dashboard', Icon: HomeIcon },
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
-    { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
-  ],
-  viewer: [
-    { to: '/', label: 'Dashboard', Icon: HomeIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
   ],
 }
@@ -61,7 +60,7 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const role = user.role || 'viewer'
   const plan = user.plan || 'pro'
-  const baseItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer
+  const baseItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.agent
   const navItems = (role === 'admin' || role === 'agent')
     ? plan === 'free'
       ? [...baseItems.filter(i => i.to !== '/campaigns' && i.to !== '/prospects'),

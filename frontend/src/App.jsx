@@ -12,6 +12,8 @@ import Calls from './pages/Calls'
 import Settings from './pages/Settings'
 import Admin from './pages/Admin'
 import DemoCall from './pages/DemoCall'
+import WhatsApp from './pages/WhatsApp'
+import Users from './pages/Users'
 
 const IDLE_MS = 10 * 60 * 1000 // 10 minutes
 
@@ -78,6 +80,8 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/demo" element={<DemoCall />} />
+          <Route path="/chatbot" element={<WhatsApp />} />
+          <Route path="/team" element={<Users />} />
         </Route>
       </Routes>
     </BrowserRouter>
