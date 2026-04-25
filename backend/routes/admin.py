@@ -30,7 +30,7 @@ def _safe_org(org: Organization) -> dict:
 class OrgCreate(BaseModel):
     name: str
     logo_url: Optional[str] = None
-    plan: str = "basic"
+    plan: str = "pro"
     retell_api_key: str = ""
     retell_phone_number: str = ""
     anthropic_api_key: str = ""

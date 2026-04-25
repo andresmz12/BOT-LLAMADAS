@@ -7,7 +7,7 @@ class Organization(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     logo_url: Optional[str] = None
-    plan: str = Field(default="basic")  # free/basic/pro
+    plan: str = Field(default="pro")  # free/pro
     retell_api_key: str = Field(default="")
     retell_phone_number: str = Field(default="")
     anthropic_api_key: str = Field(default="")

@@ -7,7 +7,7 @@ import {
 } from '../api/client'
 
 const ROLES = ['superadmin', 'admin', 'agent', 'viewer']
-const PLANS = ['free', 'basic', 'pro']
+const PLANS = ['free', 'pro']
 
 const CRM_TYPES = [
   { value: 'none', label: 'Sin integración' },
@@ -170,9 +170,7 @@ export default function Admin() {
                     <td className="px-6 py-3 font-medium text-slate-200">{org.name}</td>
                     <td className="px-6 py-3">
                       <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-                        org.plan === 'free' ? 'bg-amber-500/15 text-amber-400' :
-                        org.plan === 'pro'  ? 'bg-green-500/15 text-green-400' :
-                                              'bg-z-blue/15 text-z-blue-light'
+                        org.plan === 'free' ? 'bg-amber-500/15 text-amber-400' : 'bg-green-500/15 text-green-400'
                       }`}>{org.plan}</span>
                     </td>
                     <td className="px-6 py-3 text-slate-400 text-xs">
@@ -305,7 +303,7 @@ function OrgModal({ org, onClose, onSaved }) {
       catch { return null }
     })(),
   } : {
-    name: '', plan: 'basic', retell_api_key: '', retell_phone_number: '',
+    name: '', plan: 'pro', retell_api_key: '', retell_phone_number: '',
     anthropic_api_key: '', is_active: true,
     crm_type: 'none', crm_webhook_url: '', crm_webhook_enabled: false,
     crm_webhook_secret: '', crm_events: '["call_ended","interested"]',

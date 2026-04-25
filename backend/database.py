@@ -91,6 +91,10 @@ def run_migrations():
                         conn.execute(text(f"ALTER TABLE organization ADD COLUMN {col} {col_type}"))
                         log.info(f"Migration: added organization.{col}")
 
+        # Migrate legacy "basic" plan → "pro"
+        with engine.begin() as conn:
+            conn.execute(text("UPDATE organization SET plan = 'pro' WHERE plan = 'basic'"))
+
         # Indexes for performance on frequently filtered columns
         is_pg = not DATABASE_URL.startswith("sqlite")
         if is_pg:

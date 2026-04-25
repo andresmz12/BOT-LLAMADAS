@@ -60,7 +60,7 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const [collapsed, setCollapsed] = useState(false)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const role = user.role || 'viewer'
-  const plan = user.plan || 'basic'
+  const plan = user.plan || 'pro'
   const baseItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer
   const navItems = (role === 'admin' || role === 'agent')
     ? plan === 'free'
