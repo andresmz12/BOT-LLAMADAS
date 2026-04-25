@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { TrashIcon } from '@heroicons/react/24/outline'
+import { TrashIcon, PhoneArrowUpRightIcon, ChevronRightIcon, XMarkIcon, ForwardIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import CallDetailModal from '../components/CallDetailModal'
-import { getCalls, getCallDetail, getCampaigns, deleteCalls } from '../api/client'
+import { getCalls, getCallDetail, getCampaigns, deleteCalls, callProspect } from '../api/client'
 import { fmtDate } from '../utils/date'
 
 const OUTCOMES = ['', 'interested', 'not_interested', 'callback_requested', 'appointment_scheduled', 'voicemail', 'no_answer', 'wrong_number']
@@ -15,6 +15,8 @@ export default function Calls() {
   const [filterOutcome, setFilterOutcome] = useState('')
   const [selectedCall, setSelectedCall] = useState(null)
   const [selected, setSelected] = useState(new Set())
+  const [callingId, setCallingId] = useState(null)
+  const [queue, setQueue] = useState(null) // { items: [...], index: 0, calling: false }
 
   const load = () => {
     const params = {}
@@ -51,6 +53,42 @@ export default function Calls() {
     } catch (err) { alert(err.response?.data?.detail || 'Error') }
   }
 
+  const handleCall = async (prospectId) => {
+    if (callingId) return
+    setCallingId(prospectId)
+    try { await callProspect(prospectId); load() }
+    catch (err) { alert(err.response?.data?.detail || 'Error al llamar') }
+    finally { setCallingId(null) }
+  }
+
+  // Cola secuencial
+  const startQueue = () => {
+    const items = calls.filter(c => c.prospect_id && !c.is_demo)
+    if (!items.length) return
+    setQueue({ items, index: 0, calling: false })
+  }
+
+  const queueCall = async () => {
+    if (!queue || queue.calling) return
+    const item = queue.items[queue.index]
+    if (!item?.prospect_id) return
+    setQueue(q => ({ ...q, calling: true }))
+    try { await callProspect(item.prospect_id) }
+    catch (err) { alert(err.response?.data?.detail || 'Error al llamar') }
+    finally {
+      setQueue(q => q ? ({ ...q, calling: false }) : null)
+      load()
+    }
+  }
+
+  const queueNext = () => {
+    setQueue(q => {
+      if (!q) return null
+      const next = q.index + 1
+      return next >= q.items.length ? null : { ...q, index: next, calling: false }
+    })
+  }
+
   const handleDeleteAll = async () => {
     const scope = filterCampaign || filterOutcome ? `las ${calls.length} llamadas del filtro actual` : `TODAS las ${calls.length} llamadas`
     if (!confirm(`¿Eliminar ${scope}? Esta acción no se puede deshacer.`)) return
@@ -73,6 +111,13 @@ export default function Calls() {
         <h1 className="text-2xl font-bold text-slate-100">Llamadas</h1>
         {calls.length > 0 && (
           <div className="flex flex-wrap gap-2">
+            {calls.some(c => c.prospect_id && !c.is_demo) && (
+              <button onClick={startQueue}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-green-400 border border-green-500/30 hover:bg-green-500/10 rounded-lg transition-colors">
+                <PhoneArrowUpRightIcon className="w-3.5 h-3.5" />
+                Llamar en orden ({calls.filter(c => c.prospect_id && !c.is_demo).length})
+              </button>
+            )}
             {selected.size > 0 && (
               <button onClick={handleDeleteSelected}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-lg transition-colors">
@@ -109,7 +154,7 @@ export default function Calls() {
                 <input type="checkbox" checked={allChecked} ref={el => { if (el) el.indeterminate = someChecked }}
                   onChange={toggleAll} className="rounded border-slate-600 bg-slate-800 text-z-blue cursor-pointer" />
               </th>
-              {['Prospecto', 'Empresa', 'Teléfono', 'Tipo', 'Outcome', 'Sentimiento', 'Duración', 'Fecha'].map(h => (
+              {['Prospecto', 'Empresa', 'Teléfono', 'Tipo', 'Outcome', 'Sentimiento', 'Duración', 'Fecha', ''].map(h => (
                 <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
               ))}
             </tr>
@@ -137,16 +182,83 @@ export default function Calls() {
                 <td className="px-6 py-3 text-slate-500 text-xs" onClick={() => openDetail(call)}>
                   {fmtDate(call.started_at)}
                 </td>
+                <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
+                  {call.prospect_id && !call.is_demo && (
+                    <button onClick={() => handleCall(call.prospect_id)} disabled={callingId === call.prospect_id}
+                      title="Volver a llamar"
+                      className="text-slate-600 hover:text-green-400 transition-colors disabled:opacity-40">
+                      <PhoneArrowUpRightIcon className="w-4 h-4" />
+                    </button>
+                  )}
+                </td>
               </tr>
             ))}
             {calls.length === 0 && (
-              <tr><td colSpan={9} className="px-6 py-12 text-center text-slate-500">No hay llamadas registradas</td></tr>
+              <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-500">No hay llamadas registradas</td></tr>
             )}
           </tbody>
         </table>
         </div>
       </div>
       {selectedCall && <CallDetailModal call={selectedCall} onClose={() => setSelectedCall(null)} />}
+
+      {/* Cola secuencial */}
+      {queue && (() => {
+        const item = queue.items[queue.index]
+        const isLast = queue.index >= queue.items.length - 1
+        return (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 w-full max-w-lg px-4">
+            <div className="bg-z-card border border-z-border rounded-2xl shadow-2xl p-5">
+              <div className="flex items-start justify-between mb-4">
+                <div>
+                  <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-0.5">
+                    Cola de rellamadas — {queue.index + 1} / {queue.items.length}
+                  </p>
+                  <p className="text-lg font-bold text-slate-100">{item.prospect_name || '—'}</p>
+                  <p className="text-sm text-slate-400">{item.prospect_company || ''}</p>
+                  <p className="text-sm font-mono text-slate-300 mt-0.5">{item.prospect_phone || '—'}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={item.outcome} />
+                  <button onClick={() => setQueue(null)} className="text-slate-500 hover:text-slate-300 ml-1">
+                    <XMarkIcon className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+              {/* Progress bar */}
+              <div className="w-full bg-slate-800 rounded-full h-1 mb-4">
+                <div className="bg-z-blue h-1 rounded-full transition-all"
+                  style={{ width: `${((queue.index + 1) / queue.items.length) * 100}%` }} />
+              </div>
+              <div className="flex items-center gap-3">
+                <button onClick={queueCall} disabled={queue.calling}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold rounded-lg text-sm transition-colors flex-1 justify-center">
+                  <PhoneArrowUpRightIcon className="w-4 h-4" />
+                  {queue.calling ? 'Llamando...' : 'Llamar'}
+                </button>
+                {!isLast && (
+                  <button onClick={queueNext} title="Saltar al siguiente"
+                    className="flex items-center gap-1.5 px-4 py-2.5 border border-z-border text-slate-400 hover:text-slate-200 hover:border-slate-500 rounded-lg text-sm transition-colors">
+                    <ForwardIcon className="w-4 h-4" />
+                    Saltar
+                  </button>
+                )}
+                {isLast && !queue.calling && (
+                  <button onClick={() => setQueue(null)}
+                    className="px-4 py-2.5 border border-z-border text-slate-400 hover:text-slate-200 rounded-lg text-sm transition-colors">
+                    Finalizar
+                  </button>
+                )}
+              </div>
+              {!isLast && (
+                <p className="text-xs text-slate-600 mt-3 text-center">
+                  Siguiente: {queue.items[queue.index + 1]?.prospect_name || '—'}
+                </p>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
