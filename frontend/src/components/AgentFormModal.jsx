@@ -98,14 +98,14 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
         saved = await createAgent(form)
       }
 
-      // Step 2: Sync with Retell
+      // Step 2: Sync agent
       if (syncOnSave) {
         setSyncStatus('syncing')
         try {
           const syncResp = await syncAgent(saved.id)
           if (syncResp.retell_error) {
             setSyncStatus('error')
-            setSyncError('Agente guardado, pero error al sincronizar con Retell: ' + syncResp.retell_error)
+            setSyncError('Agente guardado, pero ocurrió un error al sincronizar: ' + syncResp.retell_error)
             setLoading(false)
             return
           }
@@ -263,7 +263,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
                   {form.inbound_enabled && (
                     <>
                       <p className="text-xs text-z-blue-light bg-z-blue/10 border border-z-blue/30 rounded-lg px-3 py-2">
-                        Se creará un agente Retell separado para entrantes y se asignará al número al sincronizar.
+                        Se configurará un agente separado para llamadas entrantes y se asignará al número al sincronizar.
                       </p>
                       <TextArea
                         label="Sistema del agente (entrante)"
@@ -296,7 +296,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
               {agent?.retell_knowledge_base_id && !kbFile && (
                 <div className="flex items-center gap-2 px-3 py-2 bg-green-500/10 border border-green-500/20 rounded-lg">
                   <CheckCircleIcon className="w-4 h-4 text-green-400 flex-shrink-0" />
-                  <span className="text-xs text-green-400">Documento actual: <span className="font-mono">{agent.retell_knowledge_base_id}</span></span>
+                  <span className="text-xs text-green-400">Documento cargado correctamente</span>
                 </div>
               )}
 
@@ -363,18 +363,18 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
             </label>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={syncOnSave} onChange={e => setSyncOnSave(e.target.checked)} className="w-4 h-4 accent-blue-500" />
-              <span className="text-sm text-slate-300">Sincronizar con Retell al guardar</span>
+              <span className="text-sm text-slate-300">Sincronizar al guardar</span>
             </label>
           </div>
 
           {/* Status messages */}
           <div className="space-y-1.5">
             {syncStatus === 'syncing' && (
-              <p className="text-sm text-z-blue-light">Sincronizando con Retell AI...</p>
+              <p className="text-sm text-z-blue-light">Sincronizando...</p>
             )}
             {syncStatus === 'ok' && kbStatus !== 'uploading' && kbStatus !== 'ok' && kbStatus !== 'warning' && (
               <span className="flex items-center gap-1.5 text-sm text-green-400">
-                <CheckCircleIcon className="w-4 h-4" /> Sincronizado con Retell correctamente
+                <CheckCircleIcon className="w-4 h-4" /> Sincronizado correctamente
               </span>
             )}
             {syncStatus === 'error' && (
@@ -383,7 +383,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
               </span>
             )}
             {kbStatus === 'uploading' && (
-              <p className="text-sm text-z-blue-light">Subiendo documento a Retell Knowledge Base...</p>
+              <p className="text-sm text-z-blue-light">Subiendo documento...</p>
             )}
             {kbStatus === 'ok' && (
               <span className="flex items-center gap-1.5 text-sm text-green-400">

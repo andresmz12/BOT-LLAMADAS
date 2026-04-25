@@ -30,6 +30,7 @@ const NAV_BY_ROLE = {
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
+    { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
   ],
 }
 

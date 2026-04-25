@@ -29,7 +29,7 @@ export default function Agents() {
     try {
       const resp = await syncAgent(agent.id)
       if (resp.retell_error) {
-        alert('Error al sincronizar con Retell: ' + resp.retell_error)
+        alert('Error al sincronizar: ' + resp.retell_error)
       }
       load()
     } catch (err) {
@@ -83,7 +83,7 @@ export default function Agents() {
             <p className="text-xs text-slate-500 mb-4">
               <span className="bg-slate-800 px-2 py-0.5 rounded-full">{agent.language}</span>
               {' • '}
-              <span className="bg-slate-800 px-2 py-0.5 rounded-full">{agent.voice_id || 'retell-Andrea'}</span>
+              <span className="bg-slate-800 px-2 py-0.5 rounded-full">{(agent.voice_id || 'retell-Andrea').replace(/^retell-/, '')}</span>
               {' • '}max {agent.max_call_duration}s
             </p>
 
