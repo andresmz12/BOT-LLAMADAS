@@ -4,6 +4,7 @@ import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
 import UpgradeBanner from '../components/UpgradeBanner'
 import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus } from '../api/client'
+import { fmtDate } from '../utils/date'
 
 const STATUSES = ['', 'pending', 'calling', 'answered', 'voicemail', 'failed', 'do_not_call']
 
@@ -201,7 +202,7 @@ export default function Prospects() {
                 <td className="px-6 py-3"><StatusBadge status={p.status} /></td>
                 <td className="px-6 py-3 text-slate-400">{p.call_attempts}</td>
                 <td className="px-6 py-3 text-slate-500 text-xs">
-                  {p.last_called_at ? new Date(p.last_called_at).toLocaleString() : '—'}
+                  {fmtDate(p.last_called_at)}
                 </td>
                 <td className="px-6 py-3">
                   <div className="flex items-center gap-2">

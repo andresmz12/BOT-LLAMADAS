@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { XMarkIcon, ChevronDownIcon, PlayIcon } from '@heroicons/react/24/outline'
 import StatusBadge from './StatusBadge'
+import { fmtDate } from '../utils/date'
 
 const SENTIMENT_EMOJI = { positive: '😊', neutral: '😐', negative: '😞' }
 
@@ -28,7 +29,7 @@ export default function CallDetailModal({ call, onClose }) {
             <StatusBadge status={call.outcome} />
             <span className="text-sm text-slate-400">{SENTIMENT_EMOJI[call.sentiment] || ''} {call.sentiment}</span>
             {call.duration_seconds && <span className="text-sm text-slate-400">⏱ {call.duration_seconds}s</span>}
-            {call.started_at && <span className="text-sm text-slate-500">{new Date(call.started_at).toLocaleString()}</span>}
+            {call.started_at && <span className="text-sm text-slate-500">{fmtDate(call.started_at)}</span>}
             {call.recording_url && (
               <a href={call.recording_url} target="_blank" rel="noreferrer"
                 className="flex items-center gap-1 text-sm text-z-blue-light font-medium hover:text-z-blue">
@@ -46,7 +47,7 @@ export default function CallDetailModal({ call, onClose }) {
           {call.appointment_scheduled && (
             <div className="bg-z-blue/10 border border-z-blue/30 rounded-xl p-4 text-blue-300">
               <p className="font-semibold">✓ Cita agendada</p>
-              {call.appointment_date && <p className="text-sm mt-1">{new Date(call.appointment_date).toLocaleString()}</p>}
+              {call.appointment_date && <p className="text-sm mt-1">{fmtDate(call.appointment_date)}</p>}
             </div>
           )}
           {call.notes && (

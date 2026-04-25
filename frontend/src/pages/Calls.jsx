@@ -3,6 +3,7 @@ import { TrashIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import CallDetailModal from '../components/CallDetailModal'
 import { getCalls, getCallDetail, getCampaigns, deleteCalls } from '../api/client'
+import { fmtDate } from '../utils/date'
 
 const OUTCOMES = ['', 'interested', 'not_interested', 'callback_requested', 'appointment_scheduled', 'voicemail', 'no_answer', 'wrong_number']
 const SENTIMENT_EMOJI = { positive: '😊', neutral: '😐', negative: '😞' }
@@ -134,7 +135,7 @@ export default function Calls() {
                 </td>
                 <td className="px-6 py-3 text-slate-500" onClick={() => openDetail(call)}>{call.duration_seconds ? `${call.duration_seconds}s` : '—'}</td>
                 <td className="px-6 py-3 text-slate-500 text-xs" onClick={() => openDetail(call)}>
-                  {call.started_at ? new Date(call.started_at).toLocaleString() : '—'}
+                  {fmtDate(call.started_at)}
                 </td>
               </tr>
             ))}

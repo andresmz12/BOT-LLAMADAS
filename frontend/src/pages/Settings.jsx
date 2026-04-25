@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { KeyIcon, PhoneIcon, CheckCircleIcon, PhoneArrowUpRightIcon, ExclamationCircleIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline'
 import { getSettings, saveSettings, getAgents, makeDemoCall, getCRMSettings, testMyCRMWebhook, getMyCRMLogs, getWhatsappSettings, saveWhatsappSettings } from '../api/client'
 import SecretInput from '../components/SecretInput'
+import { fmtDateShort } from '../utils/date'
 
 const CRM_TYPE_LABELS = {
   zapier: 'Zapier',
@@ -369,10 +370,7 @@ export default function Settings() {
                               log.success ? 'bg-green-400' : 'bg-red-400'
                             }`} />
                             <span className="text-slate-500 font-mono flex-shrink-0">
-                              {new Date(log.created_at).toLocaleString('es-MX', {
-                                month: 'short', day: 'numeric',
-                                hour: '2-digit', minute: '2-digit',
-                              })}
+                              {fmtDateShort(log.created_at)}
                             </span>
                             <span className="text-slate-400 truncate">{log.event_type}</span>
                           </div>

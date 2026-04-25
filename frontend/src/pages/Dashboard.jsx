@@ -4,6 +4,7 @@ import { UserGroupIcon, StarIcon, CalendarIcon, XCircleIcon, ClockIcon, PhoneArr
 import { WaveformIcon } from '../components/Sidebar'
 import StatusBadge from '../components/StatusBadge'
 import { getStats, getCampaigns, getOrganizations } from '../api/client'
+import { fmtDate } from '../utils/date'
 
 const PIE_COLORS = ['#2563EB', '#10b981', '#8b5cf6', '#ef4444', '#f97316', '#3b82f6']
 
@@ -208,7 +209,7 @@ export default function Dashboard() {
                     <td className="px-4 py-3 font-mono text-xs text-slate-300">{r.prospect_phone}</td>
                     <td className="px-4 py-3 text-slate-400 text-xs">{r.campaign_name}</td>
                     <td className="px-4 py-3 text-slate-500 text-xs">
-                      {r.started_at ? new Date(r.started_at).toLocaleString() : '—'}
+                      {fmtDate(r.started_at)}
                     </td>
                   </tr>
                 ))}
