@@ -95,6 +95,39 @@ export default function Dashboard() {
         </ResponsiveContainer>
       </div>
 
+      {/* Optimal call time */}
+      {stats?.calls_by_hour?.some(h => h.calls > 0) && (() => {
+        const hours = (stats.calls_by_hour || []).filter(h => h.hour >= 6 && h.hour <= 22 && h.calls > 0)
+        const best = hours.length ? hours.reduce((a, b) => b.contact_rate > a.contact_rate ? b : a, hours[0]) : null
+        return (
+          <div className="bg-z-card rounded-xl p-5 border border-z-border">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Mejor hora para llamar</h2>
+              {best && (
+                <span className="px-2 py-1 bg-green-500/15 text-green-400 text-xs font-semibold rounded-full">
+                  Mejor: {best.label} — {best.contact_rate}%
+                </span>
+              )}
+            </div>
+            <ResponsiveContainer width="100%" height={180}>
+              <BarChart data={hours} barGap={2}>
+                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} unit="%" domain={[0, 100]} />
+                <Tooltip
+                  formatter={(v, _, p) => [`${v}% (${p.payload.calls} llamadas)`, 'Tasa contacto']}
+                  contentStyle={{ background: '#111827', border: '1px solid #1E293B', borderRadius: 8, color: '#F1F5F9', fontSize: 12 }}
+                />
+                <Bar dataKey="contact_rate" radius={[3, 3, 0, 0]}>
+                  {hours.map((h, i) => (
+                    <Cell key={i} fill={h.contact_rate >= 50 ? '#10b981' : h.contact_rate >= 30 ? '#2563EB' : '#334155'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )
+      })()}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pie chart */}
         <div className="bg-z-card rounded-xl p-5 border border-z-border">

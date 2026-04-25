@@ -91,6 +91,33 @@ def global_stats(
     for call in session.exec(select(Call).where(base & Call.outcome.is_not(None))).all():
         outcomes[call.outcome] = outcomes.get(call.outcome, 0) + 1
 
+    # Calls by hour of day (optimal call time)
+    from collections import defaultdict
+    hour_buckets: dict = defaultdict(lambda: {"calls": 0, "contacted": 0})
+    for c in session.exec(select(Call).where(base & Call.started_at.is_not(None))).all():
+        h = c.started_at.hour
+        hour_buckets[h]["calls"] += 1
+        if c.outcome in _CONTACTED_OUTCOMES:
+            hour_buckets[h]["contacted"] += 1
+
+    def _hour_label(h: int) -> str:
+        if h == 0: return "12am"
+        if h < 12: return f"{h}am"
+        if h == 12: return "12pm"
+        return f"{h - 12}pm"
+
+    calls_by_hour = [
+        {
+            "hour": h,
+            "label": _hour_label(h),
+            "calls": hour_buckets[h]["calls"],
+            "contact_rate": round(
+                hour_buckets[h]["contacted"] / hour_buckets[h]["calls"] * 100, 1
+            ) if hour_buckets[h]["calls"] else 0,
+        }
+        for h in range(24)
+    ]
+
     # Recent interested prospects (last 10)
     recent_interested = []
     interested_calls = session.exec(
@@ -123,6 +150,7 @@ def global_stats(
         "answer_rate": contact_rate,  # keep for backward compat
         "calls_per_day": days,
         "outcome_distribution": [{"name": k, "value": v} for k, v in outcomes.items()],
+        "calls_by_hour": calls_by_hour,
         "recent_interested": recent_interested,
     }
 
