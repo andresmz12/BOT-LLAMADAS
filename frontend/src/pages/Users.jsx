@@ -25,7 +25,7 @@ export default function Users() {
           <p className="text-sm text-slate-500 mt-0.5">Gestiona los asesores de tu organización</p>
         </div>
         <button onClick={() => setModal({ data: null })} className="z-btn-primary flex items-center gap-2 self-start sm:self-auto">
-          <PlusIcon className="w-4 h-4" /> Agregar agente
+          <PlusIcon className="w-4 h-4" /> Agregar asesor
         </button>
       </div>
 
@@ -108,7 +108,7 @@ function MemberModal({ member, onClose, onSaved }) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between p-6 border-b border-z-border">
-          <h2 className="text-lg font-bold text-slate-100">{member ? 'Editar agente' : 'Nuevo agente'}</h2>
+          <h2 className="text-lg font-bold text-slate-100">{member ? 'Editar asesor' : 'Nuevo asesor'}</h2>
           <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
@@ -126,7 +126,7 @@ function MemberModal({ member, onClose, onSaved }) {
                 label="Contraseña"
                 value={form.password}
                 onChange={e => set('password', e.target.value)}
-                placeholder="Contraseña del agente"
+                placeholder="Contraseña del asesor"
                 required
               />
             </>
