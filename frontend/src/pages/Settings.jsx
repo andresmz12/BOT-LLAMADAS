@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { KeyIcon, PhoneIcon, CheckCircleIcon, PhoneArrowUpRightIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline'
-import { getSettings, saveSettings, getAgents, makeDemoCall, getCRMSettings, testMyCRMWebhook, getMyCRMLogs } from '../api/client'
+import { KeyIcon, PhoneIcon, CheckCircleIcon, PhoneArrowUpRightIcon, ExclamationCircleIcon, ClipboardDocumentIcon } from '@heroicons/react/24/outline'
+import { getSettings, saveSettings, getAgents, makeDemoCall, getCRMSettings, testMyCRMWebhook, getMyCRMLogs, getWhatsappSettings, saveWhatsappSettings } from '../api/client'
+import SecretInput from '../components/SecretInput'
 
 const CRM_TYPE_LABELS = {
   zapier: 'Zapier',
@@ -42,6 +43,12 @@ export default function Settings() {
   const [crmTestResult, setCrmTestResult] = useState(null)
   const [crmTestLoading, setCrmTestLoading] = useState(false)
 
+  const [waForm, setWaForm] = useState({ whatsapp_enabled: false, whatsapp_phone_number_id: '', whatsapp_access_token: '', whatsapp_verify_token: '' })
+  const [waWebhookUrl, setWaWebhookUrl] = useState('')
+  const [waSaving, setWaSaving] = useState(false)
+  const [waSaved, setWaSaved] = useState(false)
+  const [waCopied, setWaCopied] = useState(false)
+
   useEffect(() => {
     getSettings().then(data => {
       setForm(f => ({
@@ -54,6 +61,10 @@ export default function Settings() {
     getAgents().then(setAgents).catch(() => {})
     getCRMSettings().then(setCrmConfig).catch(() => {})
     getMyCRMLogs().then(setCrmLogs).catch(() => {})
+    getWhatsappSettings().then(d => {
+      setWaForm({ whatsapp_enabled: d.whatsapp_enabled, whatsapp_phone_number_id: d.whatsapp_phone_number_id, whatsapp_access_token: d.whatsapp_access_token, whatsapp_verify_token: d.whatsapp_verify_token })
+      setWaWebhookUrl(d.webhook_url || '')
+    }).catch(() => {})
   }, [])
 
   const submit = async (e) => {
@@ -82,6 +93,18 @@ export default function Settings() {
       setDemoError(err.response?.data?.detail || 'Error al iniciar llamada')
       setDemoStatus('error')
     }
+  }
+
+  const handleSaveWA = async () => {
+    setWaSaving(true)
+    setWaSaved(false)
+    try {
+      await saveWhatsappSettings(waForm)
+      setWaSaved(true)
+      setTimeout(() => setWaSaved(false), 3000)
+    } catch (err) {
+      alert(err.response?.data?.detail || 'Error al guardar')
+    } finally { setWaSaving(false) }
   }
 
   const handleCrmTest = async () => {
@@ -375,6 +398,57 @@ export default function Settings() {
           })()}
         </div>
       )}
+
+      {/* ── WhatsApp Bot ──────────────────────────────────────────────── */}
+      <div className="bg-z-card rounded-xl border border-z-border p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Bot de WhatsApp</h2>
+          <span className="text-xs text-slate-600">Meta WhatsApp Business API</span>
+        </div>
+
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input type="checkbox" checked={waForm.whatsapp_enabled}
+            onChange={e => setWaForm(f => ({ ...f, whatsapp_enabled: e.target.checked }))}
+            className="w-4 h-4 accent-blue-500" />
+          <span className="text-sm text-slate-300">Activar bot conversacional</span>
+        </label>
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-1">Phone Number ID</label>
+          <input value={waForm.whatsapp_phone_number_id} onChange={e => setWaForm(f => ({ ...f, whatsapp_phone_number_id: e.target.value }))}
+            placeholder="Ej: 123456789012345" className="z-input font-mono" />
+          <p className="text-xs text-slate-600 mt-1">Meta for Developers → WhatsApp → API Setup → Phone Number ID</p>
+        </div>
+
+        <SecretInput label="Access Token" value={waForm.whatsapp_access_token}
+          onChange={e => setWaForm(f => ({ ...f, whatsapp_access_token: e.target.value }))}
+          placeholder="Token permanente de Meta" />
+
+        <div>
+          <label className="block text-sm font-medium text-slate-300 mb-1">Verify Token</label>
+          <input value={waForm.whatsapp_verify_token} onChange={e => setWaForm(f => ({ ...f, whatsapp_verify_token: e.target.value }))}
+            placeholder="Crea un string secreto (ej: zyra-wa-2025)" className="z-input font-mono" />
+          <p className="text-xs text-slate-600 mt-1">Cualquier string que elijas — lo ingresas en Meta al configurar el webhook</p>
+        </div>
+
+        {waWebhookUrl && (
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">URL del Webhook (copia esto en Meta)</label>
+            <div className="flex items-center gap-2 bg-black/20 rounded-lg px-3 py-2 border border-z-border">
+              <span className="text-xs font-mono text-slate-400 flex-1 truncate">{waWebhookUrl}</span>
+              <button type="button" onClick={() => { navigator.clipboard.writeText(waWebhookUrl); setWaCopied(true); setTimeout(() => setWaCopied(false), 2000) }}
+                className="text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0">
+                {waCopied ? <CheckCircleIcon className="w-4 h-4 text-green-400" /> : <ClipboardDocumentIcon className="w-4 h-4" />}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <button onClick={handleSaveWA} disabled={waSaving}
+          className="z-btn-primary disabled:opacity-50 flex items-center gap-2">
+          {waSaving ? 'Guardando...' : waSaved ? '✓ Guardado' : 'Guardar configuración WhatsApp'}
+        </button>
+      </div>
     </div>
   )
 }

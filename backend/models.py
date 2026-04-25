@@ -21,6 +21,10 @@ class Organization(SQLModel, table=True):
     crm_board_or_list_id: Optional[str] = None
     crm_extra_config: Optional[str] = None  # JSON string, e.g. {"instance_url": "https://..."}
     demo_calls_used: int = Field(default=0)
+    whatsapp_phone_number_id: Optional[str] = None
+    whatsapp_access_token: Optional[str] = None
+    whatsapp_verify_token: Optional[str] = None
+    whatsapp_enabled: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")
@@ -134,6 +138,30 @@ class Call(SQLModel, table=True):
 
     prospect: Optional[Prospect] = Relationship(back_populates="calls")
     campaign: Optional[Campaign] = Relationship(back_populates="calls")
+
+
+class WhatsAppConversation(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: int = Field(foreign_key="organization.id", index=True)
+    wa_contact_id: str                  # número E.164 del contacto
+    contact_name: Optional[str] = None
+    status: str = Field(default="active")   # active | closed
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+    messages: List["WhatsAppMessage"] = Relationship(back_populates="conversation")
+
+
+class WhatsAppMessage(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    conversation_id: int = Field(foreign_key="whatsappconversation.id", index=True)
+    organization_id: int = Field(foreign_key="organization.id", index=True)
+    role: str                           # "user" | "assistant"
+    content: str
+    wa_message_id: Optional[str] = None     # ID de Meta (para dedup)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+    conversation: Optional[WhatsAppConversation] = Relationship(back_populates="messages")
 
 
 class Settings(SQLModel, table=True):

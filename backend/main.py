@@ -12,6 +12,7 @@ from database import create_db_and_tables, run_migrations, seed_initial_data, en
 from routes import agents, campaigns, prospects, calls, stats, webhook, settings
 from routes import auth, admin
 from routes import demo
+from routes import whatsapp_webhook
 from routes import webhook as webhook_module
 
 logging.basicConfig(level=logging.INFO)
@@ -87,6 +88,7 @@ app.include_router(prospects.router)
 app.include_router(calls.router)
 app.include_router(stats.router)
 app.include_router(webhook.router)
+app.include_router(whatsapp_webhook.router)
 app.include_router(settings.router)
 
 

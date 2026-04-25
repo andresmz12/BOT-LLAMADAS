@@ -42,6 +42,8 @@ export const createOrganization = (data) => api.post('/admin/organizations', dat
 export const updateOrganization = (id, data) => api.put(`/admin/organizations/${id}`, data).then(r => r.data)
 export const deleteOrganization = (id) => api.delete(`/admin/organizations/${id}`).then(r => r.data)
 export const getOrgSecrets = (id) => api.get(`/admin/organizations/${id}/secrets`).then(r => r.data)
+export const getWhatsappSettings = () => api.get('/settings/whatsapp').then(r => r.data)
+export const saveWhatsappSettings = (data) => api.post('/settings/whatsapp', data).then(r => r.data)
 export const getUsers = () => api.get('/admin/users').then(r => r.data)
 export const createUser = (data) => api.post('/admin/users', data).then(r => r.data)
 export const updateUser = (id, data) => api.put(`/admin/users/${id}`, data).then(r => r.data)
