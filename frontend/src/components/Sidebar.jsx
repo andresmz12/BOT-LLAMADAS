@@ -62,10 +62,12 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const role = user.role || 'viewer'
   const plan = user.plan || 'basic'
   const baseItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer
-  const navItems = plan === 'free' && (role === 'admin' || role === 'agent')
-    ? [...baseItems.filter(i => i.to !== '/campaigns' && i.to !== '/prospects'),
-       { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon },
-       ...baseItems.filter(i => i.to === '/campaigns' || i.to === '/prospects')]
+  const navItems = (role === 'admin' || role === 'agent')
+    ? plan === 'free'
+      ? [...baseItems.filter(i => i.to !== '/campaigns' && i.to !== '/prospects'),
+         { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon },
+         ...baseItems.filter(i => i.to === '/campaigns' || i.to === '/prospects')]
+      : [...baseItems, { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon }]
     : baseItems
   const initials = (user.full_name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 

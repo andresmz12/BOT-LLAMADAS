@@ -20,11 +20,12 @@ def demo_status(
 ):
     org = session.get(Organization, current_user.organization_id)
     used = (org.demo_calls_used or 0) if org else 0
+    is_free = (org.plan if org else "free") == "free"
     return {
         "plan": org.plan if org else "free",
         "demo_calls_used": used,
-        "demo_calls_remaining": max(0, MAX_DEMO_CALLS - used),
-        "limit_reached": used >= MAX_DEMO_CALLS,
+        "demo_calls_remaining": max(0, MAX_DEMO_CALLS - used) if is_free else None,
+        "limit_reached": is_free and used >= MAX_DEMO_CALLS,
     }
 
 
@@ -38,7 +39,7 @@ async def start_demo_call(
         raise HTTPException(status_code=404, detail="Organización no encontrada")
 
     used = org.demo_calls_used or 0
-    if used >= MAX_DEMO_CALLS:
+    if org.plan == "free" and used >= MAX_DEMO_CALLS:
         raise HTTPException(
             status_code=403,
             detail="DEMO_LIMIT: Has usado todas tus llamadas demo. Contacta soporte para activar el plan Pro."

@@ -70,6 +70,7 @@ export default function DemoCall() {
 
   const used = status?.demo_calls_used ?? 0
   const limitReached = status?.limit_reached ?? false
+  const isFree = status?.plan === 'free'
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-3xl mx-auto">
@@ -78,23 +79,25 @@ export default function DemoCall() {
         <p className="text-slate-500 text-sm mt-1">Prueba tu agente desde el navegador — sin llamar a números externos</p>
       </div>
 
-      {/* Counter */}
-      <div className="bg-z-card border border-z-border rounded-xl p-4 flex items-center gap-4">
-        <div className="flex-1">
-          <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-1">Demos usadas</p>
-          <div className="flex items-center gap-3">
-            <div className="flex-1 bg-slate-800 rounded-full h-2">
-              <div
-                className={`h-2 rounded-full transition-all ${used >= MAX_DEMOS ? 'bg-red-500' : 'bg-z-blue'}`}
-                style={{ width: `${Math.min(100, (used / MAX_DEMOS) * 100)}%` }}
-              />
+      {/* Counter — solo para plan free */}
+      {isFree && (
+        <div className="bg-z-card border border-z-border rounded-xl p-4 flex items-center gap-4">
+          <div className="flex-1">
+            <p className="text-xs text-slate-500 uppercase tracking-wide font-medium mb-1">Demos usadas</p>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 bg-slate-800 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full transition-all ${used >= MAX_DEMOS ? 'bg-red-500' : 'bg-z-blue'}`}
+                  style={{ width: `${Math.min(100, (used / MAX_DEMOS) * 100)}%` }}
+                />
+              </div>
+              <span className={`text-sm font-bold tabular-nums ${used >= MAX_DEMOS ? 'text-red-400' : 'text-slate-200'}`}>
+                {used}/{MAX_DEMOS}
+              </span>
             </div>
-            <span className={`text-sm font-bold tabular-nums ${used >= MAX_DEMOS ? 'text-red-400' : 'text-slate-200'}`}>
-              {used}/{MAX_DEMOS}
-            </span>
           </div>
         </div>
-      </div>
+      )}
 
       {limitReached ? (
         <UpgradeBanner demosUsed={used} demosTotal={MAX_DEMOS} />
