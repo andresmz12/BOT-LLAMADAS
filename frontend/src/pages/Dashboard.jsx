@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell, LabelList } from 'recharts'
 import { UserGroupIcon, StarIcon, CalendarIcon, XCircleIcon, ClockIcon, PhoneArrowDownLeftIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
 import { WaveformIcon } from '../components/Sidebar'
 import StatusBadge from '../components/StatusBadge'
@@ -7,6 +7,8 @@ import { getStats, getCampaigns, getOrganizations } from '../api/client'
 import { fmtDate } from '../utils/date'
 
 const PIE_COLORS = ['#2563EB', '#10b981', '#8b5cf6', '#ef4444', '#f97316', '#3b82f6']
+const FUNNEL_COLORS = ['#334155', '#2563EB', '#10b981', '#3b82f6']
+const TOOLTIP_STYLE = { background: '#111827', border: '1px solid #1E293B', borderRadius: 8, color: '#F1F5F9', fontSize: 12 }
 
 function KPI({ title, value, sub, color = 'text-slate-100', icon: Icon, iconColor = 'text-slate-500' }) {
   return (
@@ -44,6 +46,17 @@ export default function Dashboard() {
   }, [selectedOrg])
 
   const fmtDur = (s) => s ? (s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`) : '—'
+
+  const funnelData = stats ? [
+    { name: 'Total llamadas', value: stats.total_calls ?? 0 },
+    { name: 'Contactados', value: stats.contacted ?? 0 },
+    { name: 'Interesados', value: stats.interested ?? 0 },
+    { name: 'Citas', value: stats.appointments ?? 0 },
+  ] : []
+
+  const bestHour = stats?.calls_by_hour?.length
+    ? stats.calls_by_hour.reduce((best, h) => h.contact_rate > best.contact_rate ? h : best, stats.calls_by_hour[0])
+    : null
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -96,38 +109,48 @@ export default function Dashboard() {
         </ResponsiveContainer>
       </div>
 
-      {/* Optimal call time */}
-      {stats?.calls_by_hour?.some(h => h.calls > 0) && (() => {
-        const hours = (stats.calls_by_hour || []).filter(h => h.hour >= 6 && h.hour <= 22 && h.calls > 0)
-        const best = hours.length ? hours.reduce((a, b) => b.contact_rate > a.contact_rate ? b : a, hours[0]) : null
-        return (
+      {/* Funnel + Best hour */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {funnelData.some(d => d.value > 0) && (
           <div className="bg-z-card rounded-xl p-5 border border-z-border">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Mejor hora para llamar</h2>
-              {best && (
-                <span className="px-2 py-1 bg-green-500/15 text-green-400 text-xs font-semibold rounded-full">
-                  Mejor: {best.label} — {best.contact_rate}%
-                </span>
-              )}
-            </div>
+            <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wide">Embudo de conversión</h2>
             <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={hours} barGap={2}>
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} unit="%" domain={[0, 100]} />
-                <Tooltip
-                  formatter={(v, _, p) => [`${v}% (${p.payload.calls} llamadas)`, 'Tasa contacto']}
-                  contentStyle={{ background: '#111827', border: '1px solid #1E293B', borderRadius: 8, color: '#F1F5F9', fontSize: 12 }}
-                />
-                <Bar dataKey="contact_rate" radius={[3, 3, 0, 0]}>
-                  {hours.map((h, i) => (
-                    <Cell key={i} fill={h.contact_rate >= 50 ? '#10b981' : h.contact_rate >= 30 ? '#2563EB' : '#334155'} />
+              <BarChart data={funnelData} layout="vertical">
+                <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                <YAxis type="category" dataKey="name" tick={{ fontSize: 11, fill: '#94a3b8' }} axisLine={false} tickLine={false} width={110} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]}>
+                  {funnelData.map((_, i) => <Cell key={i} fill={FUNNEL_COLORS[i]} />)}
+                  <LabelList dataKey="value" position="right" style={{ fill: '#94a3b8', fontSize: 12 }} />
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+        {(stats?.total_calls ?? 0) >= 50 && stats?.calls_by_hour?.length > 0 && (
+          <div className="bg-z-card rounded-xl p-5 border border-z-border">
+            <h2 className="text-sm font-semibold text-slate-400 mb-1 uppercase tracking-wide">Mejor momento para llamar</h2>
+            {bestHour && (
+              <p className="text-xs text-slate-500 mb-3">
+                Mejor hora: <span className="text-z-blue-light font-medium">{bestHour.hour}:00–{bestHour.hour + 1}:00</span>{' '}
+                <span className="text-green-400">({bestHour.contact_rate}% contacto)</span>
+              </p>
+            )}
+            <ResponsiveContainer width="100%" height={120}>
+              <BarChart data={stats.calls_by_hour} barGap={1}>
+                <XAxis dataKey="hour" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={h => `${h}h`} />
+                <YAxis hide />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [v, n === 'calls' ? 'Llamadas' : 'Contactados']} labelFormatter={h => `${h}:00–${+h+1}:00`} />
+                <Bar dataKey="calls" radius={[2, 2, 0, 0]}>
+                  {stats.calls_by_hour.map((h, i) => (
+                    <Cell key={i} fill={`rgba(37,99,235,${0.2 + (h.contact_rate / 100) * 0.8})`} />
                   ))}
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-        )
-      })()}
+        )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pie chart */}

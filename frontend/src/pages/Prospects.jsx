@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon } from '@heroicons/react/24/outline'
+import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon, ClockIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
 import UpgradeBanner from '../components/UpgradeBanner'
-import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus } from '../api/client'
-import { fmtDate } from '../utils/date'
+import CallDetailModal from '../components/CallDetailModal'
+import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus, getCalls } from '../api/client'
+import { exportToCsv } from '../utils/exportCsv'
 
 const STATUSES = ['', 'pending', 'calling', 'answered', 'voicemail', 'failed', 'do_not_call']
 
@@ -66,6 +67,64 @@ function NewProspectModal({ campaigns, onClose, onSaved }) {
   )
 }
 
+function ProspectHistoryModal({ prospect, onClose }) {
+  const [calls, setCalls] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [selectedCall, setSelectedCall] = useState(null)
+
+  useEffect(() => {
+    getCalls({ prospect_id: prospect.id })
+      .then(setCalls)
+      .catch(() => setCalls([]))
+      .finally(() => setLoading(false))
+  }, [prospect.id])
+
+  return (
+    <>
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+          <div className="flex items-center justify-between p-5 border-b border-z-border">
+            <div>
+              <h2 className="text-lg font-bold text-slate-100">Historial de llamadas</h2>
+              <p className="text-sm text-slate-400">{prospect.name} · {prospect.phone}</p>
+            </div>
+            <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
+          </div>
+          <div className="overflow-auto">
+            <table className="w-full text-sm min-w-[480px]">
+              <thead className="bg-black/20 sticky top-0">
+                <tr>
+                  {['Fecha', 'Duración', 'Resultado', 'Sentimiento', ''].map(h => (
+                    <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-z-border">
+                {loading ? (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">Cargando...</td></tr>
+                ) : calls.length === 0 ? (
+                  <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">Sin llamadas registradas</td></tr>
+                ) : calls.map(c => (
+                  <tr key={c.id} className="hover:bg-white/[0.02] cursor-pointer" onClick={() => setSelectedCall(c)}>
+                    <td className="px-4 py-3 text-slate-400 text-xs">{c.started_at ? new Date(c.started_at).toLocaleString() : '—'}</td>
+                    <td className="px-4 py-3 text-slate-400 text-xs">{c.duration_seconds ? (c.duration_seconds >= 60 ? `${Math.floor(c.duration_seconds/60)}m ${c.duration_seconds%60}s` : `${c.duration_seconds}s`) : '—'}</td>
+                    <td className="px-4 py-3"><StatusBadge status={c.outcome || c.status} /></td>
+                    <td className="px-4 py-3 text-xs text-slate-400">{c.sentiment || '—'}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={e => { e.stopPropagation(); setSelectedCall(c) }} className="text-xs text-z-blue-light hover:underline">Ver</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      {selectedCall && <CallDetailModal call={selectedCall} onClose={() => setSelectedCall(null)} />}
+    </>
+  )
+}
+
 export default function Prospects() {
   const [prospects, setProspects] = useState([])
   const [campaigns, setCampaigns] = useState([])
@@ -74,6 +133,7 @@ export default function Prospects() {
   const [showImport, setShowImport] = useState(false)
   const [showNew, setShowNew] = useState(false)
   const [callingId, setCallingId] = useState(null)
+  const [historyProspect, setHistoryProspect] = useState(null)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const isFree = user.plan === 'free'
   const [demoStatus, setDemoStatus] = useState(null)
@@ -133,6 +193,16 @@ export default function Prospects() {
     } catch (err) { alert(err.response?.data?.detail || 'Error') }
   }
 
+  const handleExportCsv = () => {
+    exportToCsv(`prospectos-${Date.now()}.csv`, prospects, [
+      { key: 'name', label: 'Nombre' },
+      { key: 'company', label: 'Empresa' },
+      { key: 'phone', label: 'Teléfono' },
+      { key: 'status', label: 'Estado' },
+      { key: 'call_attempts', label: 'Intentos' },
+    ])
+  }
+
   const campaignName = (id) => campaigns.find(c => c.id === id)?.name || `#${id}`
   const noCampaigns = campaigns.length === 0
 
@@ -140,8 +210,15 @@ export default function Prospects() {
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-bold text-slate-100">Prospectos</h1>
-        {!isFree && (
-          <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2">
+          {prospects.length > 0 && (
+            <button onClick={handleExportCsv}
+              className="flex items-center gap-2 px-3 py-2 bg-z-card border border-z-border hover:bg-white/5 text-slate-300 text-sm rounded-lg transition-colors">
+              <ArrowDownTrayIcon className="w-4 h-4" /> Exportar CSV
+            </button>
+          )}
+          {!isFree && (
+            <>
             <button onClick={() => setShowNew(true)}
               className="flex items-center gap-2 px-4 py-2 border border-z-blue text-z-blue-light hover:bg-z-blue/10 font-semibold rounded-lg text-sm transition-colors">
               <PlusIcon className="w-4 h-4" /> Nuevo prospecto
@@ -149,8 +226,9 @@ export default function Prospects() {
             <button onClick={() => setShowImport(true)} className="z-btn-primary flex items-center gap-2">
               <ArrowUpTrayIcon className="w-4 h-4" /> Importar Excel / CSV
             </button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
       {isFree && (
@@ -207,10 +285,13 @@ export default function Prospects() {
                 <td className="px-6 py-3">
                   <div className="flex items-center gap-2">
                     <button onClick={() => handleCall(p)} disabled={callingId === p.id}
-                      className="text-slate-600 hover:text-z-blue-light transition-colors disabled:opacity-40">
+                      className="text-slate-600 hover:text-z-blue-light transition-colors disabled:opacity-40" title="Llamar">
                       <PhoneArrowUpRightIcon className="w-4 h-4" />
                     </button>
-                    <button onClick={() => handleDelete(p)} className="text-slate-600 hover:text-red-400 transition-colors">
+                    <button onClick={() => setHistoryProspect(p)} className="text-slate-600 hover:text-slate-300 transition-colors" title="Historial">
+                      <ClockIcon className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => handleDelete(p)} className="text-slate-600 hover:text-red-400 transition-colors" title="Eliminar">
                       <TrashIcon className="w-4 h-4" />
                     </button>
                   </div>
@@ -247,6 +328,10 @@ export default function Prospects() {
             </div>
           : <ImportCSVModal campaigns={campaigns} onClose={() => setShowImport(false)}
               onImported={() => { setShowImport(false); load() }} />
+      )}
+
+      {historyProspect && (
+        <ProspectHistoryModal prospect={historyProspect} onClose={() => setHistoryProspect(null)} />
       )}
     </div>
   )

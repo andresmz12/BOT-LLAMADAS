@@ -2,7 +2,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, func
 from sqlalchemy import true as sql_true
-from database import get_session
+from database import get_session, engine as db_engine
 from models import Call, Campaign, Prospect, User
 from routes.auth import get_current_user
 from datetime import datetime, timedelta
@@ -86,10 +86,29 @@ def global_stats(
             "interested": d_interested,
         })
 
-    # Outcome distribution
+    # Outcome distribution + calls by hour (single pass over all calls)
     outcomes: dict[str, int] = {}
-    for call in session.exec(select(Call).where(base & Call.outcome.is_not(None))).all():
-        outcomes[call.outcome] = outcomes.get(call.outcome, 0) + 1
+    hour_data: dict[int, dict] = {}
+    for call in session.exec(select(Call).where(base)).all():
+        if call.outcome:
+            outcomes[call.outcome] = outcomes.get(call.outcome, 0) + 1
+        if call.started_at:
+            h = call.started_at.hour
+            if h not in hour_data:
+                hour_data[h] = {"calls": 0, "contacted": 0}
+            hour_data[h]["calls"] += 1
+            if call.outcome in _CONTACTED_OUTCOMES:
+                hour_data[h]["contacted"] += 1
+
+    calls_by_hour = [
+        {
+            "hour": h,
+            "calls": v["calls"],
+            "contacted": v["contacted"],
+            "contact_rate": round(v["contacted"] / v["calls"] * 100, 1) if v["calls"] else 0,
+        }
+        for h, v in sorted(hour_data.items())
+    ]
 
     # Calls by hour of day (optimal call time)
     from collections import defaultdict
@@ -152,6 +171,7 @@ def global_stats(
         "outcome_distribution": [{"name": k, "value": v} for k, v in outcomes.items()],
         "calls_by_hour": calls_by_hour,
         "recent_interested": recent_interested,
+        "calls_by_hour": calls_by_hour,
     }
 
 

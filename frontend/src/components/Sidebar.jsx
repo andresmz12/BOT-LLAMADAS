@@ -5,7 +5,7 @@ import {
   UsersIcon, PhoneIcon, Cog6ToothIcon,
   KeyIcon, ArrowRightOnRectangleIcon,
   ChevronLeftIcon, ChevronRightIcon,
-  ChatBubbleLeftRightIcon,
+  ChatBubbleLeftRightIcon, FireIcon,
 } from '@heroicons/react/24/outline'
 import { logout } from '../api/client'
 
@@ -18,6 +18,7 @@ const NAV_BY_ROLE = {
   ],
   admin: [
     { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
+    { to: '/leads', label: 'Centro de Leads', Icon: FireIcon },
     { to: '/agents', label: 'Agentes de Voz', Icon: UserGroupIcon },
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
@@ -28,15 +29,19 @@ const NAV_BY_ROLE = {
   ],
   agent: [
     { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
+    { to: '/leads', label: 'Centro de Leads', Icon: FireIcon },
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
     { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
   ],
+  viewer: [
+    { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
+    { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
+  ],
 }
 
 export function WaveformIcon({ className }) {
-  // Vertical audio bars matching ZyraVoice logo — tallest in center, tapering outward
   const bars = [
     { x: 1.5,  h: 8,  y: 12 },
     { x: 5.5,  h: 14, y: 9  },
@@ -62,7 +67,7 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const role = user.role || 'viewer'
   const plan = user.plan || 'pro'
-  const baseItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.agent
+  const baseItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer
   const navItems = (role === 'admin' || role === 'agent')
     ? plan === 'free'
       ? [...baseItems.filter(i => i.to !== '/campaigns' && i.to !== '/prospects'),
@@ -74,7 +79,6 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
 
   return (
     <>
-      {/* Overlay — mobile only */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={onClose} />
       )}
@@ -85,7 +89,6 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
       bg-sidebar flex flex-col h-screen
       transition-transform md:transition-all duration-200 flex-shrink-0 border-r border-z-border
     `}>
-      {/* Logo */}
       <div className={`flex items-center ${collapsed ? 'justify-center px-0' : 'gap-2.5 px-5'} py-4 border-b border-z-border min-h-[60px]`}>
         <WaveformIcon className="w-7 h-7 text-z-blue flex-shrink-0" />
         {!collapsed && (
@@ -98,7 +101,6 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
         )}
       </div>
 
-      {/* Nav */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
         {navItems.map(({ to, label, Icon }) => (
           <NavLink
@@ -121,7 +123,6 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
         ))}
       </nav>
 
-      {/* User + logout */}
       <div className="px-2 py-3 border-t border-z-border space-y-1">
         {!collapsed && (
           <div className="flex items-center gap-2.5 px-3 py-2">

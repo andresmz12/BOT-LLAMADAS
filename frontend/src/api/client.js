@@ -85,6 +85,9 @@ export const deleteAllProspects = (params) => api.delete('/prospects', { params 
 export const retryProspects = (params) => api.post('/prospects/retry', null, { params }).then(r => r.data)
 export const callProspect = (id) => api.post(`/prospects/${id}/call`).then(r => r.data)
 
+// Leads
+export const getLeads = (params) => api.get('/leads', { params }).then(r => r.data)
+
 // Calls
 export const getCalls = (params) => api.get('/calls', { params }).then(r => r.data)
 export const getCallDetail = (id) => api.get(`/calls/${id}`).then(r => r.data)

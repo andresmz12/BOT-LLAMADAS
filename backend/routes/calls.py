@@ -92,6 +92,7 @@ async def demo_call(
 def list_calls(
     campaign_id: int | None = None,
     outcome: str | None = None,
+    prospect_id: int | None = None,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -102,6 +103,8 @@ def list_calls(
         query = query.where(Call.campaign_id == campaign_id)
     if outcome:
         query = query.where(Call.outcome == outcome)
+    if prospect_id:
+        query = query.where(Call.prospect_id == prospect_id)
     calls = session.exec(query.order_by(Call.started_at.desc())).all()
     result = []
     for call in calls:

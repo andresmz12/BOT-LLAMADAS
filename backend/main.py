@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from database import create_db_and_tables, run_migrations, seed_initial_data, engine
-from routes import agents, campaigns, prospects, calls, stats, webhook, settings
+from routes import agents, campaigns, prospects, calls, stats, webhook, settings, leads
 from routes import auth, admin
 from routes import demo
 from routes import whatsapp_webhook
@@ -94,6 +94,7 @@ app.include_router(whatsapp_webhook.router)
 app.include_router(whatsapp.router)
 app.include_router(team.router)
 app.include_router(settings.router)
+app.include_router(leads.router)
 
 
 @app.websocket("/ws/{campaign_id}")
