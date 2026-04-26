@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { ChatBubbleLeftRightIcon, CheckCircleIcon, ClipboardDocumentIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { useTranslation } from 'react-i18next'
 import SecretInput from '../components/SecretInput'
 import { getWhatsappSettings, saveWhatsappSettings, getWaConversations, getWaMessages } from '../api/client'
 import { fmtDate } from '../utils/date'
 
 export default function WhatsApp() {
+  const { t } = useTranslation()
   const userRole = JSON.parse(localStorage.getItem('user') || '{}').role || 'agent'
   const canConfig = userRole === 'admin' || userRole === 'superadmin'
 
@@ -42,7 +44,7 @@ export default function WhatsApp() {
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch (err) {
-      alert(err.response?.data?.detail || 'Error al guardar')
+      alert(err.response?.data?.detail || t('whatsapp.error_save'))
     } finally { setSaving(false) }
   }
 
@@ -58,16 +60,16 @@ export default function WhatsApp() {
     <div className="p-4 sm:p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Chatbot WhatsApp</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Bot conversacional — responde automáticamente con IA usando tu agente configurado</p>
+          <h1 className="text-2xl font-bold text-slate-100">{t('whatsapp.title')}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{t('whatsapp.subtitle')}</p>
         </div>
         <div className="flex items-center gap-3">
           <span className={`px-3 py-1 text-xs font-semibold rounded-full ${config.whatsapp_enabled ? 'bg-green-500/15 text-green-400' : 'bg-slate-700 text-slate-400'}`}>
-            {config.whatsapp_enabled ? 'Activo' : 'Inactivo'}
+            {config.whatsapp_enabled ? t('whatsapp.status_active') : t('whatsapp.status_inactive')}
           </span>
           {canConfig && (
             <button onClick={() => setShowConfig(s => !s)} className="z-btn-ghost text-sm">
-              {showConfig ? 'Ocultar config' : 'Configurar'}
+              {showConfig ? t('whatsapp.hide_config_btn') : t('whatsapp.config_btn')}
             </button>
           )}
         </div>
@@ -76,35 +78,35 @@ export default function WhatsApp() {
       {/* Config accordion */}
       {canConfig && showConfig && (
         <div className="bg-z-card border border-z-border rounded-xl p-6 space-y-4">
-          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Configuración — Meta WhatsApp Business API</h2>
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">{t('whatsapp.config_section')}</h2>
 
           <label className="flex items-center gap-3 cursor-pointer">
             <input type="checkbox" checked={config.whatsapp_enabled} onChange={e => set('whatsapp_enabled', e.target.checked)} className="w-4 h-4 accent-blue-500" />
-            <span className="text-sm text-slate-300">Activar bot conversacional</span>
+            <span className="text-sm text-slate-300">{t('whatsapp.enable_label')}</span>
           </label>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Phone Number ID</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('whatsapp.phone_id_label')}</label>
               <input value={config.whatsapp_phone_number_id} onChange={e => set('whatsapp_phone_number_id', e.target.value)}
-                placeholder="123456789012345" className="z-input font-mono" />
-              <p className="text-xs text-slate-600 mt-1">Meta for Developers → WhatsApp → API Setup</p>
+                placeholder={t('whatsapp.phone_id_placeholder')} className="z-input font-mono" />
+              <p className="text-xs text-slate-600 mt-1">{t('whatsapp.phone_id_hint')}</p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Verify Token</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('whatsapp.verify_token_label')}</label>
               <input value={config.whatsapp_verify_token} onChange={e => set('whatsapp_verify_token', e.target.value)}
-                placeholder="zyra-wa-secreto-2025" className="z-input font-mono" />
-              <p className="text-xs text-slate-600 mt-1">String secreto que eliges tú — úsalo al registrar el webhook en Meta</p>
+                placeholder={t('whatsapp.verify_token_placeholder')} className="z-input font-mono" />
+              <p className="text-xs text-slate-600 mt-1">{t('whatsapp.verify_token_hint')}</p>
             </div>
           </div>
 
-          <SecretInput label="Access Token" value={config.whatsapp_access_token}
+          <SecretInput label={t('whatsapp.access_token_label')} value={config.whatsapp_access_token}
             onChange={e => set('whatsapp_access_token', e.target.value)}
-            placeholder="Token permanente de Meta" />
+            placeholder={t('whatsapp.access_token_placeholder')} />
 
           {webhookUrl && (
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">URL del Webhook (pega esto en Meta)</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('whatsapp.webhook_url_label')}</label>
               <div className="flex items-center gap-2 bg-black/20 rounded-lg px-3 py-2 border border-z-border">
                 <span className="text-xs font-mono text-slate-400 flex-1 truncate">{webhookUrl}</span>
                 <button type="button" onClick={copyUrl} className="text-slate-500 hover:text-slate-300 transition-colors flex-shrink-0">
@@ -115,7 +117,7 @@ export default function WhatsApp() {
           )}
 
           <button onClick={handleSave} disabled={saving} className="z-btn-primary disabled:opacity-50">
-            {saving ? 'Guardando...' : saved ? '✓ Guardado' : 'Guardar'}
+            {saving ? t('whatsapp.saving') : saved ? t('whatsapp.saved') : t('whatsapp.save_btn')}
           </button>
         </div>
       )}
@@ -125,13 +127,13 @@ export default function WhatsApp() {
         {/* List */}
         <div className="bg-z-card border border-z-border rounded-xl overflow-hidden lg:col-span-1">
           <div className="p-4 border-b border-z-border">
-            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Conversaciones</h2>
+            <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">{t('whatsapp.conversations_title')}</h2>
           </div>
           <div className="divide-y divide-z-border overflow-y-auto max-h-[520px]">
             {conversations.length === 0 && (
               <div className="p-6 text-center text-slate-500 text-sm">
                 <ChatBubbleLeftRightIcon className="w-8 h-8 mx-auto mb-2 opacity-30" />
-                Sin conversaciones aún
+                {t('whatsapp.no_conversations')}
               </div>
             )}
             {conversations.map(conv => (
@@ -159,7 +161,7 @@ export default function WhatsApp() {
             <div className="flex-1 flex items-center justify-center text-slate-600 text-sm">
               <div className="text-center">
                 <ChatBubbleLeftRightIcon className="w-10 h-10 mx-auto mb-2 opacity-20" />
-                Selecciona una conversación
+                {t('whatsapp.select_conversation')}
               </div>
             </div>
           ) : (
@@ -186,7 +188,7 @@ export default function WhatsApp() {
                     </div>
                   </div>
                 ))}
-                {messages.length === 0 && <p className="text-center text-slate-600 text-sm">Sin mensajes</p>}
+                {messages.length === 0 && <p className="text-center text-slate-600 text-sm">{t('whatsapp.no_messages')}</p>}
               </div>
             </>
           )}

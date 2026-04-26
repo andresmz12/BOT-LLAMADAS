@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { login, getMe } from '../api/client'
 import api from '../api/client'
 
@@ -25,6 +26,7 @@ function WaveformIcon({ className }) {
 }
 
 export default function Login() {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -51,7 +53,7 @@ export default function Login() {
       localStorage.setItem('user', JSON.stringify(user))
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error al iniciar sesión')
+      setError(err.response?.data?.detail || t('login.error_default'))
       setLoading(false)
     }
   }
@@ -65,7 +67,7 @@ export default function Login() {
       setSetupDone(true)
       setEmail('admin@ismconsulting.com')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error al configurar')
+      setError(err.response?.data?.detail || t('login.setup_error'))
     } finally {
       setLoading(false)
     }
@@ -74,7 +76,6 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-z-bg flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
-        {/* Logo */}
         <div className="text-center mb-8">
           <div className="w-16 h-16 bg-z-blue/10 border border-z-blue/30 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <WaveformIcon className="w-9 h-9 text-z-blue" />
@@ -82,41 +83,41 @@ export default function Login() {
           <h1 className="text-2xl font-black">
             <span className="text-white">Zyra</span><span className="text-z-blue">Voice</span>
           </h1>
-          <p className="text-slate-500 text-sm mt-1">Plataforma de llamadas con IA</p>
+          <p className="text-slate-500 text-sm mt-1">{t('login.subtitle')}</p>
         </div>
 
         {needsSetup && (
           <div className="mb-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-sm text-amber-300">
-            <p className="font-semibold mb-2">Sistema no inicializado</p>
-            <p className="mb-3 text-amber-400/80">No hay usuarios configurados. Inicializa el sistema primero.</p>
+            <p className="font-semibold mb-2">{t('login.setup_title')}</p>
+            <p className="mb-3 text-amber-400/80">{t('login.setup_desc')}</p>
             <button
               onClick={handleSetup}
               disabled={loading}
               className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg text-sm disabled:opacity-50"
             >
-              {loading ? 'Configurando...' : 'Inicializar sistema'}
+              {loading ? t('login.setup_loading') : t('login.setup_btn')}
             </button>
           </div>
         )}
 
         {setupDone && (
           <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-xl text-sm text-green-400">
-            Sistema inicializado. Contraseña por defecto: <strong>ISMadmin2024!</strong>
+            {t('login.setup_done')} <strong>ISMadmin2024!</strong>
           </div>
         )}
 
         <form onSubmit={submit} className="bg-z-card border border-z-border rounded-2xl p-8 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('login.email_label')}</label>
             <input
               type="email" value={email} onChange={e => setEmail(e.target.value)}
               className="z-input"
-              placeholder="usuario@empresa.com"
+              placeholder={t('login.email_placeholder')}
               required autoFocus
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Contraseña</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('login.password_label')}</label>
             <input
               type="password" value={password} onChange={e => setPassword(e.target.value)}
               className="z-input"
@@ -132,14 +133,14 @@ export default function Login() {
             type="submit" disabled={loading}
             className="w-full py-2.5 bg-z-blue hover:bg-z-blue-dark text-white font-semibold rounded-lg text-sm disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Entrando...' : 'Iniciar sesión'}
+            {loading ? t('login.submitting') : t('login.submit')}
           </button>
         </form>
 
         <p className="text-center text-sm text-slate-500 mt-4">
-          ¿No tienes cuenta?{' '}
+          {t('login.no_account')}{' '}
           <Link to="/register" className="text-z-blue-light hover:underline font-medium">
-            Crear cuenta gratis
+            {t('login.create_free')}
           </Link>
         </p>
       </div>

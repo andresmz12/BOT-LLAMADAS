@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { WaveformIcon } from '../components/Sidebar'
 import { register, getMe } from '../api/client'
 
 export default function Register() {
+  const { t } = useTranslation()
   const [form, setForm] = useState({ full_name: '', email: '', password: '', company_name: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -13,7 +15,7 @@ export default function Register() {
   const submit = async (e) => {
     e.preventDefault()
     if (form.password.length < 6) {
-      setError('La contraseña debe tener al menos 6 caracteres.')
+      setError(t('register.password_error'))
       return
     }
     setLoading(true)
@@ -25,7 +27,7 @@ export default function Register() {
       localStorage.setItem('user', JSON.stringify(user))
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error al crear cuenta')
+      setError(err.response?.data?.detail || t('register.error_default'))
       setLoading(false)
     }
   }
@@ -40,36 +42,36 @@ export default function Register() {
           <h1 className="text-2xl font-black">
             <span className="text-white">Zyra</span><span className="text-z-blue">Voice</span>
           </h1>
-          <p className="text-slate-500 text-sm mt-1">Crea tu cuenta gratis</p>
+          <p className="text-slate-500 text-sm mt-1">{t('register.subtitle')}</p>
         </div>
 
         <form onSubmit={submit} className="bg-z-card border border-z-border rounded-2xl p-8 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Nombre completo</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('register.name_label')}</label>
             <input
               type="text" value={form.full_name} onChange={e => set('full_name', e.target.value)}
-              className="z-input" placeholder="Juan Pérez" required autoFocus
+              className="z-input" placeholder={t('register.name_placeholder')} required autoFocus
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('register.email_label')}</label>
             <input
               type="email" value={form.email} onChange={e => set('email', e.target.value)}
-              className="z-input" placeholder="juan@empresa.com" required
+              className="z-input" placeholder={t('register.email_placeholder')} required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Contraseña</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('register.password_label')}</label>
             <input
               type="password" value={form.password} onChange={e => set('password', e.target.value)}
-              className="z-input" placeholder="Mínimo 6 caracteres" required
+              className="z-input" placeholder={t('register.password_placeholder')} required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Nombre de la empresa</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('register.company_label')}</label>
             <input
               type="text" value={form.company_name} onChange={e => set('company_name', e.target.value)}
-              className="z-input" placeholder="Mi Empresa S.A." required
+              className="z-input" placeholder={t('register.company_placeholder')} required
             />
           </div>
           {error && (
@@ -81,14 +83,14 @@ export default function Register() {
             type="submit" disabled={loading}
             className="w-full py-2.5 bg-z-blue hover:bg-z-blue-dark text-white font-semibold rounded-lg text-sm disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Creando cuenta...' : 'Crear cuenta gratis'}
+            {loading ? t('register.submitting') : t('register.submit')}
           </button>
         </form>
 
         <p className="text-center text-sm text-slate-500 mt-4">
-          ¿Ya tienes cuenta?{' '}
+          {t('register.have_account')}{' '}
           <Link to="/login" className="text-z-blue-light hover:underline font-medium">
-            Iniciar sesión
+            {t('register.login_link')}
           </Link>
         </p>
       </div>

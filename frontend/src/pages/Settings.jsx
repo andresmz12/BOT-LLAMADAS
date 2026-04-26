@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { KeyIcon, PhoneIcon, CheckCircleIcon } from '@heroicons/react/24/outline'
+import { useTranslation } from 'react-i18next'
 import { getSettings, saveSettings, getCRMSettings, testMyCRMWebhook } from '../api/client'
 
 const CRM_TYPE_LABELS = {
@@ -14,12 +15,13 @@ const CRM_TYPE_LABELS = {
   pipedrive: 'Pipedrive',
   salesforce: 'Salesforce',
   n8n: 'n8n',
-  custom: 'Webhook personalizado',
+  custom: 'Webhook',
 }
 
 const NATIVE_CRM_TYPES = ['monday', 'hubspot', 'gohighlevel', 'zoho', 'salesforce']
 
 export default function Settings() {
+  const { t } = useTranslation()
   const isSuperAdmin = JSON.parse(localStorage.getItem('user') || '{}').role === 'superadmin'
 
   const [form, setForm] = useState({ retell_api_key: '', retell_phone_number: '', anthropic_api_key: '' })
@@ -50,22 +52,9 @@ export default function Settings() {
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch (err) {
-      alert(err.response?.data?.detail || 'Error al guardar')
+      alert(err.response?.data?.detail || 'Error')
     } finally {
       setLoading(false)
-    }
-  }
-
-  const handleDemoCall = async (e) => {
-    e.preventDefault()
-    setDemoStatus('loading')
-    setDemoError('')
-    try {
-      await makeDemoCall(demo.phone, Number(demo.agentId))
-      setDemoStatus('ok')
-    } catch (err) {
-      setDemoError(err.response?.data?.detail || 'Error al iniciar llamada')
-      setDemoStatus('error')
     }
   }
 
@@ -76,7 +65,7 @@ export default function Settings() {
       const res = await testMyCRMWebhook()
       setCrmTestResult(res)
     } catch (err) {
-      setCrmTestResult({ success: false, response: err.response?.data?.detail || 'Error de conexión' })
+      setCrmTestResult({ success: false, response: err.response?.data?.detail || 'Error' })
     } finally {
       setCrmTestLoading(false)
     }
@@ -84,15 +73,15 @@ export default function Settings() {
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
-      <h1 className="text-2xl font-bold text-slate-100">Configuración</h1>
+      <h1 className="text-2xl font-bold text-slate-100">{t('settings.title')}</h1>
 
       {isSuperAdmin && <form onSubmit={submit} className="space-y-6">
         <div className="bg-z-card rounded-xl p-6 border border-z-border space-y-5">
-          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Credenciales Retell AI</h2>
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">{t('settings.retell_section')}</h2>
 
           <div>
             <label className="flex items-center gap-1.5 text-sm font-medium text-slate-300 mb-1.5">
-              <KeyIcon className="w-4 h-4 text-slate-500" /> Retell API Key
+              <KeyIcon className="w-4 h-4 text-slate-500" /> {t('settings.retell_key_label')}
             </label>
             <input
               type="password"
@@ -101,14 +90,12 @@ export default function Settings() {
               placeholder="key_••••••••"
               className="z-input font-mono"
             />
-            <p className="text-xs text-slate-500 mt-1">
-              Obtén tu API key en <span className="text-z-blue-light">app.retellai.com → Settings → API Keys</span>
-            </p>
+            <p className="text-xs text-slate-500 mt-1">{t('settings.retell_key_hint')}</p>
           </div>
 
           <div>
             <label className="flex items-center gap-1.5 text-sm font-medium text-slate-300 mb-1.5">
-              <PhoneIcon className="w-4 h-4 text-slate-500" /> Número de teléfono Retell
+              <PhoneIcon className="w-4 h-4 text-slate-500" /> {t('settings.retell_phone_label')}
             </label>
             <input
               type="text"
@@ -117,14 +104,12 @@ export default function Settings() {
               placeholder="+12025551234"
               className="z-input font-mono"
             />
-            <p className="text-xs text-slate-500 mt-1">
-              Formato E.164 — compra un número en <span className="text-z-blue-light">app.retellai.com → Phone Numbers</span>
-            </p>
+            <p className="text-xs text-slate-500 mt-1">{t('settings.retell_phone_hint')}</p>
           </div>
 
           <div>
             <label className="flex items-center gap-1.5 text-sm font-medium text-slate-300 mb-1.5">
-              <KeyIcon className="w-4 h-4 text-slate-500" /> Anthropic API Key
+              <KeyIcon className="w-4 h-4 text-slate-500" /> {t('settings.anthropic_key_label')}
             </label>
             <input
               type="password"
@@ -133,21 +118,19 @@ export default function Settings() {
               placeholder="sk-ant-••••••••"
               className="z-input font-mono"
             />
-            <p className="text-xs text-slate-500 mt-1">
-              Usada para analizar transcripciones — <span className="text-z-blue-light">console.anthropic.com → API Keys</span>
-            </p>
+            <p className="text-xs text-slate-500 mt-1">{t('settings.anthropic_key_hint')}</p>
           </div>
         </div>
 
         <div className="bg-z-blue/10 border border-z-blue/30 rounded-xl p-4 text-sm text-blue-300 space-y-2">
-          <p className="font-semibold text-blue-200">Configura el webhook en Retell AI</p>
-          <p>Para recibir transcripciones y resultados de llamadas, configura el webhook en tu cuenta de Retell:</p>
+          <p className="font-semibold text-blue-200">{t('settings.webhook_info_title')}</p>
+          <p>{t('settings.webhook_info_desc')}</p>
           <ol className="list-decimal list-inside space-y-1 mt-1">
-            <li>Ve a <span className="font-mono font-medium">app.retellai.com → Settings → Webhooks</span></li>
-            <li>Agrega la URL: <code className="bg-z-blue/20 px-1 rounded">https://TU-BACKEND.railway.app/webhook/retell</code></li>
-            <li>Selecciona los eventos: <strong>call_ended</strong> y <strong>call_analyzed</strong></li>
+            <li>{t('settings.webhook_step1')}</li>
+            <li>{t('settings.webhook_step2')} <code className="bg-z-blue/20 px-1 rounded">https://TU-BACKEND.railway.app/webhook/retell</code></li>
+            <li>{t('settings.webhook_step3')} <strong>call_ended</strong> y <strong>call_analyzed</strong></li>
           </ol>
-          <p className="text-xs mt-2 text-blue-400">Sin este paso las llamadas se realizan pero no se guardan resultados.</p>
+          <p className="text-xs mt-2 text-blue-400">{t('settings.webhook_warning')}</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -156,20 +139,20 @@ export default function Settings() {
             disabled={loading}
             className="z-btn-primary disabled:opacity-50"
           >
-            {loading ? 'Guardando...' : 'Guardar configuración'}
+            {loading ? t('common.saving') : t('settings.save_btn')}
           </button>
           {saved && (
             <span className="flex items-center gap-1.5 text-sm text-green-400 font-medium">
-              <CheckCircleIcon className="w-4 h-4" /> Guardado correctamente
+              <CheckCircleIcon className="w-4 h-4" /> {t('settings.saved_ok')}
             </span>
           )}
         </div>
       </form>}
 
-      {/* ── CRM & Webhooks ───────────────────────────────────────────────────── */}
+      {/* CRM & Webhooks */}
       {crmConfig && (
         <div className="bg-z-card rounded-xl p-6 border border-z-border space-y-5">
-          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">CRM & Webhooks</h2>
+          <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">{t('settings.crm_section')}</h2>
 
           {(() => {
             const isNative = NATIVE_CRM_TYPES.includes(crmConfig.crm_type)
@@ -185,12 +168,12 @@ export default function Settings() {
                     <p className="text-sm font-medium text-slate-200">
                       {hasType
                         ? CRM_TYPE_LABELS[crmConfig.crm_type] || crmConfig.crm_type
-                        : 'Sin integración configurada'
+                        : t('common.not_configured')
                       }
                     </p>
                     {isNative && crmConfig.crm_api_key_configured && (
                       <p className="text-xs text-slate-500 mt-0.5">
-                        API Key configurada
+                        {t('settings.crm_api_key_set')}
                         {crmConfig.crm_board_or_list_id && (
                           <span className="font-mono ml-1">· ID: {crmConfig.crm_board_or_list_id}</span>
                         )}
@@ -209,7 +192,7 @@ export default function Settings() {
                       ? 'bg-green-500/20 text-green-400'
                       : 'bg-slate-700 text-slate-500'
                   }`}>
-                    {isConfigured ? 'Configurado ✓' : 'No configurado'}
+                    {isConfigured ? t('common.configured') : t('common.not_configured')}
                   </span>
                 </div>
 
@@ -221,7 +204,7 @@ export default function Settings() {
                       disabled={crmTestLoading}
                       className="z-btn-ghost border border-z-border text-sm disabled:opacity-50"
                     >
-                      {crmTestLoading ? 'Enviando prueba...' : 'Probar webhook'}
+                      {crmTestLoading ? t('settings.crm_testing') : t('settings.crm_test_btn')}
                     </button>
                     {crmTestResult && (
                       <div className={`text-xs rounded-lg px-3 py-2 ${
@@ -230,8 +213,8 @@ export default function Settings() {
                           : 'bg-red-500/10 text-red-400 border border-red-500/20'
                       }`}>
                         {crmTestResult.success
-                          ? `✓ Webhook enviado correctamente (HTTP ${crmTestResult.status_code})`
-                          : `✗ Error: ${crmTestResult.response}`
+                          ? t('settings.crm_test_ok', { code: crmTestResult.status_code })
+                          : t('settings.crm_test_fail', { msg: crmTestResult.response })
                         }
                       </div>
                     )}
@@ -239,9 +222,7 @@ export default function Settings() {
                 )}
 
                 {!hasType && (
-                  <p className="text-xs text-slate-500">
-                    No hay ningún CRM conectado a esta organización.
-                  </p>
+                  <p className="text-xs text-slate-500">{t('settings.no_crm')}</p>
                 )}
               </>
             )

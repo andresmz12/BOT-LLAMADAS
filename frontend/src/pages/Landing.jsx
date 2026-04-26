@@ -1,34 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { WaveformIcon } from '../components/Sidebar'
 
-const FEATURES = [
-  { icon: '📞', title: 'Llamadas 24/7', desc: 'Salientes y entrantes sin interrupciones. Tu agente nunca duerme ni se enferma.' },
-  { icon: '🧠', title: 'Análisis con IA', desc: 'Transcripción automática y clasificación de cada llamada según resultado.' },
-  { icon: '🔗', title: 'CRM Nativo', desc: 'Sincroniza con Monday, HubSpot, GoHighLevel, Zoho, Salesforce y más.' },
-  { icon: '📊', title: 'Dashboard en tiempo real', desc: 'Métricas de contacto, tasas de conversión y rendimiento de campañas.' },
-  { icon: '🌎', title: 'Multi-idioma', desc: 'Español, inglés y más idiomas. Tu agente habla como tus clientes.' },
-  { icon: '📬', title: 'Buzón inteligente', desc: 'Detecta buzones de voz y deja mensajes personalizados automáticamente.' },
-]
-
-const STEPS = [
-  { n: '01', title: 'Crea tu agente', desc: 'Configura el nombre, voz, instrucciones y personalidad de tu vendedor IA en minutos.' },
-  { n: '02', title: 'Sube tus prospectos', desc: 'Importa tu lista en segundos desde un CSV. Filtra, prioriza y segmenta.' },
-  { n: '03', title: 'El bot llama solo', desc: 'Clasifica resultados, agenda citas y actualiza tu CRM — sin intervención humana.' },
-]
-
-const INDUSTRIES = [
-  { emoji: '🚢', name: 'Logística y carga', desc: 'Contacta embarcadores, actualiza tarifas y califica clientes de importación y exportación.' },
-  { emoji: '🏠', name: 'Bienes raíces', desc: 'Filtra compradores y arrendatarios, agenda visitas y mantiene seguimiento de cada prospecto.' },
-  { emoji: '🛡️', name: 'Seguros y finanzas', desc: 'Califica pólizas, da seguimiento a cotizaciones y agenda citas con asesores.' },
-]
-
+const FEATURE_ICONS = ['📞', '🧠', '🔗', '📊', '🌎', '📬']
+const STEP_NUMS = ['01', '02', '03']
+const INDUSTRY_EMOJIS = ['🚢', '🏠', '🛡️']
 const CRM_LOGOS = ['Monday.com', 'HubSpot', 'GoHighLevel', 'Zoho CRM', 'Salesforce']
 
 const ISM_WHATSAPP = 'https://wa.me/573001234567'
 const SUPPORT_EMAIL = 'soporte@ismconsulting.com'
 
 export default function Landing() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [scrolled, setScrolled] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -45,6 +29,27 @@ export default function Landing() {
     setMenuOpen(false)
   }
 
+  const FEATURES = [
+    { icon: FEATURE_ICONS[0], title: t('landing.feat1_title'), desc: t('landing.feat1_desc') },
+    { icon: FEATURE_ICONS[1], title: t('landing.feat2_title'), desc: t('landing.feat2_desc') },
+    { icon: FEATURE_ICONS[2], title: t('landing.feat3_title'), desc: t('landing.feat3_desc') },
+    { icon: FEATURE_ICONS[3], title: t('landing.feat4_title'), desc: t('landing.feat4_desc') },
+    { icon: FEATURE_ICONS[4], title: t('landing.feat5_title'), desc: t('landing.feat5_desc') },
+    { icon: FEATURE_ICONS[5], title: t('landing.feat6_title'), desc: t('landing.feat6_desc') },
+  ]
+
+  const STEPS = [
+    { n: STEP_NUMS[0], title: t('landing.step1_title'), desc: t('landing.step1_desc') },
+    { n: STEP_NUMS[1], title: t('landing.step2_title'), desc: t('landing.step2_desc') },
+    { n: STEP_NUMS[2], title: t('landing.step3_title'), desc: t('landing.step3_desc') },
+  ]
+
+  const INDUSTRIES = [
+    { emoji: INDUSTRY_EMOJIS[0], name: t('landing.ind1_name'), desc: t('landing.ind1_desc') },
+    { emoji: INDUSTRY_EMOJIS[1], name: t('landing.ind2_name'), desc: t('landing.ind2_desc') },
+    { emoji: INDUSTRY_EMOJIS[2], name: t('landing.ind3_name'), desc: t('landing.ind3_desc') },
+  ]
+
   return (
     <div className="min-h-screen bg-[#0F1117] text-white overflow-x-hidden">
 
@@ -60,16 +65,16 @@ export default function Landing() {
             </span>
           </div>
           <div className="hidden md:flex items-center gap-8 text-sm text-slate-400">
-            <button onClick={() => scrollTo('features')} className="hover:text-white transition-colors">Características</button>
-            <button onClick={() => scrollTo('how')} className="hover:text-white transition-colors">Cómo funciona</button>
-            <button onClick={() => scrollTo('pricing')} className="hover:text-white transition-colors">Precios</button>
+            <button onClick={() => scrollTo('features')} className="hover:text-white transition-colors">{t('landing.nav_features')}</button>
+            <button onClick={() => scrollTo('how')} className="hover:text-white transition-colors">{t('landing.nav_how')}</button>
+            <button onClick={() => scrollTo('pricing')} className="hover:text-white transition-colors">{t('landing.nav_pricing')}</button>
           </div>
           <div className="hidden md:flex items-center gap-3">
             <Link to="/login" className="text-sm text-slate-300 hover:text-white transition-colors px-3 py-2">
-              Iniciar sesión
+              {t('landing.nav_login')}
             </Link>
             <Link to="/register" className="bg-[#2563EB] hover:bg-blue-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors">
-              Probar gratis
+              {t('landing.nav_try')}
             </Link>
           </div>
           {/* Mobile hamburger */}
@@ -82,12 +87,12 @@ export default function Landing() {
         {/* Mobile menu */}
         {menuOpen && (
           <div className="md:hidden bg-[#0F1117] border-b border-white/10 px-4 py-4 space-y-3">
-            <button onClick={() => scrollTo('features')} className="block w-full text-left text-sm text-slate-300 py-2">Características</button>
-            <button onClick={() => scrollTo('how')} className="block w-full text-left text-sm text-slate-300 py-2">Cómo funciona</button>
-            <button onClick={() => scrollTo('pricing')} className="block w-full text-left text-sm text-slate-300 py-2">Precios</button>
+            <button onClick={() => scrollTo('features')} className="block w-full text-left text-sm text-slate-300 py-2">{t('landing.nav_features')}</button>
+            <button onClick={() => scrollTo('how')} className="block w-full text-left text-sm text-slate-300 py-2">{t('landing.nav_how')}</button>
+            <button onClick={() => scrollTo('pricing')} className="block w-full text-left text-sm text-slate-300 py-2">{t('landing.nav_pricing')}</button>
             <div className="flex gap-3 pt-2">
-              <Link to="/login" className="flex-1 text-center border border-white/20 text-sm text-slate-300 py-2 rounded-lg">Iniciar sesión</Link>
-              <Link to="/register" className="flex-1 text-center bg-[#2563EB] text-white text-sm font-semibold py-2 rounded-lg">Probar gratis</Link>
+              <Link to="/login" className="flex-1 text-center border border-white/20 text-sm text-slate-300 py-2 rounded-lg">{t('landing.nav_login')}</Link>
+              <Link to="/register" className="flex-1 text-center bg-[#2563EB] text-white text-sm font-semibold py-2 rounded-lg">{t('landing.nav_try')}</Link>
             </div>
           </div>
         )}
@@ -99,30 +104,30 @@ export default function Landing() {
           <div>
             <div className="inline-flex items-center gap-2 bg-[#2563EB]/15 text-[#60A5FA] text-xs font-semibold px-3 py-1.5 rounded-full border border-[#2563EB]/30 mb-6">
               <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
-              IA de ventas · Disponible 24/7
+              {t('landing.badge')}
             </div>
             <h1 className="text-4xl sm:text-5xl font-black leading-tight mb-5">
-              El agente de ventas con IA que{' '}
-              <span className="text-[#60A5FA]">nunca duerme</span>
+              {t('landing.hero_title')}{' '}
+              <span className="text-[#60A5FA]">{t('landing.hero_title_highlight')}</span>
             </h1>
             <p className="text-lg text-slate-400 mb-8 leading-relaxed">
-              Automatiza tus llamadas, califica prospectos y llena tu CRM — sin intervención humana.
+              {t('landing.hero_sub')}
             </p>
             <div className="flex flex-wrap gap-3">
               <Link
                 to="/register"
                 className="bg-[#2563EB] hover:bg-blue-700 text-white font-semibold px-6 py-3 rounded-lg transition-colors shadow-lg shadow-blue-900/40"
               >
-                Crear cuenta gratis
+                {t('landing.cta_primary')}
               </Link>
               <button
                 onClick={() => scrollTo('how')}
                 className="border border-white/20 hover:border-white/40 text-slate-300 hover:text-white font-semibold px-6 py-3 rounded-lg transition-colors"
               >
-                Ver cómo funciona →
+                {t('landing.cta_secondary')}
               </button>
             </div>
-            <p className="text-xs text-slate-600 mt-4">Sin tarjeta de crédito · 10 llamadas demo gratis</p>
+            <p className="text-xs text-slate-600 mt-4">{t('landing.hero_fine')}</p>
           </div>
 
           {/* App mockup */}
@@ -146,7 +151,7 @@ export default function Landing() {
                 {/* Content */}
                 <div className="flex-1 p-4 space-y-3">
                   <div className="grid grid-cols-3 gap-2">
-                    {[['847', 'Llamadas'], ['63%', 'Contactados'], ['124', 'Calificados']].map(([v, l]) => (
+                    {[['847', 'Calls'], ['63%', 'Contacted'], ['124', 'Qualified']].map(([v, l]) => (
                       <div key={l} className="bg-white/5 rounded-lg p-2.5">
                         <div className="text-base font-bold text-white">{v}</div>
                         <div className="text-[10px] text-slate-500 mt-0.5">{l}</div>
@@ -154,8 +159,8 @@ export default function Landing() {
                     ))}
                   </div>
                   <div className="bg-white/5 rounded-lg p-3">
-                    <div className="text-[10px] text-slate-500 mb-2 font-semibold uppercase tracking-wide">Campañas activas</div>
-                    {[['Logística Q2', 78], ['Seguros mayo', 45]].map(([name, pct]) => (
+                    <div className="text-[10px] text-slate-500 mb-2 font-semibold uppercase tracking-wide">Active campaigns</div>
+                    {[['Logistics Q2', 78], ['Insurance May', 45]].map(([name, pct]) => (
                       <div key={name} className="flex items-center gap-2 mb-2">
                         <div className="text-[11px] text-slate-300 w-20 truncate">{name}</div>
                         <div className="flex-1 bg-white/10 rounded-full h-1.5">
@@ -168,8 +173,8 @@ export default function Landing() {
                   <div className="bg-white/5 rounded-lg p-3 flex items-center gap-3">
                     <div className="w-7 h-7 rounded-full bg-[#2563EB]/20 flex items-center justify-center text-xs flex-shrink-0">🤖</div>
                     <div className="flex-1 min-w-0">
-                      <div className="text-[11px] text-slate-300 font-medium">Agente activo</div>
-                      <div className="text-[10px] text-slate-600 truncate">+57 310 *** 4821 · Logística Q2</div>
+                      <div className="text-[11px] text-slate-300 font-medium">Active Agent</div>
+                      <div className="text-[10px] text-slate-600 truncate">Logistics Q2 Campaign · running</div>
                     </div>
                     <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse flex-shrink-0" />
                   </div>
@@ -184,7 +189,7 @@ export default function Landing() {
       <section className="py-12 border-y border-white/5 bg-white/[0.015]">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <p className="text-center text-xs font-semibold text-slate-600 uppercase tracking-widest mb-8">
-            Integrado con las herramientas que ya usas
+            {t('landing.social_title')}
           </p>
           <div className="flex flex-wrap justify-center gap-8 sm:gap-12">
             {CRM_LOGOS.map(name => (
@@ -196,14 +201,13 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── CÓMO FUNCIONA ──────────────────────────────────────────────── */}
+      {/* ── HOW IT WORKS ───────────────────────────────────────────────── */}
       <section id="how" className="py-20 px-4 sm:px-6 max-w-6xl mx-auto">
         <div className="text-center mb-14">
-          <h2 className="text-3xl sm:text-4xl font-black mb-3">Cómo funciona</h2>
-          <p className="text-slate-400">Tres pasos para automatizar tus ventas</p>
+          <h2 className="text-3xl sm:text-4xl font-black mb-3">{t('landing.how_title')}</h2>
+          <p className="text-slate-400">{t('landing.how_sub')}</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-10 relative">
-          {/* Connector line — desktop only */}
           <div className="hidden md:block absolute top-8 left-1/6 right-1/6 h-px bg-gradient-to-r from-transparent via-[#2563EB]/30 to-transparent" />
           {STEPS.map(({ n, title, desc }) => (
             <div key={n} className="relative">
@@ -219,8 +223,8 @@ export default function Landing() {
       <section id="features" className="py-20 px-4 sm:px-6 bg-white/[0.015] border-y border-white/5">
         <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-black mb-3">Todo lo que necesitas para cerrar más ventas</h2>
-            <p className="text-slate-400">Sin contratar, sin entrenar, sin parar</p>
+            <h2 className="text-3xl sm:text-4xl font-black mb-3">{t('landing.features_title')}</h2>
+            <p className="text-slate-400">{t('landing.features_sub')}</p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
             {FEATURES.map(({ icon, title, desc }) => (
@@ -237,11 +241,11 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── CASOS DE USO ───────────────────────────────────────────────── */}
+      {/* ── INDUSTRIES ─────────────────────────────────────────────────── */}
       <section className="py-20 px-4 sm:px-6 max-w-6xl mx-auto">
         <div className="text-center mb-14">
-          <h2 className="text-3xl sm:text-4xl font-black mb-3">Diseñado para tu industria</h2>
-          <p className="text-slate-400">ZyraVoice se adapta a cualquier sector que venda por teléfono</p>
+          <h2 className="text-3xl sm:text-4xl font-black mb-3">{t('landing.industries_title')}</h2>
+          <p className="text-slate-400">{t('landing.industries_sub')}</p>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {INDUSTRIES.map(({ emoji, name, desc }) => (
@@ -257,28 +261,28 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── PRECIOS ────────────────────────────────────────────────────── */}
+      {/* ── PRICING ────────────────────────────────────────────────────── */}
       <section id="pricing" className="py-20 px-4 sm:px-6 bg-white/[0.015] border-y border-white/5">
         <div className="max-w-4xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-black mb-3">Precios simples y transparentes</h2>
-            <p className="text-slate-400">Empieza gratis, escala cuando estés listo</p>
+            <h2 className="text-3xl sm:text-4xl font-black mb-3">{t('landing.pricing_title')}</h2>
+            <p className="text-slate-400">{t('landing.pricing_sub')}</p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
             {/* Plan Free */}
             <div className="bg-[#161B27] border border-white/10 rounded-2xl p-8">
               <div className="mb-7">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Free</div>
-                <div className="text-5xl font-black mb-1">$0</div>
-                <p className="text-sm text-slate-400 mt-1">Para explorar la plataforma</p>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">{t('landing.plan_free')}</div>
+                <div className="text-5xl font-black mb-1">{t('landing.plan_free_price')}</div>
+                <p className="text-sm text-slate-400 mt-1">{t('landing.plan_free_desc')}</p>
               </div>
               <ul className="space-y-3 mb-8">
                 {[
-                  '10 llamadas demo dentro de la app',
-                  '1 agente configurable',
-                  'Dashboard básico',
-                  'Soporte por email',
+                  t('landing.plan_free_f1'),
+                  t('landing.plan_free_f2'),
+                  t('landing.plan_free_f3'),
+                  t('landing.plan_free_f4'),
                 ].map(f => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
                     <span className="text-green-400 mt-0.5 flex-shrink-0">✓</span>
@@ -290,28 +294,28 @@ export default function Landing() {
                 to="/register"
                 className="block text-center border border-white/20 hover:border-white/40 text-slate-200 hover:text-white font-semibold py-3 rounded-xl transition-colors text-sm"
               >
-                Empezar gratis
+                {t('landing.plan_free_cta')}
               </Link>
             </div>
 
             {/* Plan Pro */}
             <div className="bg-[#161B27] border-2 border-[#2563EB]/60 rounded-2xl p-8 relative shadow-lg shadow-blue-950/50">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#2563EB] text-white text-xs font-bold px-4 py-1 rounded-full">
-                Más popular
+                {t('landing.plan_pro_badge')}
               </div>
               <div className="mb-7">
-                <div className="text-xs font-bold text-[#60A5FA] uppercase tracking-widest mb-2">Pro</div>
-                <div className="text-5xl font-black mb-1">A medida</div>
-                <p className="text-sm text-slate-400 mt-1">Según volumen y necesidades</p>
+                <div className="text-xs font-bold text-[#60A5FA] uppercase tracking-widest mb-2">{t('landing.plan_pro')}</div>
+                <div className="text-5xl font-black mb-1">{t('landing.plan_pro_price')}</div>
+                <p className="text-sm text-slate-400 mt-1">{t('landing.plan_pro_desc')}</p>
               </div>
               <ul className="space-y-3 mb-8">
                 {[
-                  'Llamadas según plan contratado',
-                  'Múltiples agentes de voz',
-                  'CRM nativo (Monday, HubSpot, GHL y más)',
-                  'Campañas masivas de llamadas',
-                  'Prospectos ilimitados',
-                  'Soporte prioritario',
+                  t('landing.plan_pro_f1'),
+                  t('landing.plan_pro_f2'),
+                  t('landing.plan_pro_f3'),
+                  t('landing.plan_pro_f4'),
+                  t('landing.plan_pro_f5'),
+                  t('landing.plan_pro_f6'),
                 ].map(f => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
                     <span className="text-[#60A5FA] mt-0.5 flex-shrink-0">✓</span>
@@ -325,7 +329,7 @@ export default function Landing() {
                 rel="noopener noreferrer"
                 className="block text-center bg-[#2563EB] hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-colors text-sm shadow-md shadow-blue-900/40"
               >
-                Contactar a ventas
+                {t('landing.plan_pro_cta')}
               </a>
             </div>
           </div>
@@ -337,16 +341,16 @@ export default function Landing() {
         <div className="absolute inset-0 bg-gradient-radial from-[#2563EB]/10 to-transparent" />
         <div className="relative max-w-2xl mx-auto">
           <h2 className="text-3xl sm:text-4xl font-black mb-4 leading-tight">
-            Empieza hoy gratis.<br />Sin tarjeta de crédito.
+            {t('landing.cta_title')}<br />{t('landing.cta_title2')}
           </h2>
           <p className="text-slate-400 mb-10 text-lg">
-            Configura tu primer agente en minutos y lanza tu primera campaña.
+            {t('landing.cta_sub')}
           </p>
           <Link
             to="/register"
             className="inline-block bg-[#2563EB] hover:bg-blue-700 text-white font-bold text-lg px-10 py-4 rounded-xl transition-colors shadow-xl shadow-blue-900/50"
           >
-            Crear mi cuenta gratis
+            {t('landing.cta_btn')}
           </Link>
         </div>
       </section>
@@ -362,13 +366,13 @@ export default function Landing() {
                   <span className="text-white">Zyra</span><span className="text-[#60A5FA]">Voice</span>
                 </span>
               </div>
-              <p className="text-xs text-slate-600">Powered by ISM Consulting Services</p>
+              <p className="text-xs text-slate-600">{t('landing.footer_powered')}</p>
             </div>
             <div className="flex flex-wrap gap-5 text-sm text-slate-500">
-              <Link to="/login" className="hover:text-slate-300 transition-colors">Iniciar sesión</Link>
-              <Link to="/register" className="hover:text-slate-300 transition-colors">Crear cuenta</Link>
-              <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-slate-300 transition-colors">Contacto</a>
-              <a href={ISM_WHATSAPP} target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">WhatsApp</a>
+              <Link to="/login" className="hover:text-slate-300 transition-colors">{t('landing.footer_login')}</Link>
+              <Link to="/register" className="hover:text-slate-300 transition-colors">{t('landing.footer_register')}</Link>
+              <a href={`mailto:${SUPPORT_EMAIL}`} className="hover:text-slate-300 transition-colors">{t('landing.footer_contact')}</a>
+              <a href={ISM_WHATSAPP} target="_blank" rel="noopener noreferrer" className="hover:text-slate-300 transition-colors">{t('landing.footer_whatsapp')}</a>
             </div>
           </div>
           <div className="mt-8 pt-6 border-t border-white/5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">

@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon, DocumentArrowUpIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
+import { useTranslation } from 'react-i18next'
 import { createAgent, updateAgent, syncAgent, uploadKnowledgeBase } from '../api/client'
 
 const VOICES = [
@@ -43,6 +44,7 @@ function formatBytes(bytes) {
 }
 
 export default function AgentFormModal({ agent, onClose, onSaved }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState(agent ? { ...EMPTY, ...agent } : { ...EMPTY })
   const [syncOnSave, setSyncOnSave] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -160,7 +162,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-z-border">
-          <h2 className="text-lg font-bold text-slate-100">{agent ? 'Editar Agente' : 'Nuevo Agente'}</h2>
+          <h2 className="text-lg font-bold text-slate-100">{agent ? t('agents.edit') + ' Agent' : t('agents.new')}</h2>
           <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
@@ -398,7 +400,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="z-btn-ghost">Cancelar</button>
+            <button type="button" onClick={onClose} className="z-btn-ghost">{t('common.cancel')}</button>
             <button type="submit" disabled={loading || !!kbFileError} className="z-btn-primary disabled:opacity-50">
               {submitLabel()}
             </button>

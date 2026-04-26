@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   HomeIcon, UserGroupIcon, MegaphoneIcon,
   UsersIcon, PhoneIcon, Cog6ToothIcon,
@@ -9,34 +10,33 @@ import {
 } from '@heroicons/react/24/outline'
 import { logout } from '../api/client'
 
-const NAV_BY_ROLE = {
+const NAV_KEYS = {
   superadmin: [
-    { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
-    { to: '/admin', label: 'Admin Panel', Icon: KeyIcon },
-    { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
-    { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
+    { to: '/dashboard', key: 'nav.dashboard', Icon: HomeIcon },
+    { to: '/admin', key: 'nav.admin', Icon: KeyIcon },
+    { to: '/chatbot', key: 'nav.chatbot', Icon: ChatBubbleLeftRightIcon },
+    { to: '/settings', key: 'nav.settings', Icon: Cog6ToothIcon },
   ],
   admin: [
-    { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
-    { to: '/agents', label: 'Agentes de Voz', Icon: UserGroupIcon },
-    { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
-    { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
-    { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
-    { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
-    { to: '/team', label: 'Asesores', Icon: UsersIcon },
-    { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
+    { to: '/dashboard', key: 'nav.dashboard', Icon: HomeIcon },
+    { to: '/agents', key: 'nav.agents', Icon: UserGroupIcon },
+    { to: '/campaigns', key: 'nav.campaigns', Icon: MegaphoneIcon },
+    { to: '/prospects', key: 'nav.prospects', Icon: UsersIcon },
+    { to: '/calls', key: 'nav.calls', Icon: PhoneIcon },
+    { to: '/chatbot', key: 'nav.chatbot', Icon: ChatBubbleLeftRightIcon },
+    { to: '/team', key: 'nav.advisors', Icon: UsersIcon },
+    { to: '/settings', key: 'nav.settings', Icon: Cog6ToothIcon },
   ],
   agent: [
-    { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
-    { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
-    { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
-    { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
-    { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
+    { to: '/dashboard', key: 'nav.dashboard', Icon: HomeIcon },
+    { to: '/campaigns', key: 'nav.campaigns', Icon: MegaphoneIcon },
+    { to: '/prospects', key: 'nav.prospects', Icon: UsersIcon },
+    { to: '/calls', key: 'nav.calls', Icon: PhoneIcon },
+    { to: '/chatbot', key: 'nav.chatbot', Icon: ChatBubbleLeftRightIcon },
   ],
 }
 
 export function WaveformIcon({ className }) {
-  // Vertical audio bars matching ZyraVoice logo — tallest in center, tapering outward
   const bars = [
     { x: 1.5,  h: 8,  y: 12 },
     { x: 5.5,  h: 14, y: 9  },
@@ -58,23 +58,24 @@ export function WaveformIcon({ className }) {
 }
 
 export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
+  const { t, i18n } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
-  const role = user.role || 'viewer'
+  const role = user.role || 'agent'
   const plan = user.plan || 'pro'
-  const baseItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.agent
+  const baseItems = NAV_KEYS[role] || NAV_KEYS.agent
   const navItems = (role === 'admin' || role === 'agent')
     ? plan === 'free'
       ? [...baseItems.filter(i => i.to !== '/campaigns' && i.to !== '/prospects'),
-         { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon },
+         { to: '/demo', key: 'nav.demo', Icon: PhoneIcon },
          ...baseItems.filter(i => i.to === '/campaigns' || i.to === '/prospects')]
-      : [...baseItems, { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon }]
+      : [...baseItems, { to: '/demo', key: 'nav.demo', Icon: PhoneIcon }]
     : baseItems
   const initials = (user.full_name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  const toggleLang = () => i18n.changeLanguage(i18n.language === 'es' ? 'en' : 'es')
 
   return (
     <>
-      {/* Overlay — mobile only */}
       {mobileOpen && (
         <div className="fixed inset-0 z-40 bg-black/60 md:hidden" onClick={onClose} />
       )}
@@ -100,12 +101,12 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
 
       {/* Nav */}
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ to, label, Icon }) => (
+        {navItems.map(({ to, key, Icon }) => (
           <NavLink
-            key={to + label}
+            key={to + key}
             to={to}
             end={to === '/dashboard'}
-            title={collapsed ? label : undefined}
+            title={collapsed ? t(key) : undefined}
             onClick={onClose}
             className={({ isActive }) =>
               `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
@@ -116,7 +117,7 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
             }
           >
             <Icon className="w-5 h-5 flex-shrink-0" />
-            {!collapsed && label}
+            {!collapsed && t(key)}
           </NavLink>
         ))}
       </nav>
@@ -129,18 +130,26 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
               <span className="text-z-blue-light font-bold text-xs">{initials}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-slate-200 text-xs font-medium truncate">{user.full_name || 'Usuario'}</div>
+              <div className="text-slate-200 text-xs font-medium truncate">{user.full_name || 'User'}</div>
               <div className="text-slate-500 text-xs truncate">{user.organization_name || ''}</div>
             </div>
           </div>
         )}
         <button
+          onClick={toggleLang}
+          title={t('common.language')}
+          className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2'} w-full px-3 py-2 text-xs text-slate-500 hover:text-slate-300 rounded-lg hover:bg-white/5 transition-colors`}
+        >
+          <span className="text-sm flex-shrink-0">🌐</span>
+          {!collapsed && (i18n.language === 'es' ? 'English' : 'Español')}
+        </button>
+        <button
           onClick={logout}
-          title="Cerrar sesión"
+          title={t('common.logout')}
           className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2'} w-full px-3 py-2 text-xs text-slate-500 hover:text-red-400 rounded-lg hover:bg-white/5 transition-colors`}
         >
           <ArrowRightOnRectangleIcon className="w-4 h-4 flex-shrink-0" />
-          {!collapsed && 'Cerrar sesión'}
+          {!collapsed && t('common.logout')}
         </button>
         <button
           onClick={() => setCollapsed(c => !c)}

@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { PlusIcon, PlayIcon, PauseIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { useTranslation } from 'react-i18next'
 import StatusBadge from '../components/StatusBadge'
 import UpgradeBanner from '../components/UpgradeBanner'
 import { getCampaigns, createCampaign, startCampaign, pauseCampaign, deleteCampaign, getAgents, getDemoStatus } from '../api/client'
 
 export default function Campaigns() {
+  const { t } = useTranslation()
   const [campaigns, setCampaigns] = useState([])
   const [agents, setAgents] = useState([])
   const [showModal, setShowModal] = useState(false)
@@ -22,25 +24,25 @@ export default function Campaigns() {
 
   const handleStart = async (id) => {
     try { await startCampaign(id); load() }
-    catch (err) { alert(err.response?.data?.detail || 'Error al iniciar') }
+    catch (err) { alert(err.response?.data?.detail || t('campaigns.error_start')) }
   }
   const handlePause = async (id) => {
     try { await pauseCampaign(id); load() }
-    catch (err) { alert(err.response?.data?.detail || 'Error al pausar') }
+    catch (err) { alert(err.response?.data?.detail || t('campaigns.error_pause')) }
   }
   const handleDelete = async (c) => {
-    if (!confirm(`¿Eliminar campaña "${c.name}"?`)) return
+    if (!confirm(t('campaigns.confirm_delete', { name: c.name }))) return
     try { await deleteCampaign(c.id); load() }
-    catch (err) { alert(err.response?.data?.detail || 'Error al eliminar') }
+    catch (err) { alert(err.response?.data?.detail || t('campaigns.error_delete')) }
   }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-100">Campañas</h1>
+        <h1 className="text-2xl font-bold text-slate-100">{t('campaigns.title')}</h1>
         {!isFree && (
           <button onClick={() => setShowModal(true)} className="z-btn-primary flex items-center gap-2 self-start sm:self-auto">
-            <PlusIcon className="w-4 h-4" /> Nueva Campaña
+            <PlusIcon className="w-4 h-4" /> {t('campaigns.new')}
           </button>
         )}
       </div>
@@ -54,7 +56,7 @@ export default function Campaigns() {
         <table className="w-full text-sm min-w-[700px]">
           <thead className="bg-black/20">
             <tr>
-              {['Nombre', 'Estado', 'Prospectos', 'Llamadas', 'Interesados', 'Citas', 'Ritmo', 'Acciones'].map(h => (
+              {[t('campaigns.col_name'), t('campaigns.col_status'), t('campaigns.col_prospects'), t('campaigns.col_calls'), t('campaigns.col_interested'), t('campaigns.col_appointments'), t('campaigns.col_pace'), t('campaigns.col_actions')].map(h => (
                 <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
               ))}
             </tr>
@@ -82,27 +84,27 @@ export default function Campaigns() {
                   <td className="px-6 py-4 text-slate-300">{c.appointments_scheduled}</td>
                   <td className="px-6 py-4 text-slate-400 text-xs">
                     {c.sequential_calls
-                      ? <span className="px-2 py-0.5 bg-purple-500/15 text-purple-400 rounded-full font-medium">Secuencial</span>
-                      : `${c.calls_per_minute ?? 10}/min`}
+                      ? <span className="px-2 py-0.5 bg-purple-500/15 text-purple-400 rounded-full font-medium">{t('campaigns.sequential')}</span>
+                      : t('campaigns.per_min', { n: c.calls_per_minute ?? 10 })}
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
                       {(c.status === 'draft' || c.status === 'paused') && (
                         <button onClick={() => handleStart(c.id)}
                           className="flex items-center gap-1 px-2.5 py-1 bg-green-500/15 hover:bg-green-500/25 text-green-400 text-xs font-medium rounded-lg">
-                          <PlayIcon className="w-3.5 h-3.5" /> Iniciar
+                          <PlayIcon className="w-3.5 h-3.5" /> {t('campaigns.start')}
                         </button>
                       )}
                       {c.status === 'running' && (
                         <button onClick={() => handlePause(c.id)}
                           className="flex items-center gap-1 px-2.5 py-1 bg-yellow-500/15 hover:bg-yellow-500/25 text-yellow-400 text-xs font-medium rounded-lg">
-                          <PauseIcon className="w-3.5 h-3.5" /> Pausar
+                          <PauseIcon className="w-3.5 h-3.5" /> {t('campaigns.pause')}
                         </button>
                       )}
                       {c.status !== 'running' && (
                         <button onClick={() => handleDelete(c)}
                           className="flex items-center gap-1 px-2.5 py-1 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs font-medium rounded-lg">
-                          <TrashIcon className="w-3.5 h-3.5" /> Eliminar
+                          <TrashIcon className="w-3.5 h-3.5" /> {t('campaigns.delete')}
                         </button>
                       )}
                     </div>
@@ -111,7 +113,7 @@ export default function Campaigns() {
               )
             })}
             {campaigns.length === 0 && (
-              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-500">No hay campañas creadas</td></tr>
+              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-500">{t('campaigns.empty')}</td></tr>
             )}
           </tbody>
         </table>
@@ -127,6 +129,7 @@ export default function Campaigns() {
 }
 
 function NewCampaignModal({ agents, onClose, onSaved }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState({ name: '', description: '', agent_config_id: agents[0]?.id || '', calls_per_minute: 10, sequential_calls: false })
   const [loading, setLoading] = useState(false)
 
@@ -138,13 +141,13 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
 
   const submit = async (e) => {
     e.preventDefault()
-    if (!form.agent_config_id) return alert('Selecciona un agente')
+    if (!form.agent_config_id) return alert(t('campaigns.select_agent'))
     setLoading(true)
     try {
       await createCampaign({ ...form, agent_config_id: Number(form.agent_config_id), calls_per_minute: Number(form.calls_per_minute), sequential_calls: form.sequential_calls })
       onSaved()
     } catch (err) {
-      alert(err.response?.data?.detail || 'Error al crear campaña')
+      alert(err.response?.data?.detail || t('campaigns.error_create'))
     } finally { setLoading(false) }
   }
 
@@ -152,47 +155,47 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between p-6 border-b border-z-border">
-          <h2 className="text-lg font-bold text-slate-100">Nueva Campaña</h2>
+          <h2 className="text-lg font-bold text-slate-100">{t('campaigns.modal_title')}</h2>
           <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Nombre</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('campaigns.field_name')}</label>
             <input required value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="z-input" placeholder="Campaña Enero 2025" />
+              className="z-input" placeholder={t('campaigns.field_name_placeholder')} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Descripción (opcional)</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('campaigns.field_desc')}</label>
             <input value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-              className="z-input" placeholder="Descripción breve" />
+              className="z-input" placeholder={t('campaigns.field_desc_placeholder')} />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Agente</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('campaigns.field_agent')}</label>
             <select value={form.agent_config_id} onChange={e => setForm(f => ({ ...f, agent_config_id: e.target.value }))}
               className="z-input">
               {agents.map(a => <option key={a.id} value={a.id}>{a.agent_name} — {a.company_name}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Llamadas por minuto</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('campaigns.field_cpm')}</label>
             <input type="number" min="1" max="60" value={form.calls_per_minute}
               onChange={e => setForm(f => ({ ...f, calls_per_minute: e.target.value }))}
               className={`z-input ${form.sequential_calls ? 'opacity-40 pointer-events-none' : ''}`} />
-            <p className="text-xs text-slate-500 mt-1">Intervalo entre llamadas: {(60 / (form.calls_per_minute || 10)).toFixed(1)}s</p>
+            <p className="text-xs text-slate-500 mt-1">{t('campaigns.field_interval', { s: (60 / (form.calls_per_minute || 10)).toFixed(1) })}</p>
           </div>
           <label className="flex items-center gap-3 p-3 rounded-lg border border-z-border hover:bg-white/[0.02] cursor-pointer">
             <input type="checkbox" checked={form.sequential_calls}
               onChange={e => setForm(f => ({ ...f, sequential_calls: e.target.checked }))}
               className="rounded border-slate-600 bg-slate-800 text-z-blue w-4 h-4 cursor-pointer" />
             <div>
-              <p className="text-sm font-medium text-slate-200">Llamadas secuenciales</p>
-              <p className="text-xs text-slate-500">Esperar a que cada llamada termine antes de iniciar la siguiente</p>
+              <p className="text-sm font-medium text-slate-200">{t('campaigns.field_sequential')}</p>
+              <p className="text-xs text-slate-500">{t('campaigns.field_sequential_desc')}</p>
             </div>
           </label>
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="z-btn-ghost">Cancelar</button>
+            <button type="button" onClick={onClose} className="z-btn-ghost">{t('common.cancel')}</button>
             <button type="submit" disabled={loading} className="z-btn-primary">
-              {loading ? 'Creando...' : 'Crear campaña'}
+              {loading ? t('campaigns.creating') : t('campaigns.create_btn')}
             </button>
           </div>
         </form>
