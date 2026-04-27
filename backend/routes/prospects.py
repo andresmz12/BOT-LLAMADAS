@@ -76,7 +76,7 @@ async def import_file(
     else:
         text = content.decode("utf-8-sig")
         reader = csv.DictReader(io.StringIO(text))
-        rows = list(reader)
+        rows = [{k.strip().lower(): v for k, v in r.items()} for r in reader]
 
     imported = 0
     for row in rows:
@@ -85,16 +85,13 @@ async def import_file(
                  or row.get("número") or row.get("numero")
                  or row.get("cel") or row.get("celular")
                  or row.get("móvil") or row.get("movil") or "").strip()
-        has_contact_col = bool(row.get("contact") or row.get("contacto"))
-        name = (row.get("contact") or row.get("contacto")
-                or row.get("nombre") or row.get("name")
+        name = (row.get("name") or row.get("nombre")
+                or row.get("contact") or row.get("contacto")
                 or row.get("full name") or row.get("fullname")
                 or row.get("first name") or row.get("firstname") or phone).strip()
         company = (row.get("company") or row.get("empresa")
                    or row.get("organization") or row.get("organización")
-                   or row.get("org")
-                   or (row.get("name") if has_contact_col else "")
-                   or "").strip()
+                   or row.get("org") or "").strip()
         email = row.get("email", "").strip() or row.get("correo", "").strip()
         if not phone:
             continue
