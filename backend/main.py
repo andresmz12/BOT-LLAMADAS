@@ -61,6 +61,21 @@ async def lifespan(app: FastAPI):
         logger.info("Database initialized")
     except Exception as e:
         logger.error(f"Database initialization error: {e}")
+
+    # Recover prospects stuck in "calling" from a previous crashed/restarted session
+    try:
+        from sqlmodel import Session as _S, select as _sel
+        from models import Prospect as _Prospect
+        with _S(engine) as s:
+            stuck = s.exec(_sel(_Prospect).where(_Prospect.status == "calling")).all()
+            for p in stuck:
+                p.status = "pending"
+                s.add(p)
+            if stuck:
+                s.commit()
+                logger.info(f"[Startup] Reset {len(stuck)} stuck 'calling' prospect(s) → 'pending'")
+    except Exception as e:
+        logger.error(f"[Startup] Failed to recover stuck prospects: {e}")
     if not os.getenv("RETELL_WEBHOOK_SECRET"):
         logger.warning("⚠️  RETELL_WEBHOOK_SECRET not set — webhook signature verification is DISABLED")
     if not os.getenv("JWT_SECRET"):

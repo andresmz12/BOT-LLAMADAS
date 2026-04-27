@@ -132,6 +132,9 @@ def delete_campaign(
     task = call_orchestrator.running_tasks.pop(campaign_id, None)
     if task:
         task.cancel()
+    # Delete associated prospects first to avoid FK constraint issues
+    for p in session.exec(select(Prospect).where(Prospect.campaign_id == campaign_id)).all():
+        session.delete(p)
     session.delete(campaign)
     session.commit()
     return {"ok": True}

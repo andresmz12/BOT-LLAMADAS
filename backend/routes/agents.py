@@ -110,7 +110,8 @@ def update_agent(
     if current_user.role != "superadmin" and agent.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
     NON_NULLABLE = {'temperature', 'max_call_duration', 'is_default', 'language', 'name',
-                    'agent_name', 'company_name', 'company_info', 'services', 'instructions'}
+                    'agent_name', 'company_name', 'company_info', 'services', 'instructions',
+                    'voice_id', 'inbound_enabled'}
     for field, value in data.dict(exclude_unset=True).items():
         if value is None and field in NON_NULLABLE:
             continue
@@ -147,10 +148,8 @@ async def sync_agent(
         )
         agent.retell_agent_id = out_agent_id
         agent.retell_llm_id = out_llm_id
-        if in_agent_id:
-            agent.inbound_retell_agent_id = in_agent_id
-        if in_llm_id:
-            agent.inbound_retell_llm_id = in_llm_id
+        agent.inbound_retell_agent_id = in_agent_id or None
+        agent.inbound_retell_llm_id = in_llm_id or None
         session.add(agent)
         session.commit()
         session.refresh(agent)
@@ -173,7 +172,7 @@ def delete_agent(
         raise HTTPException(status_code=404, detail="Agent not found")
     if current_user.role != "superadmin" and agent.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
-    campaigns = session.exec(select(Campaign).where(Campaign.agent_config_id == agent_id)).first()
+    campaigns = session.exec(select(Campaign).where(Campaign.agent_config_id == agent_id)).all()
     if campaigns:
         raise HTTPException(status_code=400, detail="Agent has associated campaigns")
     session.delete(agent)

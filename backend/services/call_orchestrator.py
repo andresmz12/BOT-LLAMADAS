@@ -168,6 +168,7 @@ async def _run_campaign_loop(campaign_id: int):
                 "calls_per_minute": max(1, campaign.calls_per_minute or 10),
                 "sequential_calls": bool(campaign.sequential_calls),
                 "voicemail_message": agent_config.voicemail_message or "",
+                "max_call_duration": agent_config.max_call_duration or 180,
             }
             logger.info(
                 f"[Campaign {campaign_id}] Dialing {prospect.phone} "
@@ -224,7 +225,7 @@ async def _run_campaign_loop(campaign_id: int):
 
         # Wait strategy: sequential (poll until ended) or rate-limited (fixed sleep)
         if call_info["sequential_calls"]:
-            max_wait_seconds = 900  # 15 min hard ceiling
+            max_wait_seconds = call_info["max_call_duration"] + 60  # call duration + buffer
             elapsed = 0
             poll_interval = 5
             logger.info(f"[Campaign {campaign_id}] Sequential mode — waiting for call {call_info['call_id']} to end")

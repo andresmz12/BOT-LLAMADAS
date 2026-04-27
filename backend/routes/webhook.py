@@ -82,7 +82,8 @@ async def _bg_analyze_and_sync(
                 outcome = call.outcome or "no_answer"
                 if outcome == "voicemail":
                     prospect.status = "voicemail"
-                elif outcome in ("interested", "callback_requested", "appointment_scheduled", "not_interested"):
+                elif outcome in ("interested", "callback_requested", "appointment_scheduled",
+                                 "not_interested", "wrong_number"):
                     prospect.status = "answered"
                 elif outcome == "no_answer":
                     prospect.status = "no_answer"
@@ -100,12 +101,13 @@ async def _bg_analyze_and_sync(
                 elif outcome == "interested":
                     campaign.interested += 1
                     campaign.answered += 1
-                elif outcome in ("not_interested", "callback_requested"):
+                elif outcome in ("not_interested", "callback_requested", "wrong_number"):
                     campaign.answered += 1
                 elif outcome == "appointment_scheduled":
                     campaign.appointments_scheduled += 1
                     campaign.answered += 1
-                # no_answer and anything else: just total_calls, no failed counter
+                elif outcome in ("failed", "no_answer"):
+                    campaign.failed += 1
                 s.add(campaign)
 
         s.commit()
@@ -304,6 +306,12 @@ async def retell_webhook(request: Request, background_tasks: BackgroundTasks, se
             if prospect:
                 prospect.status = "no_answer"
                 session.add(prospect)
+        if call.campaign_id:
+            campaign = session.get(Campaign, call.campaign_id)
+            if campaign:
+                campaign.total_calls += 1
+                campaign.failed += 1
+                session.add(campaign)
         session.commit()
 
     return {"ok": True}
