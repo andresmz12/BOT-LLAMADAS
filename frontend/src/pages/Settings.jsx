@@ -56,19 +56,6 @@ export default function Settings() {
     }
   }
 
-  const handleDemoCall = async (e) => {
-    e.preventDefault()
-    setDemoStatus('loading')
-    setDemoError('')
-    try {
-      await makeDemoCall(demo.phone, Number(demo.agentId))
-      setDemoStatus('ok')
-    } catch (err) {
-      setDemoError(err.response?.data?.detail || 'Error al iniciar llamada')
-      setDemoStatus('error')
-    }
-  }
-
   const handleCrmTest = async () => {
     setCrmTestLoading(true)
     setCrmTestResult(null)
