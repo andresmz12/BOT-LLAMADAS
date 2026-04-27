@@ -33,12 +33,6 @@ function ProtectedLayout() {
       navigate('/login', { replace: true })
     }
 
-    // Logout immediately when tab is hidden / user leaves the app
-    const onVisibility = () => {
-      if (document.visibilityState === 'hidden') doLogout()
-    }
-    document.addEventListener('visibilitychange', onVisibility)
-
     // Logout after 5 min of inactivity inside the app
     let timer
     const reset = () => {
@@ -51,7 +45,6 @@ function ProtectedLayout() {
 
     return () => {
       clearTimeout(timer)
-      document.removeEventListener('visibilitychange', onVisibility)
       events.forEach(e => window.removeEventListener(e, reset))
     }
   }, [token])
