@@ -19,20 +19,23 @@ def build_system_prompt(agent_config: AgentConfig) -> str:
         rules = (
             "- Never invent prices or services not listed in your information\n"
             "- If no one answers, leave a brief and friendly voicemail\n"
-            "- At the end of the call, say goodbye cordially\n"
-            "- CRITICAL: If audio is inaudible or you cannot hear the customer, say ONCE "
-            "'I'm sorry, I can't hear you, I'll call back another time' and HANG UP immediately. "
-            "Do not retry more than once."
+            "- At the end of the call, say goodbye cordially and use the end_call tool to hang up\n"
+            "- AUDIO: If you cannot hear the customer well, ask them to repeat themselves. "
+            "Try up to 2 times. If after 2 attempts you still cannot hear them, say "
+            "'I'm sorry, I'm having audio issues, I'll call back another time' "
+            "and use the end_call tool to end the call.\n"
+            "- IMPORTANT: Always end the call using the end_call tool."
         )
     else:
         lang_instruction = "IDIOMA: Habla SIEMPRE en español. Never respond in English under any circumstances."
         rules = (
             "- Nunca inventes precios ni servicios que no están en tu información\n"
             "- Si no contestan, deja un mensaje de voz breve y amable\n"
-            "- Al finalizar la llamada, despídete cordialmente\n"
-            "- CRÍTICO: Si el audio es inaudible o no puedes escuchar al cliente, di UNA sola vez "
-            "'Disculpe, no logro escucharle bien, le llamo en otro momento' y CUELGA inmediatamente. "
-            "No repitas el intento más de una vez."
+            "- Al finalizar la llamada, despídete cordialmente y usa la herramienta end_call para colgar\n"
+            "- AUDIO: Si no escuchas bien al cliente, pídele que repita. Intenta hasta 2 veces. "
+            "Si tras 2 intentos sigue sin escucharse, di 'Disculpe, tengo problemas con el audio, "
+            "le llamo en otro momento' y usa la herramienta end_call para terminar la llamada.\n"
+            "- IMPORTANTE: Siempre termina la llamada usando la herramienta end_call."
         )
 
     return f"""{lang_instruction}

@@ -33,6 +33,9 @@ REGLAS ESTRICTAS PARA outcome (aplica en orden de prioridad):
 
 4. "not_interested" — si cualquiera de estas condiciones:
    - Dijo explícitamente "no me interesa", "no gracias", "no quiero".
+   - Dijo que ya tiene el servicio/producto: "ya tengo", "ya cuento con", "ya tenemos",
+     "ya tengo otro proveedor", "ya tenemos uno", "ya tenemos contratado", "ya lo tenemos".
+   - Dijo "no lo necesito", "no aplica", "no es para nosotros", "no estamos interesados".
    - Colgó sin responder nada relevante.
    - La conversación duró menos de 20 segundos sin mostrar interés real.
 
