@@ -282,31 +282,6 @@ async def retell_webhook(request: Request, background_tasks: BackgroundTasks, se
             call.prospect_id, call.campaign_id,
         )
 
-        # ── CRM dispatch (native APIs + generic webhooks) ──────────────────────
-        if org and org.crm_webhook_enabled and org.crm_type and org.crm_type != "none":
-            try:
-                from services.crm_service import send_call_to_crm
-                crm_prospect = session.get(Prospect, call.prospect_id) if call.prospect_id else None
-                crm_camp = None
-                crm_agent = None
-                if call.campaign_id:
-                    crm_camp = session.get(Campaign, call.campaign_id)
-                    if crm_camp:
-                        crm_agent = session.get(AgentConfig, crm_camp.agent_config_id)
-                call_data_crm = {
-                    "phone": crm_prospect.phone if crm_prospect else None,
-                    "call_result": call.outcome,
-                    "duration_seconds": call.duration_seconds,
-                    "summary": call.notes,
-                    "campaign_name": crm_camp.name if crm_camp else None,
-                    "transcript": call.raw_transcript,
-                    "timestamp": (call.ended_at or datetime.utcnow()).isoformat(),
-                }
-                await send_call_to_crm(org, call_data_crm, call, crm_prospect, crm_agent, session)
-            except Exception as e:
-                logger.error(f"CRM sync failed: {e}")
-                # NO re-raise — Retell must always receive 200
-
         if ws_manager and call.campaign_id:
             await ws_manager.broadcast(call.campaign_id, {
                 "event": "call_updated",
