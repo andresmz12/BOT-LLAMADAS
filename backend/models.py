@@ -70,6 +70,9 @@ class AgentConfig(SQLModel, table=True):
     inbound_retell_llm_id: Optional[str] = None
     retell_knowledge_base_id: Optional[str] = None
     organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+    call_objective: Optional[str] = None
+    target_audience: Optional[str] = None
+    custom_objections: Optional[str] = None
 
     campaigns: List["Campaign"] = Relationship(back_populates="agent_config")
 

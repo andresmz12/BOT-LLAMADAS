@@ -38,6 +38,9 @@ def run_migrations():
                 "inbound_retell_agent_id": "VARCHAR(255)",
                 "inbound_retell_llm_id": "VARCHAR(255)",
                 "voicemail_message": "TEXT",
+                "call_objective": "VARCHAR(100)",
+                "target_audience": "TEXT",
+                "custom_objections": "TEXT",
             }
             with engine.begin() as conn:
                 for col, col_type in new_cols.items():

@@ -30,6 +30,9 @@ class AgentCreate(BaseModel):
     inbound_enabled: bool = False
     inbound_system_prompt: Optional[str] = None
     inbound_first_message: Optional[str] = None
+    call_objective: Optional[str] = None
+    target_audience: Optional[str] = None
+    custom_objections: Optional[str] = None
 
 
 class AgentUpdate(BaseModel):
@@ -55,6 +58,56 @@ class AgentUpdate(BaseModel):
     inbound_first_message: Optional[str] = None
     inbound_retell_agent_id: Optional[str] = None
     inbound_retell_llm_id: Optional[str] = None
+    call_objective: Optional[str] = None
+    target_audience: Optional[str] = None
+    custom_objections: Optional[str] = None
+
+
+def _compute_score(agent) -> tuple[int, list[str]]:
+    score = 15  # name + agent_name + company_name are required so always present
+    warnings = []
+    info_len = len(agent.company_info or "")
+    if info_len > 100:
+        score += 15
+    elif info_len > 20:
+        score += 7
+        warnings.append("Info de empresa muy corta — amplíala para darle más contexto al agente")
+    else:
+        warnings.append("Falta información de la empresa")
+
+    svc_len = len(agent.services or "")
+    if svc_len > 100:
+        score += 15
+    elif svc_len > 20:
+        score += 7
+        warnings.append("Descripción de servicios muy corta")
+    else:
+        warnings.append("Falta descripción de servicios")
+
+    if agent.target_audience:
+        score += 15
+    else:
+        warnings.append("Sin público objetivo — el agente no puede calificar prospectos durante la llamada")
+
+    if agent.call_objective:
+        score += 15
+    else:
+        warnings.append("Sin objetivo de llamada — el agente no sabe cuándo intentar cerrar")
+
+    if agent.custom_objections:
+        score += 10
+    else:
+        warnings.append("Sin objeciones personalizadas — el agente usará respuestas genéricas")
+
+    if agent.voicemail_message:
+        score += 5
+    else:
+        warnings.append("Sin mensaje de buzón de voz")
+
+    if agent.outbound_first_message:
+        score += 5
+
+    return min(score, 100), warnings
 
 
 @router.post("")
@@ -94,6 +147,23 @@ def get_agent(
     if current_user.role != "superadmin" and agent.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
     return agent.dict(exclude={"campaigns"})
+
+
+@router.get("/{agent_id}/prompt-preview")
+def prompt_preview(
+    agent_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    agent = session.get(AgentConfig, agent_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if current_user.role != "superadmin" and agent.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+    from services.call_orchestrator import build_system_prompt
+    prompt = agent.outbound_system_prompt or build_system_prompt(agent)
+    score, warnings = _compute_score(agent)
+    return {"prompt": prompt, "score": score, "warnings": warnings}
 
 
 @router.put("/{agent_id}")
