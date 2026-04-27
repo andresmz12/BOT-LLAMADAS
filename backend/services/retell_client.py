@@ -153,12 +153,13 @@ async def sync_to_retell(
     base_agent_settings = {
         "voice_id": voice_id,
         "language": retell_language,
-        "responsiveness": 1,
-        "interruption_sensitivity": 0.8,
+        "responsiveness": 0.8,
+        "interruption_sensitivity": 0.6,
         "enable_backchannel": True,
         "backchannel_frequency": 0.7,
         "backchannel_words": backchannel_words,
         "ambient_sound": "coffee-shop",
+        "max_call_duration_ms": (agent_config.max_call_duration or 180) * 1000,
     }
 
     # ── OUTBOUND ─────────────────────────────────────────────────
@@ -176,10 +177,11 @@ async def sync_to_retell(
     )
 
     outbound_llm_payload = {
-        "model": "claude-4.5-haiku",
+        "model": "claude-3-5-haiku",
         "general_prompt": outbound_prompt,
         "begin_message": outbound_begin,
         "general_tools": [],
+        "temperature": agent_config.temperature if agent_config.temperature is not None else 0.4,
     }
     if agent_config.retell_knowledge_base_id:
         outbound_llm_payload["knowledge_base_ids"] = [agent_config.retell_knowledge_base_id]
@@ -192,10 +194,8 @@ async def sync_to_retell(
         "agent_name": agent_config.name,
         **base_agent_settings,
         "voicemail_option": {
-            "action": {
-                "type": "static_text",
-                "text": default_voicemail_msg,
-            },
+            "type": "static_text",
+            "text": default_voicemail_msg,
         },
     }
 
@@ -223,10 +223,11 @@ async def sync_to_retell(
             )
 
             inbound_llm_payload = {
-                "model": "claude-4.5-haiku",
+                "model": "claude-3-5-haiku",
                 "general_prompt": inbound_prompt,
                 "begin_message": inbound_begin,
                 "general_tools": [],
+                "temperature": agent_config.temperature if agent_config.temperature is not None else 0.4,
             }
             if agent_config.retell_knowledge_base_id:
                 inbound_llm_payload["knowledge_base_ids"] = [agent_config.retell_knowledge_base_id]
@@ -335,10 +336,8 @@ async def create_call_direct(
             "company_name": prospect_company or "",
         },
         "voicemail_option": {
-            "action": {
-                "type": "static_text",
-                "text": voicemail_message or "Hola, le llamaremos de nuevo en otro momento. ¡Que tenga un buen día!",
-            },
+            "type": "static_text",
+            "text": voicemail_message or "Hola, le llamaremos de nuevo en otro momento. ¡Que tenga un buen día!",
         },
     }
 
