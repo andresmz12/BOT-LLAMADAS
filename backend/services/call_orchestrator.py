@@ -19,14 +19,20 @@ def build_system_prompt(agent_config: AgentConfig) -> str:
         rules = (
             "- Never invent prices or services not listed in your information\n"
             "- If no one answers, leave a brief and friendly voicemail\n"
-            "- At the end of the call, say goodbye cordially"
+            "- At the end of the call, say goodbye cordially\n"
+            "- CRITICAL: If audio is inaudible or you cannot hear the customer, say ONCE "
+            "'I'm sorry, I can't hear you, I'll call back another time' and HANG UP immediately. "
+            "Do not retry more than once."
         )
     else:
         lang_instruction = "IDIOMA: Habla SIEMPRE en español. Never respond in English under any circumstances."
         rules = (
             "- Nunca inventes precios ni servicios que no están en tu información\n"
             "- Si no contestan, deja un mensaje de voz breve y amable\n"
-            "- Al finalizar la llamada, despídete cordialmente"
+            "- Al finalizar la llamada, despídete cordialmente\n"
+            "- CRÍTICO: Si el audio es inaudible o no puedes escuchar al cliente, di UNA sola vez "
+            "'Disculpe, no logro escucharle bien, le llamo en otro momento' y CUELGA inmediatamente. "
+            "No repitas el intento más de una vez."
         )
 
     return f"""{lang_instruction}

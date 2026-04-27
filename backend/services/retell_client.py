@@ -160,6 +160,7 @@ async def sync_to_retell(
         "backchannel_words": backchannel_words,
         "ambient_sound": "coffee-shop",
         "max_call_duration_ms": (agent_config.max_call_duration or 180) * 1000,
+        "end_call_after_silence_ms": 8000,
     }
 
     # ── OUTBOUND ─────────────────────────────────────────────────
