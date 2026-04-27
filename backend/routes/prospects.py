@@ -80,24 +80,10 @@ async def import_file(
 
     imported = 0
     for row in rows:
-        phone = (row.get("phone") or row.get("telefono") or row.get("teléfono")
-                 or row.get("phone number") or row.get("phonenumber")
-                 or row.get("número") or row.get("numero")
-                 or row.get("cel") or row.get("celular")
-                 or row.get("móvil") or row.get("movil") or "").strip()
-        # If file has "contact" column → person name; "name" column → company
-        # If file has only "name" column → person name
-        has_contact = bool(row.get("contact") or row.get("contacto"))
-        name = (row.get("contact") or row.get("contacto")
-                or row.get("name") or row.get("nombre")
-                or row.get("full name") or row.get("fullname")
-                or row.get("first name") or row.get("firstname") or phone).strip()
-        company = (row.get("company") or row.get("empresa")
-                   or row.get("organization") or row.get("organización")
-                   or row.get("org")
-                   or (row.get("name") if has_contact else "")
-                   or "").strip()
-        email = row.get("email", "").strip() or row.get("correo", "").strip()
+        phone = (row.get("phone") or "").strip()
+        name = (row.get("name") or "").strip()
+        company = (row.get("company") or "").strip()
+        email = (row.get("email") or "").strip()
         if not phone:
             continue
         session.add(Prospect(
