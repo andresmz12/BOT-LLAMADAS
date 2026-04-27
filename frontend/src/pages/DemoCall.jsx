@@ -131,9 +131,18 @@ export default function DemoCall() {
               </button>
             )}
             {callState === 'connecting' && (
-              <div className="flex items-center gap-2 text-slate-400 text-sm">
-                <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
-                Conectando...
+              <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2 text-slate-400 text-sm">
+                  <div className="w-4 h-4 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                  Conectando...
+                </div>
+                <button
+                  onClick={endCall}
+                  className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-semibold rounded-lg text-sm transition-colors"
+                >
+                  <StopIcon className="w-4 h-4" />
+                  Cancelar
+                </button>
               </div>
             )}
             {callState === 'active' && (
