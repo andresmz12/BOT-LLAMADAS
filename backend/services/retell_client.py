@@ -177,7 +177,7 @@ async def sync_to_retell(
     )
 
     outbound_llm_payload = {
-        "model": "claude-3-5-haiku",
+        "model": "claude-4.5-haiku",
         "general_prompt": outbound_prompt,
         "begin_message": outbound_begin,
         "general_tools": [],
@@ -223,7 +223,7 @@ async def sync_to_retell(
             )
 
             inbound_llm_payload = {
-                "model": "claude-3-5-haiku",
+                "model": "claude-4.5-haiku",
                 "general_prompt": inbound_prompt,
                 "begin_message": inbound_begin,
                 "general_tools": [],
