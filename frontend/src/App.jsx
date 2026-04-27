@@ -17,7 +17,7 @@ import WhatsApp from './pages/WhatsApp'
 import Users from './pages/Users'
 import Leads from './pages/Leads'
 
-const IDLE_MS = 10 * 60 * 1000 // 10 minutes
+const IDLE_MS = 5 * 60 * 1000 // 5 minutes
 
 function ProtectedLayout() {
   const token = localStorage.getItem('token')
@@ -26,20 +26,32 @@ function ProtectedLayout() {
 
   useEffect(() => {
     if (!token) return
+
+    const doLogout = () => {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      navigate('/login', { replace: true })
+    }
+
+    // Logout immediately when tab is hidden / user leaves the app
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') doLogout()
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+
+    // Logout after 5 min of inactivity inside the app
     let timer
     const reset = () => {
       clearTimeout(timer)
-      timer = setTimeout(() => {
-        localStorage.removeItem('token')
-        localStorage.removeItem('user')
-        navigate('/login', { replace: true })
-      }, IDLE_MS)
+      timer = setTimeout(doLogout, IDLE_MS)
     }
     const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll']
     events.forEach(e => window.addEventListener(e, reset, { passive: true }))
     reset()
+
     return () => {
       clearTimeout(timer)
+      document.removeEventListener('visibilitychange', onVisibility)
       events.forEach(e => window.removeEventListener(e, reset))
     }
   }, [token])
