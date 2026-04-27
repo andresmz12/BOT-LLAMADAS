@@ -6,6 +6,7 @@ import UpgradeBanner from '../components/UpgradeBanner'
 import CallDetailModal from '../components/CallDetailModal'
 import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus, getCalls } from '../api/client'
 import { exportToCsv } from '../utils/exportCsv'
+import { fmtDate } from '../utils/date'
 
 const STATUSES = ['', 'pending', 'calling', 'answered', 'voicemail', 'failed', 'do_not_call']
 
