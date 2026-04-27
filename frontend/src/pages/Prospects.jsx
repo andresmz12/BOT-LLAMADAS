@@ -107,7 +107,7 @@ function ProspectHistoryModal({ prospect, onClose }) {
                   <tr><td colSpan={5} className="px-4 py-8 text-center text-slate-500">Sin llamadas registradas</td></tr>
                 ) : calls.map(c => (
                   <tr key={c.id} className="hover:bg-white/[0.02] cursor-pointer" onClick={() => setSelectedCall(c)}>
-                    <td className="px-4 py-3 text-slate-400 text-xs">{c.started_at ? new Date(c.started_at).toLocaleString() : '—'}</td>
+                    <td className="px-4 py-3 text-slate-400 text-xs">{fmtDate(c.started_at)}</td>
                     <td className="px-4 py-3 text-slate-400 text-xs">{c.duration_seconds ? (c.duration_seconds >= 60 ? `${Math.floor(c.duration_seconds/60)}m ${c.duration_seconds%60}s` : `${c.duration_seconds}s`) : '—'}</td>
                     <td className="px-4 py-3"><StatusBadge status={c.outcome || c.status} /></td>
                     <td className="px-4 py-3 text-xs text-slate-400">{c.sentiment || '—'}</td>

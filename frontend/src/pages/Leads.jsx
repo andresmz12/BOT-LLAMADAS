@@ -20,7 +20,9 @@ function fmtDur(s) {
 
 function fmtDate(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleString('es-MX', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const s = String(iso)
+  const d = new Date(s.endsWith('Z') || s.includes('+') ? s : s + 'Z')
+  return d.toLocaleString('es-MX', { timeZone: 'America/Bogota', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
 export default function Leads() {
