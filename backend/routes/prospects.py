@@ -80,9 +80,13 @@ async def import_file(
 
     imported = 0
     for row in rows:
-        phone = (row.get("phone") or "").strip()
-        name = (row.get("name") or "").strip()
-        company = (row.get("company") or "").strip()
+        # Phone: "phone" or "phone number"
+        phone = (row.get("phone") or row.get("phone number") or "").strip()
+        # When file has "contact" column → contact=person name, name=company
+        # When file has only "name" column → name=person name
+        has_contact = "contact" in row
+        name = (row.get("contact") or row.get("name") or "").strip()
+        company = (row.get("company") or (row.get("name") if has_contact else "") or "").strip()
         email = (row.get("email") or "").strip()
         if not phone:
             continue
