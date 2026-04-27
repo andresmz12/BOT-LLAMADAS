@@ -181,7 +181,7 @@ async def sync_to_retell(
         "model": "claude-4.5-haiku",
         "general_prompt": outbound_prompt,
         "begin_message": outbound_begin,
-        "general_tools": [{"type": "end_call"}],
+        "general_tools": [{"type": "end_call", "name": "end_call", "description": "Termina la llamada."}],
         "temperature": agent_config.temperature if agent_config.temperature is not None else 0.4,
     }
     if agent_config.retell_knowledge_base_id:
@@ -218,7 +218,7 @@ async def sync_to_retell(
                 "model": "claude-4.5-haiku",
                 "general_prompt": inbound_prompt,
                 "begin_message": inbound_begin,
-                "general_tools": [{"type": "end_call"}],
+                "general_tools": [{"type": "end_call", "name": "end_call", "description": "Termina la llamada."}],
                 "temperature": agent_config.temperature if agent_config.temperature is not None else 0.4,
             }
             if agent_config.retell_knowledge_base_id:
