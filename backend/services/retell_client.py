@@ -328,6 +328,8 @@ async def create_call_direct(
             "company_name": prospect_company or "",
         },
     }
+    if voicemail_message:
+        payload["voicemail_message"] = voicemail_message
 
     headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=30) as client:
