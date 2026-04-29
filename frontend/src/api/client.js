@@ -74,10 +74,11 @@ export const deleteCampaign = (id) => api.delete(`/campaigns/${id}`).then(r => r
 // Prospects
 export const getProspects = (params) => api.get('/prospects', { params }).then(r => r.data)
 export const createProspect = (data) => api.post('/prospects', data).then(r => r.data)
-export const importProspects = (campaignId, file) => {
+export const importProspects = (campaignId, file, countryCode = '+1') => {
   const form = new FormData()
   form.append('campaign_id', campaignId)
   form.append('file', file)
+  form.append('phone_country_code', countryCode)
   return api.post('/prospects/import', form).then(r => r.data)
 }
 export const updateProspect = (id, data) => api.put(`/prospects/${id}`, data).then(r => r.data)

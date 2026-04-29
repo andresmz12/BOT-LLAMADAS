@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlmodel import Session, select
@@ -10,6 +11,22 @@ from models import Prospect, Campaign, AgentConfig, Call, User, Organization
 from routes.auth import get_current_user, require_write_access, require_pro_plan
 
 router = APIRouter(prefix="/prospects", tags=["prospects"])
+
+
+def normalize_phone(phone: str, country_code: str = "+1") -> str:
+    phone = phone.strip()
+    if not phone:
+        return phone
+    if phone.startswith('+'):
+        digits = re.sub(r'\D', '', phone[1:])
+        return '+' + digits if digits else phone
+    digits = re.sub(r'\D', '', phone)
+    if not digits:
+        return phone
+    cc_digits = re.sub(r'\D', '', country_code)
+    if digits.startswith(cc_digits) and len(digits) > len(cc_digits):
+        return '+' + digits
+    return country_code + digits
 
 
 class ProspectCreate(BaseModel):
@@ -37,7 +54,7 @@ def create_prospect(
     prospect = Prospect(
         campaign_id=data.campaign_id,
         name=data.name,
-        phone=data.phone,
+        phone=normalize_phone(data.phone),
         company=data.company or None,
         notes=data.notes or None,
         organization_id=current_user.organization_id,
@@ -52,6 +69,7 @@ def create_prospect(
 async def import_file(
     campaign_id: int = Form(...),
     file: UploadFile = File(...),
+    phone_country_code: str = Form(default="+1"),
     current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
@@ -82,14 +100,13 @@ async def import_file(
     for row in rows:
         # Phone: "phone" or "phone number"
         phone = (row.get("phone") or row.get("phone number") or "").strip()
-        # When file has "contact" column → contact=person name, name=company
-        # When file has only "name" column → name=person name
         has_contact = "contact" in row
         name = (row.get("contact") or row.get("name") or "").strip()
         company = (row.get("company") or (row.get("name") if has_contact else "") or "").strip()
         email = (row.get("email") or "").strip()
         if not phone:
             continue
+        phone = normalize_phone(phone, phone_country_code)
         session.add(Prospect(
             campaign_id=campaign_id,
             name=name,

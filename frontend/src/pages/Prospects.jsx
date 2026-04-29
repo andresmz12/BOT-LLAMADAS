@@ -10,8 +10,30 @@ import { fmtDate } from '../utils/date'
 
 const STATUSES = ['', 'pending', 'calling', 'answered', 'voicemail', 'failed', 'do_not_call']
 
+const PHONE_PREFIXES = [
+  { code: '+1',   flag: '🇺🇸', label: '+1' },
+  { code: '+52',  flag: '🇲🇽', label: '+52' },
+  { code: '+57',  flag: '🇨🇴', label: '+57' },
+  { code: '+54',  flag: '🇦🇷', label: '+54' },
+  { code: '+56',  flag: '🇨🇱', label: '+56' },
+  { code: '+51',  flag: '🇵🇪', label: '+51' },
+  { code: '+34',  flag: '🇪🇸', label: '+34' },
+  { code: '+55',  flag: '🇧🇷', label: '+55' },
+  { code: '+58',  flag: '🇻🇪', label: '+58' },
+  { code: '+593', flag: '🇪🇨', label: '+593' },
+  { code: '+502', flag: '🇬🇹', label: '+502' },
+  { code: '+503', flag: '🇸🇻', label: '+503' },
+  { code: '+504', flag: '🇭🇳', label: '+504' },
+  { code: '+505', flag: '🇳🇮', label: '+505' },
+  { code: '+506', flag: '🇨🇷', label: '+506' },
+  { code: '+507', flag: '🇵🇦', label: '+507' },
+  { code: '+598', flag: '🇺🇾', label: '+598' },
+  { code: '+595', flag: '🇵🇾', label: '+595' },
+  { code: '+591', flag: '🇧🇴', label: '+591' },
+]
+
 function NewProspectModal({ campaigns, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: '', phone: '', company: '', campaign_id: campaigns[0]?.id || '' })
+  const [form, setForm] = useState({ name: '', phoneDigits: '', phonePrefix: '+1', company: '', campaign_id: campaigns[0]?.id || '' })
   const [loading, setLoading] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -19,7 +41,8 @@ function NewProspectModal({ campaigns, onClose, onSaved }) {
     e.preventDefault()
     setLoading(true)
     try {
-      await createProspect({ ...form, campaign_id: Number(form.campaign_id) })
+      const phone = form.phonePrefix + form.phoneDigits.replace(/\D/g, '')
+      await createProspect({ name: form.name, phone, company: form.company, campaign_id: Number(form.campaign_id) })
       onSaved()
     } catch (err) {
       alert('Error: ' + (err.response?.data?.detail || err.message))
@@ -41,9 +64,18 @@ function NewProspectModal({ campaigns, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Teléfono *</label>
-            <input required value={form.phone} onChange={e => set('phone', e.target.value)}
-              placeholder="+521234567890" className="z-input font-mono" />
-            <p className="text-xs text-slate-500 mt-1">Formato E.164 con código de país</p>
+            <div className="flex gap-2">
+              <select value={form.phonePrefix} onChange={e => set('phonePrefix', e.target.value)}
+                className="z-input w-28 flex-shrink-0 font-mono">
+                {PHONE_PREFIXES.map(p => (
+                  <option key={p.code} value={p.code}>{p.flag} {p.label}</option>
+                ))}
+              </select>
+              <input required value={form.phoneDigits} onChange={e => set('phoneDigits', e.target.value)}
+                placeholder="5551234567" className="z-input flex-1 font-mono"
+                inputMode="numeric" />
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Solo dígitos, sin espacios ni guiones</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Empresa</label>
