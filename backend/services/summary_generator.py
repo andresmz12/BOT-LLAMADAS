@@ -23,32 +23,32 @@ REGLAS ESTRICTAS PARA outcome (aplica en orden de prioridad):
 
 1. "appointment_scheduled" — el prospecto aceptó una cita o reunión con fecha/hora concreta.
 
-2. "interested" — SOLO si quien contestó muestra interés ACTIVO en el producto/servicio del agente.
-   Requiere al menos uno de estos:
-   - Preguntó activamente por precios, costos o detalles del servicio que ofrece el agente.
-   - Dijo explícitamente: "cuéntame más", "me interesa", "suena bien", "¿cómo funciona?", "¿qué incluye?", "¿cuánto cuesta?".
-   - Aceptó recibir más información, una demostración o una llamada de seguimiento.
-   - Pidió los datos de contacto del agente para saber más.
-   IMPORTANTE — NO cuenta como interés:
-   - Responder preguntas del agente sobre el propio negocio del cliente.
-   - Describir los servicios que el cliente ya ofrece en su empresa.
-   - Mantener una conversación cortés sin pedir nada sobre el producto del agente.
+2. "interested" — SOLO si el cliente muestra interés CONCRETO y ACTIVO. Requiere al menos uno:
+   - Proporcionó su correo electrónico, WhatsApp u otro dato de contacto para recibir información.
+   - Pidió explícitamente que le envíen información, un catálogo o una propuesta.
+   - Preguntó activamente por precios, costos o condiciones del servicio del agente.
+   - Aceptó una llamada o reunión de seguimiento con compromiso claro.
+   - Dijo frases como: "me interesa", "mándame información", "¿cuánto cuesta?", "¿cómo funciona?", "quiero saber más".
+   NO cuenta como interés:
+   - Responder preguntas del agente sobre su propio negocio.
+   - Escuchar la presentación sin pedir nada.
+   - Mantener conversación cortés y colgar sin comprometerse a nada.
 
 3. "callback_requested" — cualquiera de estas situaciones:
-   - La persona buscada NO estaba disponible: alguien contestó y dijo "no está", "no se encuentra",
-     "está ocupado", "no está en este momento", "ahorita no puede", "está en una junta",
-     "no está disponible ahora", "no está aquí".
-   - El prospecto dijo: "Llámeme después", "Estoy ocupado", "Mañana", "Ahorita no puedo",
-     "En otro momento", "Más tarde", "Llama mañana", "Ahora no es buen momento", "Te llamo yo".
+   - La persona buscada NO estaba disponible: "no está", "no se encuentra", "está ocupado",
+     "no está en este momento", "ahorita no puede", "está en una junta", "no está aquí".
+   - El prospecto dijo que no es buen momento: "Llámeme después", "Estoy ocupado", "Mañana",
+     "Ahorita no puedo", "En otro momento", "Más tarde", "Ahora no es buen momento", "Te llamo yo".
+   - Contestó, escuchó la presentación, respondió algunas preguntas pero colgó sin mostrar
+     interés claro NI rechazar explícitamente — hay que intentar de nuevo.
 
-4. "not_interested" — si cualquiera de estas condiciones:
-   - Dijo explícitamente "no me interesa", "no gracias", "no quiero", "no, gracias".
-   - Dijo que ya tiene el servicio/producto: "ya tengo", "ya cuento con", "ya tenemos",
-     "ya tengo otro proveedor", "ya tenemos uno", "ya tenemos contratado", "ya lo tenemos",
-     "ya estamos con alguien", "ya trabajamos con otro".
-   - Dijo "no lo necesito", "no aplica", "no es para nosotros", "no estamos interesados",
-     "no nos interesa", "no es algo que necesitemos".
-   - Colgó inmediatamente después de escuchar la presentación sin mostrar ningún interés.
+4. "not_interested" — SOLO si hubo rechazo EXPLÍCITO y definitivo:
+   - Dijo claramente: "no me interesa", "no gracias", "no quiero", "no, gracias".
+   - Dijo que ya tiene el servicio: "ya tengo", "ya cuento con", "ya tenemos",
+     "ya tengo otro proveedor", "ya tenemos contratado", "ya estamos con alguien".
+   - Dijo: "no lo necesito", "no aplica", "no es para nosotros", "no estamos interesados",
+     "no nos interesa", "no busco eso".
+   IMPORTANTE: La duda, el silencio o colgar sin rechazar NO es not_interested — usa callback_requested.
 
 5. "wrong_number" — contestó alguien equivocado, marcó error, o el número no corresponde al prospecto buscado.
 
