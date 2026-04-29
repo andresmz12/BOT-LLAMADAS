@@ -69,7 +69,7 @@ export default function Campaigns() {
                     {c.description && <p className="text-xs text-slate-500 mt-0.5">{c.description}</p>}
                     {c.status === 'scheduled' && c.scheduled_start_at && (
                       <p className="text-xs text-orange-400 mt-0.5">
-                        Inicia: {new Date(c.scheduled_start_at).toLocaleString()}
+                        Inicia: {new Date(c.scheduled_start_at.endsWith('Z') ? c.scheduled_start_at : c.scheduled_start_at + 'Z').toLocaleString()}
                       </p>
                     )}
                   </td>
