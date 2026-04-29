@@ -55,7 +55,7 @@ webhook_module.ws_manager = ws_manager
 async def _campaign_scheduler():
     """Poll every 30s and auto-start campaigns whose scheduled_start_at has arrived."""
     import asyncio as _asyncio
-    from datetime import datetime as _dt
+    from datetime import datetime as _dt, timezone as _tz
     from sqlmodel import Session as _S, select as _sel
     from models import Campaign as _Campaign
     from services import call_orchestrator as _orch
@@ -67,7 +67,7 @@ async def _campaign_scheduler():
                 due = s.exec(
                     _sel(_Campaign).where(
                         _Campaign.status == "scheduled",
-                        _Campaign.scheduled_start_at <= _dt.utcnow(),
+                        _Campaign.scheduled_start_at <= _dt.now(_tz.utc),
                     )
                 ).all()
                 for campaign in due:

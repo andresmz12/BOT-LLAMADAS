@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select
 from pydantic import BaseModel, Field
@@ -27,7 +27,11 @@ def create_campaign(
     current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
-    status = "scheduled" if data.scheduled_start_at and data.scheduled_start_at > datetime.utcnow() else "draft"
+    now_utc = datetime.now(timezone.utc)
+    sched = data.scheduled_start_at
+    if sched and sched.tzinfo is None:
+        sched = sched.replace(tzinfo=timezone.utc)
+    status = "scheduled" if sched and sched > now_utc else "draft"
     campaign = Campaign(
         name=data.name,
         description=data.description,
