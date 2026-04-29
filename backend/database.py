@@ -74,6 +74,9 @@ def run_migrations():
                 if "sequential_calls" not in camp_cols:
                     conn.execute(text("ALTER TABLE campaign ADD COLUMN sequential_calls BOOLEAN DEFAULT FALSE"))
                     log.info("Migration: added campaign.sequential_calls")
+                if "scheduled_start_at" not in camp_cols:
+                    conn.execute(text("ALTER TABLE campaign ADD COLUMN scheduled_start_at TIMESTAMP"))
+                    log.info("Migration: added campaign.scheduled_start_at")
 
         if "organization" in tables:
             org_cols = {c["name"] for c in insp.get_columns("organization")}

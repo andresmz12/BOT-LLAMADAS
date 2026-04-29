@@ -67,6 +67,11 @@ export default function Campaigns() {
                   <td className="px-6 py-4">
                     <p className="font-medium text-slate-200">{c.name}</p>
                     {c.description && <p className="text-xs text-slate-500 mt-0.5">{c.description}</p>}
+                    {c.status === 'scheduled' && c.scheduled_start_at && (
+                      <p className="text-xs text-orange-400 mt-0.5">
+                        Inicia: {new Date(c.scheduled_start_at).toLocaleString()}
+                      </p>
+                    )}
                   </td>
                   <td className="px-6 py-4"><StatusBadge status={c.status} pulse /></td>
                   <td className="px-6 py-4">
@@ -87,7 +92,7 @@ export default function Campaigns() {
                   </td>
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-2">
-                      {(c.status === 'draft' || c.status === 'paused') && (
+                      {(c.status === 'draft' || c.status === 'paused' || c.status === 'scheduled') && (
                         <button onClick={() => handleStart(c.id)}
                           className="flex items-center gap-1 px-2.5 py-1 bg-green-500/15 hover:bg-green-500/25 text-green-400 text-xs font-medium rounded-lg">
                           <PlayIcon className="w-3.5 h-3.5" /> Iniciar
@@ -127,7 +132,7 @@ export default function Campaigns() {
 }
 
 function NewCampaignModal({ agents, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: '', description: '', agent_config_id: agents[0]?.id || '', calls_per_minute: 10, sequential_calls: false })
+  const [form, setForm] = useState({ name: '', description: '', agent_config_id: agents[0]?.id || '', calls_per_minute: 10, sequential_calls: false, schedule_enabled: false, scheduled_start_at: '' })
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -141,16 +146,29 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
     if (!form.agent_config_id) return alert('Selecciona un agente')
     setLoading(true)
     try {
-      await createCampaign({ ...form, agent_config_id: Number(form.agent_config_id), calls_per_minute: Number(form.calls_per_minute), sequential_calls: form.sequential_calls })
+      const payload = {
+        ...form,
+        agent_config_id: Number(form.agent_config_id),
+        calls_per_minute: Number(form.calls_per_minute),
+        sequential_calls: form.sequential_calls,
+        scheduled_start_at: form.schedule_enabled && form.scheduled_start_at
+          ? new Date(form.scheduled_start_at).toISOString()
+          : null,
+      }
+      delete payload.schedule_enabled
+      await createCampaign(payload)
       onSaved()
     } catch (err) {
       alert(err.response?.data?.detail || 'Error al crear campaña')
     } finally { setLoading(false) }
   }
 
+  // Minimum datetime for the picker: now + 1 min
+  const minDatetime = new Date(Date.now() + 60000).toISOString().slice(0, 16)
+
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-md">
+      <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-z-border">
           <h2 className="text-lg font-bold text-slate-100">Nueva Campaña</h2>
           <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
@@ -189,10 +207,37 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
               <p className="text-xs text-slate-500">Esperar a que cada llamada termine antes de iniciar la siguiente</p>
             </div>
           </label>
+
+          <div className="border-t border-z-border pt-4">
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="checkbox" checked={form.schedule_enabled}
+                onChange={e => setForm(f => ({ ...f, schedule_enabled: e.target.checked, scheduled_start_at: '' }))}
+                className="rounded border-slate-600 bg-slate-800 text-orange-500 w-4 h-4 cursor-pointer" />
+              <div>
+                <p className="text-sm font-medium text-slate-200">Programar inicio automático</p>
+                <p className="text-xs text-slate-500">La campaña arrancará sola en la fecha y hora que elijas</p>
+              </div>
+            </label>
+            {form.schedule_enabled && (
+              <div className="mt-3">
+                <label className="block text-sm font-medium text-slate-300 mb-1">Fecha y hora de inicio</label>
+                <input
+                  type="datetime-local"
+                  required={form.schedule_enabled}
+                  min={minDatetime}
+                  value={form.scheduled_start_at}
+                  onChange={e => setForm(f => ({ ...f, scheduled_start_at: e.target.value }))}
+                  className="z-input"
+                />
+                <p className="text-xs text-slate-500 mt-1">Hora en tu zona horaria local</p>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="z-btn-ghost">Cancelar</button>
             <button type="submit" disabled={loading} className="z-btn-primary">
-              {loading ? 'Creando...' : 'Crear campaña'}
+              {loading ? 'Creando...' : form.schedule_enabled ? 'Programar campaña' : 'Crear campaña'}
             </button>
           </div>
         </form>
