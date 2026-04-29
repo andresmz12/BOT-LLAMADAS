@@ -24,6 +24,7 @@ async def _bg_analyze_and_sync(
     org_id: int | None,
     prospect_id: int | None,
     campaign_id: int | None,
+    duration_seconds: int = 0,
 ):
     """Background task: Claude analysis + DB update + CRM dispatch.
     Runs AFTER Retell already received 200, preventing duplicate retries."""
@@ -54,7 +55,7 @@ async def _bg_analyze_and_sync(
         elif transcript.strip():
             logger.info(f"[BG] call_id={call_id} analyzing {len(transcript)} chars with Claude...")
             try:
-                analysis = await summary_generator.analyze_transcript(transcript, api_key=org_api_key)
+                analysis = await summary_generator.analyze_transcript(transcript, api_key=org_api_key, duration_seconds=duration_seconds)
                 logger.info(f"[BG] call_id={call_id} outcome={analysis.get('outcome')} sentiment={analysis.get('sentiment')}")
                 call.client_said = json.dumps(analysis.get("client_said", []))
                 call.agent_said = json.dumps(analysis.get("agent_said", []))
@@ -281,7 +282,7 @@ async def retell_webhook(request: Request, background_tasks: BackgroundTasks, se
         background_tasks.add_task(
             _bg_analyze_and_sync,
             call.id, transcript, in_voicemail, call.organization_id,
-            call.prospect_id, call.campaign_id,
+            call.prospect_id, call.campaign_id, call.duration_seconds or 0,
         )
 
         if ws_manager and call.campaign_id:
