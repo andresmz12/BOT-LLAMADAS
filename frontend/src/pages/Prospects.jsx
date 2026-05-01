@@ -221,13 +221,11 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
             <div className="col-span-2">
               <label className="block text-sm font-medium text-slate-300 mb-1">¿Qué tipo de negocio buscas? *</label>
               <input required value={form.search_term} onChange={e => set('search_term', e.target.value)}
-                placeholder="ej: tiendas de abarrotes, talleres mecánicos, dentistas"
                 className="z-input" />
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">Ciudad o estado *</label>
               <input required value={form.location} onChange={e => set('location', e.target.value)}
-                placeholder="ej: Chicago IL, Dallas TX"
                 className="z-input" />
             </div>
             <div>
@@ -240,7 +238,6 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
             <div className="col-span-2">
               <label className="block text-sm font-medium text-slate-300 mb-1">Zona específica <span className="text-slate-500 font-normal">(opcional)</span></label>
               <input value={form.zone} onChange={e => set('zone', e.target.value)}
-                placeholder="ej: Pilsen, Logan Square, ZIP 60608"
                 className="z-input" />
               <p className="text-xs text-slate-600 mt-1">Limita la búsqueda a un barrio o código postal específico</p>
             </div>
@@ -263,7 +260,6 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
                 <span className="text-slate-500 font-normal ml-1">(separadas por coma)</span>
               </label>
               <input value={form.exclude_keywords} onChange={e => set('exclude_keywords', e.target.value)}
-                placeholder="ej: corp, inc, llc, chain, franchise, group"
                 className="z-input" />
               <p className="text-xs text-slate-600 mt-1">Se filtrará cualquier negocio cuyo nombre contenga estas palabras</p>
             </div>

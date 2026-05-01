@@ -155,200 +155,6 @@ async def import_file(
     return {"imported": imported}
 
 
-class ApifySearchRequest(BaseModel):
-    campaign_id: int
-    search_term: str
-    location: str
-    zone: str = ""
-    max_results: int = 50
-    exclude_keywords: str = ""
-    exclude_chains: bool = True
-    dedupe_by_brand: bool = True
-    min_reviews: int = 0
-    min_rating: float = 0.0
-    skip_closed: bool = True
-    require_phone: bool = True
-    language: str = "en"
-
-
-def _brand_key(name: str) -> str:
-    """Normalize a business name to its 'brand key' for deduplication."""
-    n = name.lower()
-    n = re.sub(r'\b(inc|llc|corp|ltd|co|no|num|sucursal|branch|location|store)\b', '', n)
-    n = re.sub(r'#\s*\d+', '', n)       # remove #123
-    n = re.sub(r'\b\d+\b', '', n)       # remove standalone numbers
-    n = re.sub(r'[^\w\s]', '', n)       # remove punctuation
-    n = re.sub(r'\s+', ' ', n).strip()
-    return n
-
-
-# Common chain/franchise keywords to filter out automatically
-_CHAIN_KEYWORDS = [
-    "walmart", "mcdonald", "starbucks", "burger king", "wendy's", "taco bell",
-    "domino", "pizza hut", "subway", "dunkin", "7-eleven", "cvs", "walgreens",
-    "dollar general", "dollar tree", "family dollar", "target", "costco",
-    "home depot", "lowe's", "autozone", "advance auto", "o'reilly",
-    "chase bank", "wells fargo", "bank of america", "citibank", "td bank",
-    "h&r block", "jackson hewitt", "liberty tax",
-    "shell", "exxon", "chevron", "bp ", "circle k", "speedway",
-]
-
-
-@router.post("/search-apify")
-async def search_apify_prospects(
-    data: ApifySearchRequest,
-    current_user: User = Depends(require_pro_plan),
-    session: Session = Depends(get_session),
-):
-    import asyncio
-    import httpx
-    from models import Organization
-
-    org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
-    if not org or not org.apify_enabled:
-        raise HTTPException(status_code=403, detail="Búsqueda con IA no habilitada para esta organización")
-
-    api_token = (org.apify_api_token or "").strip() or os.getenv("APIFY_API_TOKEN", "")
-    if not api_token:
-        raise HTTPException(status_code=503, detail="Token de Apify no configurado para esta organización")
-
-    campaign = session.get(Campaign, data.campaign_id)
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaña no encontrada")
-
-    # Build exclude list (unchanged existing logic)
-    user_excludes = [kw.strip().lower() for kw in data.exclude_keywords.split(",") if kw.strip()]
-    chain_excludes = _CHAIN_KEYWORDS if data.exclude_chains else []
-    all_excludes = user_excludes + chain_excludes
-
-    # Build location query — prepend zone if provided
-    location_query = f"{data.zone.strip()}, {data.location}" if data.zone.strip() else data.location
-    search_query = f"{data.search_term} in {location_query}"
-
-    actor_input = {
-        "searchStrings": [search_query],
-        "maxCrawledPlacesPerSearch": min(data.max_results * 3, 500),
-        "includeHistogram": False,
-        "includeOpeningHours": False,
-        "includePeopleAlsoSearchFor": False,
-        "language": data.language,
-        "skipClosedPlaces": data.skip_closed,
-    }
-    if data.min_rating > 0:
-        actor_input["minimumStars"] = data.min_rating
-
-    async with httpx.AsyncClient(timeout=200) as client:
-        run_resp = await client.post(
-            "https://api.apify.com/v2/acts/compass~crawler-google-places/runs",
-            headers={"Authorization": f"Bearer {api_token}"},
-            json=actor_input,
-        )
-        if run_resp.status_code >= 400:
-            raise HTTPException(status_code=502, detail=f"Error Apify: {run_resp.text[:300]}")
-
-        run_id = run_resp.json().get("data", {}).get("id", "")
-        if not run_id:
-            raise HTTPException(status_code=502, detail="Apify no devolvió run_id")
-
-        run_status = ""
-        for _ in range(70):
-            await asyncio.sleep(3)
-            status_resp = await client.get(
-                f"https://api.apify.com/v2/actor-runs/{run_id}",
-                headers={"Authorization": f"Bearer {api_token}"},
-            )
-            run_status = status_resp.json().get("data", {}).get("status", "")
-            if run_status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
-                break
-
-        if run_status != "SUCCEEDED":
-            raise HTTPException(status_code=502, detail=f"Apify run terminó con estado: {run_status}")
-
-        items_resp = await client.get(
-            f"https://api.apify.com/v2/actor-runs/{run_id}/dataset/items",
-            headers={"Authorization": f"Bearer {api_token}"},
-            params={"format": "json", "limit": min(data.max_results * 3, 500)},
-        )
-        items = items_resp.json() if items_resp.status_code == 200 else []
-
-    # Deduplicate by brand — keep highest reviewsCount per brand key
-    skipped_duplicates = 0
-    if data.dedupe_by_brand:
-        brand_best: dict[str, dict] = {}
-        for item in items:
-            key = _brand_key((item.get("title") or item.get("name") or ""))
-            if not key:
-                continue
-            reviews = item.get("reviewsCount") or item.get("numRatings") or 0
-            existing = brand_best.get(key)
-            if existing is None:
-                brand_best[key] = item
-            elif reviews > (existing.get("reviewsCount") or existing.get("numRatings") or 0):
-                skipped_duplicates += 1
-                brand_best[key] = item
-            else:
-                skipped_duplicates += 1
-        items = list(brand_best.values())
-
-    imported = 0
-    skipped_no_phone = 0
-    skipped_no_reviews = 0
-    skipped_excluded = 0
-
-    for item in items:
-        if imported >= data.max_results:
-            break
-
-        # Filter by min_reviews
-        if data.min_reviews > 0:
-            reviews = item.get("reviewsCount") or item.get("numRatings") or 0
-            if reviews < data.min_reviews:
-                skipped_no_reviews += 1
-                continue
-
-        phone_raw = (item.get("phone") or item.get("phoneUnformatted") or "").strip()
-        if data.require_phone and not phone_raw:
-            skipped_no_phone += 1
-            continue
-
-        name = (item.get("title") or item.get("name") or "").strip()
-        name_lower = name.lower()
-
-        # Apply exclude filters (existing logic unchanged)
-        if any(kw in name_lower for kw in all_excludes):
-            skipped_excluded += 1
-            continue
-
-        phone = normalize_phone(phone_raw, "+1") if phone_raw else ""
-        address = (item.get("address") or item.get("street") or "").strip()
-        rating = item.get("totalScore") or item.get("rating") or 0
-        notes_parts = []
-        if address:
-            notes_parts.append(address)
-        if rating:
-            notes_parts.append(f"Rating: {rating}")
-
-        session.add(Prospect(
-            campaign_id=data.campaign_id,
-            name=name,
-            phone=phone,
-            company=name,
-            notes=" | ".join(notes_parts) or None,
-            organization_id=current_user.organization_id,
-        ))
-        imported += 1
-
-    session.commit()
-    return {
-        "imported": imported,
-        "total_found": len(items),
-        "skipped_no_phone": skipped_no_phone,
-        "skipped_no_reviews": skipped_no_reviews,
-        "skipped_duplicates": skipped_duplicates,
-        "skipped_excluded": skipped_excluded,
-    }
-
-
 @router.get("")
 def list_prospects(
     campaign_id: int | None = None,
@@ -570,10 +376,12 @@ async def search_apify_prospects(
     all_excludes = user_excludes + chain_excludes
 
     location_query = f"{data.zone.strip()}, {data.location}" if data.zone.strip() else data.location
-    search_query = f"{data.search_term} in {location_query}"
 
+    # compass/crawler-google-places now expects searchStringsArray + locationQuery
+    # as separate fields. Sending the legacy "searchStrings" causes immediate FAILED.
     actor_input = {
-        "searchStrings": [search_query],
+        "searchStringsArray": [data.search_term],
+        "locationQuery": location_query,
         "maxCrawledPlacesPerSearch": min(data.max_results * 3, 500),
         "includeHistogram": False,
         "includeOpeningHours": False,
@@ -581,8 +389,6 @@ async def search_apify_prospects(
         "language": data.language,
         "skipClosedPlaces": data.skip_closed,
     }
-    if data.min_rating > 0:
-        actor_input["minimumStars"] = data.min_rating
 
     # timeout=300 covers the full polling loop (70 * 3 = 210 s) with margin
     async with httpx.AsyncClient(timeout=300) as client:
@@ -657,6 +463,7 @@ async def search_apify_prospects(
     imported = 0
     skipped_no_phone = 0
     skipped_no_reviews = 0
+    skipped_low_rating = 0
     skipped_excluded = 0
 
     for item in items:
@@ -667,6 +474,12 @@ async def search_apify_prospects(
             reviews = item.get("reviewsCount") or item.get("numRatings") or 0
             if reviews < data.min_reviews:
                 skipped_no_reviews += 1
+                continue
+
+        if data.min_rating > 0:
+            rating_val = item.get("totalScore") or item.get("rating") or 0
+            if rating_val < data.min_rating:
+                skipped_low_rating += 1
                 continue
 
         phone_raw = (item.get("phone") or item.get("phoneUnformatted") or "").strip()
@@ -704,6 +517,7 @@ async def search_apify_prospects(
         "total_found": len(items),
         "skipped_no_phone": skipped_no_phone,
         "skipped_no_reviews": skipped_no_reviews,
+        "skipped_low_rating": skipped_low_rating,
         "skipped_duplicates": skipped_duplicates,
         "skipped_excluded": skipped_excluded,
     }
