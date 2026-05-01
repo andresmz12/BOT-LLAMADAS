@@ -189,7 +189,14 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
       setResult(res)
       onImported()
     } catch (err) {
-      alert('Error: ' + (err.response?.data?.detail || err.message))
+      const detail = err.response?.data?.detail || err.message || 'Error desconocido'
+      const isTokenError = detail.includes('user-or-token-not-found') ||
+        detail.toLowerCase().includes('authentication token') ||
+        detail.toLowerCase().includes('token de apify') ||
+        detail.toLowerCase().includes('token no configurado')
+      alert(isTokenError
+        ? 'Token de Apify inválido o no configurado.\n\nVe a Admin Panel → Organizaciones → edita tu organización → sección "Búsqueda con IA" → actualiza el token de Apify.'
+        : `Error: ${detail}`)
     } finally { setLoading(false) }
   }
 

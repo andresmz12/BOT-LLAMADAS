@@ -98,11 +98,40 @@ def update_org(
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
     for k, v in data.dict().items():
+        # Never overwrite a real secret with a masked placeholder (e.g. "****xxxx")
+        if k in _SENSITIVE and isinstance(v, str) and v.startswith("***"):
+            continue
         setattr(org, k, v)
     session.add(org)
     session.commit()
     session.refresh(org)
     return org
+
+
+@router.post("/organizations/{org_id}/apify/test")
+async def test_apify_token(
+    org_id: int,
+    _: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    import httpx
+    import os
+    org = session.get(Organization, org_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    token = (org.apify_api_token or "").strip() or os.getenv("APIFY_API_TOKEN", "")
+    if not token:
+        return {"ok": False, "detail": "Token de Apify no configurado para esta organización"}
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.get(
+            "https://api.apify.com/v2/users/me",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+    if resp.status_code == 200:
+        username = resp.json().get("data", {}).get("username", "?")
+        return {"ok": True, "username": username}
+    error_msg = resp.json().get("error", {}).get("message", resp.text[:200]) if resp.headers.get("content-type", "").startswith("application/json") else resp.text[:200]
+    return {"ok": False, "detail": error_msg}
 
 
 @router.get("/organizations/{org_id}/secrets")

@@ -3,7 +3,7 @@ import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, EyeIcon } from '@heroicons/
 import {
   getOrganizations, createOrganization, updateOrganization, deleteOrganization,
   getUsers, createUser, updateUser, deleteUser,
-  testCRMWebhook, upgradeOrg, getOrgSecrets,
+  testCRMWebhook, upgradeOrg, getOrgSecrets, testApifyToken,
 } from '../api/client'
 import SecretInput from '../components/SecretInput'
 
@@ -325,6 +325,8 @@ function OrgModal({ org, onClose, onSaved }) {
   const [testResult, setTestResult] = useState(null)
   const [testLoading, setTestLoading] = useState(false)
   const [revealLoading, setRevealLoading] = useState(false)
+  const [apifyTestResult, setApifyTestResult] = useState(null)
+  const [apifyTestLoading, setApifyTestLoading] = useState(false)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const setCrmExtra = (key, value) => set('crm_extra_config', { ...(form.crm_extra_config || {}), [key]: value })
@@ -470,12 +472,45 @@ function OrgModal({ org, onClose, onSaved }) {
                 <SecretInput
                   label="Apify API Token"
                   value={form.apify_api_token || ''}
-                  onChange={e => set('apify_api_token', e.target.value)}
+                  onChange={e => { set('apify_api_token', e.target.value); setApifyTestResult(null) }}
                   placeholder="apify_api_xxxxxxxxxxxxxxxxxxxx"
                 />
                 <p className="text-xs text-slate-500">
                   Token de la cuenta Apify de esta organización. Si se deja vacío se usará el token global de Railway.
                 </p>
+                {org?.id && (
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      disabled={apifyTestLoading}
+                      onClick={async () => {
+                        setApifyTestLoading(true)
+                        setApifyTestResult(null)
+                        try {
+                          const res = await testApifyToken(org.id)
+                          setApifyTestResult(res)
+                        } catch {
+                          setApifyTestResult({ ok: false, detail: 'Error de conexión' })
+                        } finally { setApifyTestLoading(false) }
+                      }}
+                      className="z-btn-ghost border border-z-border text-sm disabled:opacity-50"
+                    >
+                      {apifyTestLoading ? 'Probando...' : 'Probar token Apify'}
+                    </button>
+                    {apifyTestResult && (
+                      <div className={`text-xs rounded-lg px-3 py-2 ${
+                        apifyTestResult.ok
+                          ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                          : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                      }`}>
+                        {apifyTestResult.ok
+                          ? `✓ Token válido — conectado como @${apifyTestResult.username}`
+                          : `✗ Token inválido: ${apifyTestResult.detail}`
+                        }
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>
