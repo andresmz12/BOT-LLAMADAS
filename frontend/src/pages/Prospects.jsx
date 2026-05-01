@@ -225,7 +225,7 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
               </label>
               <input required value={form.search_term} onChange={e => set('search_term', e.target.value)}
                 className="z-input" />
-              <p className="text-xs text-slate-600 mt-1">Captura todas las variantes que la gente usa, ej: <span className="text-slate-400">paqueteria, envios, mailbox, shipping store</span></p>
+              <p className="text-xs text-slate-600 mt-1">Captura todas las variantes que usa la gente para describir el mismo servicio</p>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">
