@@ -47,6 +47,7 @@ class OrgCreate(BaseModel):
     whatsapp_phone_number_id: Optional[str] = None
     whatsapp_access_token: Optional[str] = None
     whatsapp_verify_token: Optional[str] = None
+    apify_enabled: bool = False
 
 
 class UserCreate(BaseModel):
