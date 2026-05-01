@@ -2,7 +2,7 @@ import os
 import json
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
@@ -65,10 +65,12 @@ async def lifespan(app: FastAPI):
         logger.warning("⚠️  RETELL_WEBHOOK_SECRET not set — webhook signature verification is DISABLED")
     if not os.getenv("JWT_SECRET"):
         logger.warning("⚠️  JWT_SECRET not set — using insecure development key")
+    if not os.getenv("SUPERADMIN_PASSWORD"):
+        logger.warning("⚠️  SUPERADMIN_PASSWORD not set — using default hardcoded password, CHANGE THIS IN PRODUCTION")
     yield
 
 
-app = FastAPI(title="Voice Agent API", lifespan=lifespan)
+app = FastAPI(title="Voice Agent API", lifespan=lifespan, docs_url=None, redoc_url=None)
 
 _raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
 _allowed_origins = [o.strip() for o in _raw_origins.split(",")] if _raw_origins != "*" else ["*"]
@@ -77,8 +79,8 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_allowed_origins,
     allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 app.include_router(auth.router)
@@ -98,7 +100,16 @@ app.include_router(leads.router)
 
 
 @app.websocket("/ws/{campaign_id}")
-async def websocket_endpoint(websocket: WebSocket, campaign_id: int):
+async def websocket_endpoint(websocket: WebSocket, campaign_id: int, token: str = ""):
+    from services.auth import decode_token
+    if not token:
+        await websocket.close(code=4001)
+        return
+    try:
+        decode_token(token)
+    except ValueError:
+        await websocket.close(code=4001)
+        return
     await ws_manager.connect(campaign_id, websocket)
     try:
         while True:
@@ -122,6 +133,6 @@ def health_db():
         missing = list(required - org_cols)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        return {"db": "ok", "org_columns_missing": missing, "migration_needed": bool(missing)}
-    except Exception as e:
-        return {"db": "error", "detail": str(e)}
+        return {"db": "ok", "migration_needed": bool(missing)}
+    except Exception:
+        return {"db": "error"}

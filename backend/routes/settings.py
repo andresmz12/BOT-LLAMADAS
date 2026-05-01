@@ -2,6 +2,7 @@ import json
 import os
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from typing import Optional
 from sqlmodel import Session, select
 from sqlalchemy import desc
 from database import get_session
@@ -12,6 +13,12 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 SECRET_FIELDS = {"retell_api_key", "anthropic_api_key"}
 CREDENTIAL_FIELDS = {"retell_api_key", "retell_phone_number", "anthropic_api_key"}
+
+
+class CredentialsUpdate(BaseModel):
+    retell_api_key: Optional[str] = None
+    retell_phone_number: Optional[str] = None
+    anthropic_api_key: Optional[str] = None
 
 
 def _mask(value: str) -> str:
@@ -39,18 +46,19 @@ def get_settings(
 
 @router.post("")
 def save_settings(
-    data: dict,
+    data: CredentialsUpdate,
     current_user: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
 ):
     if current_user.organization_id:
         org = session.get(Organization, current_user.organization_id)
         if org:
-            for key, value in data.items():
-                if key in CREDENTIAL_FIELDS:
-                    if key in SECRET_FIELDS and str(value).startswith("***"):
-                        continue  # unchanged masked value — don't overwrite
-                    setattr(org, key, str(value))
+            for key, value in data.dict(exclude_unset=True).items():
+                if value is None:
+                    continue
+                if key in SECRET_FIELDS and str(value).startswith("***"):
+                    continue
+                setattr(org, key, str(value))
             session.add(org)
             session.commit()
     return {"ok": True}

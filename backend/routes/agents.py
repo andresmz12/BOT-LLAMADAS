@@ -103,7 +103,7 @@ def update_agent(
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
-    logger.info(f"PUT /agents/{agent_id} — payload: {data.dict(exclude_none=True)}")
+    logger.info(f"PUT /agents/{agent_id}")
     agent = session.get(AgentConfig, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")

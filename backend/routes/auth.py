@@ -5,7 +5,7 @@ from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlmodel import Session, select
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from database import get_session
 from models import User, Organization
 from services.auth import verify_password, create_token, decode_token
@@ -13,6 +13,19 @@ from services.auth import verify_password, create_token, decode_token
 _login_attempts: dict[str, list[float]] = defaultdict(list)
 _RATE_WINDOW = 60
 _RATE_MAX = 5
+
+
+def _get_client_ip(request: Request) -> str:
+    """Use X-Real-IP (set by trusted reverse proxy) first, then fall back to direct IP.
+    Never trust X-Forwarded-For alone — it can be forged by the client."""
+    real_ip = request.headers.get("x-real-ip", "").strip()
+    if real_ip:
+        return real_ip
+    # X-Forwarded-For: take the LAST entry (closest trusted proxy), not the first (client-supplied)
+    forwarded_for = request.headers.get("x-forwarded-for", "").strip()
+    if forwarded_for:
+        return forwarded_for.split(",")[-1].strip()
+    return request.client.host if request.client else "unknown"
 
 
 def _check_rate_limit(ip: str):
@@ -31,12 +44,49 @@ class LoginRequest(BaseModel):
     email: str
     password: str
 
+    @field_validator("email")
+    @classmethod
+    def email_length(cls, v: str) -> str:
+        if len(v) > 254:
+            raise ValueError("Email demasiado largo")
+        return v.strip().lower()
+
+    @field_validator("password")
+    @classmethod
+    def password_length(cls, v: str) -> str:
+        if len(v) > 128:
+            raise ValueError("Contraseña demasiado larga")
+        return v
+
 
 class RegisterRequest(BaseModel):
     full_name: str
     email: str
     password: str
     company_name: str
+
+    @field_validator("email")
+    @classmethod
+    def email_length(cls, v: str) -> str:
+        if len(v) > 254:
+            raise ValueError("Email demasiado largo")
+        return v.strip().lower()
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres")
+        if len(v) > 128:
+            raise ValueError("Contraseña demasiado larga")
+        return v
+
+    @field_validator("full_name", "company_name")
+    @classmethod
+    def name_length(cls, v: str) -> str:
+        if len(v) > 200:
+            raise ValueError("Nombre demasiado largo")
+        return v.strip()
 
 
 def _decode_or_401(token: str) -> dict:
@@ -88,9 +138,7 @@ def require_pro_plan(
 
 @router.post("/register")
 def register(data: RegisterRequest, request: Request, session: Session = Depends(get_session)):
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else (request.client.host if request.client else "unknown")
-    _check_rate_limit(client_ip)
+    _check_rate_limit(_get_client_ip(request))
     from services.auth import hash_password
     existing = session.exec(select(User).where(User.email == data.email)).first()
     if existing:
@@ -116,9 +164,7 @@ def register(data: RegisterRequest, request: Request, session: Session = Depends
 
 @router.post("/login")
 def login(req: LoginRequest, request: Request, session: Session = Depends(get_session)):
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else (request.client.host if request.client else "unknown")
-    _check_rate_limit(client_ip)
+    _check_rate_limit(_get_client_ip(request))
     user = session.exec(select(User).where(User.email == req.email)).first()
     if not user or not verify_password(req.password, user.password_hash):
         raise HTTPException(status_code=401, detail="Credenciales incorrectas")
@@ -155,8 +201,8 @@ def me(
 @router.get("/status")
 def status(session: Session = Depends(get_session)):
     """Public: check if system has been initialized (any users exist)."""
-    user_count = len(session.exec(select(User)).all())
-    return {"initialized": user_count > 0, "users": user_count}
+    exists = session.exec(select(User)).first() is not None
+    return {"initialized": exists}
 
 
 @router.post("/setup")

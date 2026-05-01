@@ -3,13 +3,21 @@ import io
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlmodel import Session, select
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from database import get_session
 from models import Prospect, Campaign, AgentConfig, Call, User, Organization
 from routes.auth import get_current_user, require_write_access, require_pro_plan
 
 router = APIRouter(prefix="/prospects", tags=["prospects"])
+
+
+def _validate_phone(v: str) -> str:
+    import re
+    v = v.strip()
+    if not re.match(r"^\+?[\d\s\-().]{7,20}$", v):
+        raise ValueError("Número de teléfono inválido")
+    return v
 
 
 class ProspectCreate(BaseModel):
@@ -19,6 +27,18 @@ class ProspectCreate(BaseModel):
     company: Optional[str] = None
     notes: Optional[str] = None
 
+    @field_validator("phone")
+    @classmethod
+    def phone_valid(cls, v: str) -> str:
+        return _validate_phone(v)
+
+    @field_validator("name")
+    @classmethod
+    def name_length(cls, v: str) -> str:
+        if len(v) > 200:
+            raise ValueError("Nombre demasiado largo")
+        return v.strip()
+
 
 class ProspectUpdate(BaseModel):
     name: Optional[str] = None
@@ -26,6 +46,21 @@ class ProspectUpdate(BaseModel):
     company: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+
+    @field_validator("phone")
+    @classmethod
+    def phone_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return _validate_phone(v)
+
+    @field_validator("status")
+    @classmethod
+    def status_valid(cls, v: Optional[str]) -> Optional[str]:
+        allowed = {"pending", "calling", "answered", "no_answer", "voicemail", "failed"}
+        if v is not None and v not in allowed:
+            raise ValueError(f"Estado inválido: {v}")
+        return v
 
 
 @router.post("")
@@ -88,7 +123,8 @@ async def import_file(
         name = (row.get("contact") or row.get("name") or "").strip()
         company = (row.get("company") or (row.get("name") if has_contact else "") or "").strip()
         email = (row.get("email") or "").strip()
-        if not phone:
+        import re
+        if not phone or not re.match(r"^\+?[\d\s\-().]{7,20}$", phone):
             continue
         session.add(Prospect(
             campaign_id=campaign_id,
