@@ -701,6 +701,16 @@ async def expand_keywords(
             messages=[{"role": "user", "content": prompt}],
         )
     except Exception as e:
+        msg = str(e).lower()
+        if "401" in msg or "invalid x-api-key" in msg or "authentication" in msg:
+            raise HTTPException(
+                status_code=401,
+                detail="API key de Anthropic inválida. Actualízala en Admin Panel → Organizaciones → tu organización."
+            )
+        if "429" in msg or "rate" in msg:
+            raise HTTPException(status_code=429, detail="Anthropic rate limit alcanzado. Intenta en unos segundos.")
+        if "credit" in msg or "balance" in msg:
+            raise HTTPException(status_code=402, detail="Cuenta de Anthropic sin créditos. Recarga en console.anthropic.com.")
         raise HTTPException(status_code=502, detail=f"Error de IA: {str(e)[:200]}")
 
     text_out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
