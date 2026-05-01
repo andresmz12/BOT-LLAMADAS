@@ -219,12 +219,19 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
           {/* Search */}
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-300 mb-1">¿Qué tipo de negocio buscas? *</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                ¿Qué tipo de negocio buscas? *
+                <span className="text-slate-500 font-normal ml-1">(separa varios términos por coma)</span>
+              </label>
               <input required value={form.search_term} onChange={e => set('search_term', e.target.value)}
                 className="z-input" />
+              <p className="text-xs text-slate-600 mt-1">Captura todas las variantes que la gente usa, ej: <span className="text-slate-400">paqueteria, envios, mailbox, shipping store</span></p>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Ciudad o estado *</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Ciudad o estado *
+                <span className="text-slate-500 font-normal ml-1">(varios separados por coma)</span>
+              </label>
               <input required value={form.location} onChange={e => set('location', e.target.value)}
                 className="z-input" />
             </div>
@@ -297,9 +304,9 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
             <div className="space-y-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.exclude_chains} onChange={e => set('exclude_chains', e.target.checked)} className="w-4 h-4 accent-purple-500" />
-                <span className="text-sm text-slate-300">Excluir cadenas y franquicias conocidas</span>
-                <span className="text-xs text-slate-500">(Walmart, McDonald's, Starbucks…)</span>
+                <span className="text-sm text-slate-300">Excluir cadenas, franquicias y grandes paqueterías</span>
               </label>
+              <p className="text-xs text-slate-600 ml-6 -mt-1">UPS Store, FedEx, DHL, USPS, Walmart, McDonald's, etc.</p>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.skip_closed} onChange={e => set('skip_closed', e.target.checked)} className="w-4 h-4 accent-purple-500" />
                 <span className="text-sm text-slate-300">Excluir negocios permanentemente cerrados</span>

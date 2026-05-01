@@ -347,6 +347,11 @@ _CHAIN_KEYWORDS = [
     "chase bank", "wells fargo", "bank of america", "citibank", "td bank",
     "h&r block", "jackson hewitt", "liberty tax",
     "shell", "exxon", "chevron", "bp ", "circle k", "speedway",
+    # Major shipping/parcel carriers — never independents, exclude by default
+    "ups store", "the ups store", "fedex", "fed ex", "fed-ex", "dhl",
+    "usps", "united states postal", "post office", "u.s. post",
+    "amazon hub", "amazon locker", "ontrac", "lasershop", "lasership",
+    "purolator", "aramex", "tnt express",
 ]
 
 
@@ -375,13 +380,24 @@ async def search_apify_prospects(
     chain_excludes = _CHAIN_KEYWORDS if data.exclude_chains else []
     all_excludes = user_excludes + chain_excludes
 
-    location_query = f"{data.zone.strip()}, {data.location}" if data.zone.strip() else data.location
+    # Allow multi-keyword and multi-location input (comma separated). Build the
+    # cartesian product as the searchStringsArray so a single Apify run covers
+    # every combination, e.g. ["paqueteria Illinois", "envios Illinois", ...].
+    keywords = [k.strip() for k in data.search_term.split(",") if k.strip()]
+    locations = [l.strip() for l in data.location.split(",") if l.strip()]
+    if not keywords or not locations:
+        raise HTTPException(status_code=400, detail="Debes ingresar al menos una palabra clave y una ubicación")
+
+    zone_prefix = f"{data.zone.strip()}, " if data.zone.strip() else ""
+    search_strings = [
+        f"{kw} in {zone_prefix}{loc}" for kw in keywords for loc in locations
+    ]
 
     # compass/crawler-google-places now expects searchStringsArray + locationQuery
     # as separate fields. Sending the legacy "searchStrings" causes immediate FAILED.
     actor_input = {
-        "searchStringsArray": [data.search_term],
-        "locationQuery": location_query,
+        "searchStringsArray": search_strings,
+        "locationQuery": locations[0] if len(locations) == 1 and not data.zone.strip() else "",
         "maxCrawledPlacesPerSearch": min(data.max_results * 3, 500),
         "includeHistogram": False,
         "includeOpeningHours": False,
@@ -389,6 +405,10 @@ async def search_apify_prospects(
         "language": data.language,
         "skipClosedPlaces": data.skip_closed,
     }
+    # locationQuery is most reliable for single locations; for multi-location we
+    # encode location into the search string itself, so drop the empty field.
+    if not actor_input["locationQuery"]:
+        actor_input.pop("locationQuery")
 
     # timeout=300 covers the full polling loop (70 * 3 = 210 s) with margin
     async with httpx.AsyncClient(timeout=300) as client:
