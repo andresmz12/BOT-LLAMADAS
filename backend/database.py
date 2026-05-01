@@ -95,6 +95,7 @@ def run_migrations():
                 "whatsapp_verify_token": "VARCHAR(255)",
                 "whatsapp_enabled": "BOOLEAN DEFAULT FALSE",
                 "apify_enabled": "BOOLEAN DEFAULT FALSE",
+                "apify_api_token": "TEXT",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():

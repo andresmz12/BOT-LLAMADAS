@@ -140,9 +140,9 @@ async def search_apify_prospects(
     if not org or not org.apify_enabled:
         raise HTTPException(status_code=403, detail="Búsqueda con IA no habilitada para esta organización")
 
-    api_token = os.getenv("APIFY_API_TOKEN", "")
+    api_token = (org.apify_api_token or "").strip() or os.getenv("APIFY_API_TOKEN", "")
     if not api_token:
-        raise HTTPException(status_code=503, detail="Token de Apify no configurado en el servidor")
+        raise HTTPException(status_code=503, detail="Token de Apify no configurado para esta organización")
 
     campaign = session.get(Campaign, data.campaign_id)
     if not campaign:

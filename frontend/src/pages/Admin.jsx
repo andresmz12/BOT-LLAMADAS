@@ -308,6 +308,7 @@ function OrgModal({ org, onClose, onSaved }) {
     whatsapp_access_token: org.whatsapp_access_token || '',
     whatsapp_verify_token: org.whatsapp_verify_token || '',
     apify_enabled: org.apify_enabled || false,
+    apify_api_token: org.apify_api_token || '',
   } : {
     name: '', plan: 'pro', retell_api_key: '', retell_phone_number: '',
     anthropic_api_key: '', is_active: true,
@@ -317,6 +318,7 @@ function OrgModal({ org, onClose, onSaved }) {
     whatsapp_enabled: false, whatsapp_phone_number_id: '',
     whatsapp_access_token: '', whatsapp_verify_token: '',
     apify_enabled: false,
+    apify_api_token: '',
   })
   const [loading, setLoading] = useState(false)
   const [crmAccordionOpen, setCrmAccordionOpen] = useState(false)
@@ -464,10 +466,17 @@ function OrgModal({ org, onClose, onSaved }) {
               <span className="text-sm text-slate-300">Activar búsqueda de prospectos con IA (Apify)</span>
             </label>
             {form.apify_enabled && (
-              <p className="text-xs text-slate-500">
-                Usa el token <span className="font-mono">APIFY_API_TOKEN</span> configurado en Railway.
-                El botón "Buscar prospectos" aparecerá en la sección de Prospectos para esta organización.
-              </p>
+              <div className="space-y-2">
+                <SecretInput
+                  label="Apify API Token"
+                  value={form.apify_api_token || ''}
+                  onChange={e => set('apify_api_token', e.target.value)}
+                  placeholder="apify_api_xxxxxxxxxxxxxxxxxxxx"
+                />
+                <p className="text-xs text-slate-500">
+                  Token de la cuenta Apify de esta organización. Si se deja vacío se usará el token global de Railway.
+                </p>
+              </div>
             )}
           </div>
 
