@@ -162,10 +162,13 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
   const [form, setForm] = useState({
     search_term: '',
     location: '',
+    zone: '',
     max_results: 50,
     campaign_id: campaigns[0]?.id || '',
     exclude_keywords: '',
     exclude_chains: true,
+    dedupe_by_brand: true,
+    min_reviews: 0,
     min_rating: 0,
     skip_closed: true,
     require_phone: true,
@@ -185,6 +188,7 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
         campaign_id: Number(form.campaign_id),
         max_results: Number(form.max_results),
         min_rating: Number(form.min_rating),
+        min_reviews: Number(form.min_reviews),
       })
       setResult(res)
       onImported()
@@ -226,6 +230,20 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
                 <option value="es">Español</option>
               </select>
             </div>
+            <div className="col-span-2">
+              <label className="block text-sm font-medium text-slate-300 mb-1">Zona específica <span className="text-slate-500 font-normal">(opcional)</span></label>
+              <input value={form.zone} onChange={e => set('zone', e.target.value)}
+                placeholder="ej: Pilsen, Logan Square, ZIP 60608"
+                className="z-input" />
+              <p className="text-xs text-slate-600 mt-1">Limita la búsqueda a un barrio o código postal específico</p>
+            </div>
+            <div className="col-span-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.dedupe_by_brand} onChange={e => set('dedupe_by_brand', e.target.checked)} className="w-4 h-4 accent-purple-500" />
+                <span className="text-sm text-slate-300">Solo negocios independientes</span>
+              </label>
+              <p className="text-xs text-slate-600 mt-1 ml-6">Excluir empresas con varias sucursales en la misma área — evita importar la misma marca 5 veces</p>
+            </div>
           </div>
 
           {/* Filters */}
@@ -245,6 +263,16 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Mínimo de reseñas en Google</label>
+                <select value={form.min_reviews} onChange={e => set('min_reviews', e.target.value)} className="z-input">
+                  <option value={0}>Sin mínimo</option>
+                  <option value={5}>5+ reseñas</option>
+                  <option value={10}>10+ reseñas</option>
+                  <option value={25}>25+ reseñas</option>
+                  <option value={50}>50+ reseñas</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Rating mínimo en Google</label>
                 <select value={form.min_rating} onChange={e => set('min_rating', e.target.value)} className="z-input">
                   <option value={0}>Sin mínimo</option>
@@ -254,12 +282,13 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
                   <option value={4.5}>4.5+ ⭐</option>
                 </select>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Máx. prospectos a importar</label>
-                <select value={form.max_results} onChange={e => set('max_results', e.target.value)} className="z-input">
-                  {[25, 50, 100, 150, 200].map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </div>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Máx. prospectos a importar</label>
+              <select value={form.max_results} onChange={e => set('max_results', e.target.value)} className="z-input">
+                {[25, 50, 100, 150, 200].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
             </div>
 
             <div className="space-y-2">
@@ -299,6 +328,8 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
               <p className="font-semibold">✓ Búsqueda completada</p>
               <p>Encontrados: {result.total_found} · Importados: <span className="font-bold">{result.imported}</span></p>
               {result.skipped_no_phone > 0 && <p className="text-slate-500">Sin teléfono: {result.skipped_no_phone}</p>}
+              {result.skipped_no_reviews > 0 && <p className="text-slate-500">Sin suficientes reseñas: {result.skipped_no_reviews}</p>}
+              {result.skipped_duplicates > 0 && <p className="text-slate-500">Sucursales duplicadas eliminadas: {result.skipped_duplicates}</p>}
               {result.skipped_excluded > 0 && <p className="text-slate-500">Filtrados por exclusión: {result.skipped_excluded}</p>}
             </div>
           )}

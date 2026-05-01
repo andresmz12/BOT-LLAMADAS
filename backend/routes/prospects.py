@@ -159,13 +159,27 @@ class ApifySearchRequest(BaseModel):
     campaign_id: int
     search_term: str
     location: str
+    zone: str = ""
     max_results: int = 50
-    exclude_keywords: str = ""      # comma-separated: "walmart, mcdonald, corp"
-    exclude_chains: bool = True     # exclude obvious chains/franchises
-    min_rating: float = 0.0         # 0 = all, 3.5 = only 3.5+ stars
-    skip_closed: bool = True        # skip permanently closed places
-    require_phone: bool = True      # only import if has phone number
+    exclude_keywords: str = ""
+    exclude_chains: bool = True
+    dedupe_by_brand: bool = True
+    min_reviews: int = 0
+    min_rating: float = 0.0
+    skip_closed: bool = True
+    require_phone: bool = True
     language: str = "en"
+
+
+def _brand_key(name: str) -> str:
+    """Normalize a business name to its 'brand key' for deduplication."""
+    n = name.lower()
+    n = re.sub(r'\b(inc|llc|corp|ltd|co|no|num|sucursal|branch|location|store)\b', '', n)
+    n = re.sub(r'#\s*\d+', '', n)       # remove #123
+    n = re.sub(r'\b\d+\b', '', n)       # remove standalone numbers
+    n = re.sub(r'[^\w\s]', '', n)       # remove punctuation
+    n = re.sub(r'\s+', ' ', n).strip()
+    return n
 
 
 # Common chain/franchise keywords to filter out automatically
@@ -202,16 +216,18 @@ async def search_apify_prospects(
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaña no encontrada")
 
-    # Build exclude list
+    # Build exclude list (unchanged existing logic)
     user_excludes = [kw.strip().lower() for kw in data.exclude_keywords.split(",") if kw.strip()]
     chain_excludes = _CHAIN_KEYWORDS if data.exclude_chains else []
     all_excludes = user_excludes + chain_excludes
 
-    search_query = f"{data.search_term} in {data.location}"
+    # Build location query — prepend zone if provided
+    location_query = f"{data.zone.strip()}, {data.location}" if data.zone.strip() else data.location
+    search_query = f"{data.search_term} in {location_query}"
 
     actor_input = {
         "searchStrings": [search_query],
-        "maxCrawledPlacesPerSearch": min(data.max_results * 3, 500),  # fetch extra to account for filtered-out
+        "maxCrawledPlacesPerSearch": min(data.max_results * 3, 500),
         "includeHistogram": False,
         "includeOpeningHours": False,
         "includePeopleAlsoSearchFor": False,
@@ -255,13 +271,40 @@ async def search_apify_prospects(
         )
         items = items_resp.json() if items_resp.status_code == 200 else []
 
+    # Deduplicate by brand — keep highest reviewsCount per brand key
+    skipped_duplicates = 0
+    if data.dedupe_by_brand:
+        brand_best: dict[str, dict] = {}
+        for item in items:
+            key = _brand_key((item.get("title") or item.get("name") or ""))
+            if not key:
+                continue
+            reviews = item.get("reviewsCount") or item.get("numRatings") or 0
+            existing = brand_best.get(key)
+            if existing is None:
+                brand_best[key] = item
+            elif reviews > (existing.get("reviewsCount") or existing.get("numRatings") or 0):
+                skipped_duplicates += 1
+                brand_best[key] = item
+            else:
+                skipped_duplicates += 1
+        items = list(brand_best.values())
+
     imported = 0
     skipped_no_phone = 0
+    skipped_no_reviews = 0
     skipped_excluded = 0
 
     for item in items:
         if imported >= data.max_results:
             break
+
+        # Filter by min_reviews
+        if data.min_reviews > 0:
+            reviews = item.get("reviewsCount") or item.get("numRatings") or 0
+            if reviews < data.min_reviews:
+                skipped_no_reviews += 1
+                continue
 
         phone_raw = (item.get("phone") or item.get("phoneUnformatted") or "").strip()
         if data.require_phone and not phone_raw:
@@ -271,7 +314,7 @@ async def search_apify_prospects(
         name = (item.get("title") or item.get("name") or "").strip()
         name_lower = name.lower()
 
-        # Apply exclude filters
+        # Apply exclude filters (existing logic unchanged)
         if any(kw in name_lower for kw in all_excludes):
             skipped_excluded += 1
             continue
@@ -300,6 +343,8 @@ async def search_apify_prospects(
         "imported": imported,
         "total_found": len(items),
         "skipped_no_phone": skipped_no_phone,
+        "skipped_no_reviews": skipped_no_reviews,
+        "skipped_duplicates": skipped_duplicates,
         "skipped_excluded": skipped_excluded,
     }
 
