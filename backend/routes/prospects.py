@@ -323,10 +323,20 @@ class ApifySearchRequest(BaseModel):
     exclude_chains: bool = True
     dedupe_by_brand: bool = True
     min_reviews: int = 0
+    max_reviews: int = 0  # 0 = no cap
     min_rating: float = 0.0
     skip_closed: bool = True
     require_phone: bool = True
     language: str = "en"
+    # Geographic radius (overrides location string when set)
+    radius_zip: str = ""
+    radius_miles: int = 0
+    # Freshness — only keep places with a review newer than N days (0 = off)
+    fresh_days: int = 0
+    # Website filter: "any" | "with" | "without"
+    website_filter: str = "any"
+    # Skip prospects whose phone already exists in the org
+    skip_existing_in_org: bool = True
 
 
 def _brand_key(name: str) -> str:
@@ -384,20 +394,23 @@ async def search_apify_prospects(
     # cartesian product as the searchStringsArray so a single Apify run covers
     # every combination, e.g. ["paqueteria Illinois", "envios Illinois", ...].
     keywords = [k.strip() for k in data.search_term.split(",") if k.strip()]
-    locations = [l.strip() for l in data.location.split(",") if l.strip()]
-    if not keywords or not locations:
-        raise HTTPException(status_code=400, detail="Debes ingresar al menos una palabra clave y una ubicación")
 
-    zone_prefix = f"{data.zone.strip()}, " if data.zone.strip() else ""
-    search_strings = [
-        f"{kw} in {zone_prefix}{loc}" for kw in keywords for loc in locations
-    ]
+    # Geographic radius mode replaces the location string with a single
+    # "<keyword> within X miles of <zip>" search string. Single zip + radius is
+    # far more precise than broad city/state and matches sales-territory needs.
+    if data.radius_zip.strip() and data.radius_miles > 0:
+        zip_code = data.radius_zip.strip()
+        radius = max(1, min(data.radius_miles, 100))
+        search_strings = [f"{kw} within {radius} miles of {zip_code}" for kw in keywords]
+    else:
+        locations = [l.strip() for l in data.location.split(",") if l.strip()]
+        if not keywords or not locations:
+            raise HTTPException(status_code=400, detail="Debes ingresar al menos una palabra clave y una ubicación")
+        zone_prefix = f"{data.zone.strip()}, " if data.zone.strip() else ""
+        search_strings = [f"{kw} in {zone_prefix}{loc}" for kw in keywords for loc in locations]
 
-    # compass/crawler-google-places now expects searchStringsArray + locationQuery
-    # as separate fields. Sending the legacy "searchStrings" causes immediate FAILED.
     actor_input = {
         "searchStringsArray": search_strings,
-        "locationQuery": locations[0] if len(locations) == 1 and not data.zone.strip() else "",
         "maxCrawledPlacesPerSearch": min(data.max_results * 3, 500),
         "includeHistogram": False,
         "includeOpeningHours": False,
@@ -405,10 +418,6 @@ async def search_apify_prospects(
         "language": data.language,
         "skipClosedPlaces": data.skip_closed,
     }
-    # locationQuery is most reliable for single locations; for multi-location we
-    # encode location into the search string itself, so drop the empty field.
-    if not actor_input["locationQuery"]:
-        actor_input.pop("locationQuery")
 
     # timeout=300 covers the full polling loop (70 * 3 = 210 s) with margin
     async with httpx.AsyncClient(timeout=300) as client:
@@ -480,21 +489,40 @@ async def search_apify_prospects(
                 skipped_duplicates += 1
         items = list(brand_best.values())
 
+    # Pre-load existing phones in the org for anti-duplicate skip. Doing this
+    # once up-front avoids N+1 queries inside the loop.
+    existing_phones: set[str] = set()
+    if data.skip_existing_in_org and current_user.organization_id:
+        rows = session.exec(
+            select(Prospect.phone).where(Prospect.organization_id == current_user.organization_id)
+        ).all()
+        existing_phones = {p for p in rows if p}
+
+    from datetime import timedelta
+    fresh_cutoff = datetime.utcnow() - timedelta(days=data.fresh_days) if data.fresh_days > 0 else None
+    six_months_ago = datetime.utcnow() - timedelta(days=180)
+
     imported = 0
     skipped_no_phone = 0
     skipped_no_reviews = 0
+    skipped_too_many_reviews = 0
     skipped_low_rating = 0
     skipped_excluded = 0
+    skipped_stale = 0
+    skipped_website = 0
+    skipped_existing = 0
 
     for item in items:
         if imported >= data.max_results:
             break
 
-        if data.min_reviews > 0:
-            reviews = item.get("reviewsCount") or item.get("numRatings") or 0
-            if reviews < data.min_reviews:
-                skipped_no_reviews += 1
-                continue
+        reviews = item.get("reviewsCount") or item.get("numRatings") or 0
+        if data.min_reviews > 0 and reviews < data.min_reviews:
+            skipped_no_reviews += 1
+            continue
+        if data.max_reviews > 0 and reviews > data.max_reviews:
+            skipped_too_many_reviews += 1
+            continue
 
         if data.min_rating > 0:
             rating_val = item.get("totalScore") or item.get("rating") or 0
@@ -512,23 +540,103 @@ async def search_apify_prospects(
             skipped_excluded += 1
             continue
 
+        website = (item.get("website") or item.get("url") or "").strip()
+        if data.website_filter == "with" and not website:
+            skipped_website += 1
+            continue
+        if data.website_filter == "without" and website:
+            skipped_website += 1
+            continue
+
+        # Freshness — most recent review date if Apify returned reviews
+        last_review_at = None
+        reviews_list = item.get("reviews") or []
+        if isinstance(reviews_list, list) and reviews_list:
+            for r in reviews_list:
+                ts = r.get("publishedAtDate") or r.get("publishAt") or r.get("publishedAt")
+                if not ts:
+                    continue
+                try:
+                    parsed = datetime.fromisoformat(str(ts).replace("Z", "+00:00")).replace(tzinfo=None)
+                except Exception:
+                    continue
+                if last_review_at is None or parsed > last_review_at:
+                    last_review_at = parsed
+        # Fall back to actor's lastUpdatedAt for the place itself
+        if last_review_at is None:
+            ts = item.get("lastUpdatedAt") or item.get("scrapedAt")
+            if ts:
+                try:
+                    last_review_at = datetime.fromisoformat(str(ts).replace("Z", "+00:00")).replace(tzinfo=None)
+                except Exception:
+                    last_review_at = None
+        if fresh_cutoff and (last_review_at is None or last_review_at < fresh_cutoff):
+            skipped_stale += 1
+            continue
+
         phone = normalize_phone(phone_raw, "+1") if phone_raw else ""
-        address = (item.get("address") or item.get("street") or "").strip()
+
+        # Anti-duplicates within the organization (across all campaigns)
+        if phone and phone in existing_phones:
+            skipped_existing += 1
+            continue
+
+        # Email enrichment — Apify returns emails when it could scrape them
+        email = ""
+        emails_field = item.get("emails")
+        if isinstance(emails_field, list) and emails_field:
+            email = str(emails_field[0]).strip()
+        elif isinstance(emails_field, str):
+            email = emails_field.strip()
+        if not email:
+            email = (item.get("email") or "").strip()
+
         rating = item.get("totalScore") or item.get("rating") or 0
+        place_id = (item.get("placeId") or item.get("place_id") or "").strip() or None
+        address = (item.get("address") or item.get("street") or "").strip()
+
+        # Quality score 0-100 — universal across industries
+        score = 0
+        if phone:
+            score += 20
+        if website:
+            score += 20
+        if email:
+            score += 20
+        if reviews >= 10:
+            score += 15
+        elif reviews >= 3:
+            score += 7
+        if rating and rating >= 4:
+            score += 15
+        elif rating and rating >= 3.5:
+            score += 8
+        if last_review_at and last_review_at > six_months_ago:
+            score += 10
+
         notes_parts = []
         if address:
             notes_parts.append(address)
         if rating:
-            notes_parts.append(f"Rating: {rating}")
+            notes_parts.append(f"Rating: {rating} ({reviews} reseñas)")
+        if website:
+            notes_parts.append(website)
 
         session.add(Prospect(
             campaign_id=data.campaign_id,
             name=name,
             phone=phone,
+            email=email or None,
             company=name,
             notes=" | ".join(notes_parts) or None,
             organization_id=current_user.organization_id,
+            website=website or None,
+            place_id=place_id,
+            last_review_at=last_review_at,
+            quality_score=score,
         ))
+        if phone:
+            existing_phones.add(phone)  # prevent same-batch duplicates too
         imported += 1
 
     session.commit()
@@ -537,7 +645,86 @@ async def search_apify_prospects(
         "total_found": len(items),
         "skipped_no_phone": skipped_no_phone,
         "skipped_no_reviews": skipped_no_reviews,
+        "skipped_too_many_reviews": skipped_too_many_reviews,
         "skipped_low_rating": skipped_low_rating,
         "skipped_duplicates": skipped_duplicates,
+        "skipped_existing": skipped_existing,
+        "skipped_stale": skipped_stale,
+        "skipped_website": skipped_website,
         "skipped_excluded": skipped_excluded,
     }
+
+
+class ExpandKeywordsRequest(BaseModel):
+    seed: str
+    language: str = "en"
+
+
+@router.post("/expand-keywords")
+async def expand_keywords(
+    data: ExpandKeywordsRequest,
+    current_user: User = Depends(require_pro_plan),
+    session: Session = Depends(get_session),
+):
+    """Generate Google-Maps search variants for a seed term using Claude.
+    Returns a list of strings the user can paste into the comma-separated
+    search field to dramatically improve coverage."""
+    import json
+    from anthropic import AsyncAnthropic
+
+    org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
+    api_key = ((org.anthropic_api_key if org else "") or "").strip() or __import__("os").getenv("ANTHROPIC_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Anthropic API key no configurada para esta organización")
+
+    seed = data.seed.strip()
+    if not seed:
+        raise HTTPException(status_code=400, detail="Falta el término base")
+
+    lang_label = "Spanish" if data.language == "es" else "English"
+    prompt = (
+        f"Generate up to 15 search-term variants that people actually type into "
+        f"Google Maps to find the same kind of business as: \"{seed}\".\n\n"
+        f"Rules:\n"
+        f"- Output {lang_label} terms only.\n"
+        f"- Include synonyms, related categories, and common misspellings or trade names.\n"
+        f"- Each term must be a noun phrase (no full sentences).\n"
+        f"- Exclude brand names of major chains/franchises.\n"
+        f"- Return ONLY a JSON array of strings, nothing else."
+    )
+
+    client = AsyncAnthropic(api_key=api_key)
+    try:
+        resp = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=400,
+            messages=[{"role": "user", "content": prompt}],
+        )
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error de IA: {str(e)[:200]}")
+
+    text_out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+    # Strip markdown code fences if present
+    if text_out.startswith("```"):
+        text_out = re.sub(r"^```(?:json)?\s*|\s*```$", "", text_out).strip()
+    try:
+        variants = json.loads(text_out)
+    except Exception:
+        # Fallback — split lines and clean
+        variants = [ln.strip(" -•*\t").strip() for ln in text_out.splitlines() if ln.strip()]
+
+    cleaned = []
+    seen = set()
+    for v in variants:
+        if not isinstance(v, str):
+            continue
+        v = v.strip().strip(",.")
+        key = v.lower()
+        if not v or key in seen:
+            continue
+        seen.add(key)
+        cleaned.append(v)
+        if len(cleaned) >= 15:
+            break
+
+    return {"variants": cleaned}

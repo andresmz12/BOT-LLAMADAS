@@ -50,10 +50,18 @@ def run_migrations():
 
         if "prospect" in tables:
             prospect_cols = {c["name"] for c in insp.get_columns("prospect")}
+            prospect_new = {
+                "email": "VARCHAR(255)",
+                "website": "VARCHAR(500)",
+                "place_id": "VARCHAR(255)",
+                "last_review_at": "TIMESTAMP",
+                "quality_score": "INTEGER",
+            }
             with engine.begin() as conn:
-                if "email" not in prospect_cols:
-                    conn.execute(text("ALTER TABLE prospect ADD COLUMN email VARCHAR(255)"))
-                    log.info("Migration: added prospect.email")
+                for col, col_type in prospect_new.items():
+                    if col not in prospect_cols:
+                        conn.execute(text(f"ALTER TABLE prospect ADD COLUMN {col} {col_type}"))
+                        log.info(f"Migration: added prospect.{col}")
 
         if "call" in tables:
             call_cols = {c["name"] for c in insp.get_columns("call")}

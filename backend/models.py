@@ -114,6 +114,11 @@ class Prospect(SQLModel, table=True):
     last_called_at: Optional[datetime] = None
     notes: Optional[str] = None
     organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+    # Apify-sourced enrichment fields
+    website: Optional[str] = None
+    place_id: Optional[str] = Field(default=None, index=True)
+    last_review_at: Optional[datetime] = None
+    quality_score: Optional[int] = None
 
     campaign: Optional[Campaign] = Relationship(back_populates="prospects")
     calls: List["Call"] = Relationship(back_populates="prospect")

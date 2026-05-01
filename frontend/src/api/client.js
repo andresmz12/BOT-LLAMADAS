@@ -88,6 +88,7 @@ export const deleteAllProspects = (params) => api.delete('/prospects', { params 
 export const retryProspects = (params) => api.post('/prospects/retry', null, { params }).then(r => r.data)
 export const callProspect = (id) => api.post(`/prospects/${id}/call`).then(r => r.data)
 export const searchApifyProspects = (data) => api.post('/prospects/search-apify', data).then(r => r.data)
+export const expandKeywords = (data) => api.post('/prospects/expand-keywords', data).then(r => r.data)
 
 // Leads
 export const getLeads = (params) => api.get('/leads', { params }).then(r => r.data)
