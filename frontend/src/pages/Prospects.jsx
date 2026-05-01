@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon, ClockIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon, ClockIcon, ArrowDownTrayIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
 import UpgradeBanner from '../components/UpgradeBanner'
 import CallDetailModal from '../components/CallDetailModal'
-import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus, getCalls } from '../api/client'
+import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus, getCalls, searchApifyProspects } from '../api/client'
 import { exportToCsv } from '../utils/exportCsv'
 import { fmtDate } from '../utils/date'
 
@@ -158,6 +158,83 @@ function ProspectHistoryModal({ prospect, onClose }) {
   )
 }
 
+function ApifySearchModal({ campaigns, onClose, onImported }) {
+  const [form, setForm] = useState({
+    search_term: '',
+    location: '',
+    max_results: 50,
+    campaign_id: campaigns[0]?.id || '',
+  })
+  const [loading, setLoading] = useState(false)
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const submit = async (e) => {
+    e.preventDefault()
+    setLoading(true)
+    try {
+      const result = await searchApifyProspects({ ...form, campaign_id: Number(form.campaign_id), max_results: Number(form.max_results) })
+      alert(`✓ ${result.imported} prospectos importados (${result.total_found} encontrados)`)
+      onImported()
+    } catch (err) {
+      alert('Error: ' + (err.response?.data?.detail || err.message))
+    } finally { setLoading(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+      <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-md">
+        <div className="flex items-center justify-between p-6 border-b border-z-border">
+          <div>
+            <h2 className="text-lg font-bold text-slate-100">Buscar prospectos con IA</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Búsqueda en Google Maps · Los resultados se importan directo a tu campaña</p>
+          </div>
+          <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
+        </div>
+        <form onSubmit={submit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">¿Qué tipo de negocio buscas? *</label>
+            <input required value={form.search_term} onChange={e => set('search_term', e.target.value)}
+              placeholder="ej: tiendas de abarrotes, talleres mecánicos, dentistas"
+              className="z-input" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Ciudad o estado *</label>
+            <input required value={form.location} onChange={e => set('location', e.target.value)}
+              placeholder="ej: Chicago IL, Dallas TX, Miami FL"
+              className="z-input" />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Máx. resultados</label>
+              <select value={form.max_results} onChange={e => set('max_results', e.target.value)} className="z-input">
+                {[25, 50, 100, 150, 200].map(n => <option key={n} value={n}>{n}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Campaña destino *</label>
+              <select required value={form.campaign_id} onChange={e => set('campaign_id', e.target.value)} className="z-input">
+                {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+          </div>
+          {loading && (
+            <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3 text-xs text-purple-300">
+              Buscando negocios... esto puede tomar hasta 2 minutos.
+            </div>
+          )}
+          <div className="flex justify-end gap-3 pt-2">
+            <button type="button" onClick={onClose} className="z-btn-ghost">Cancelar</button>
+            <button type="submit" disabled={loading} className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50">
+              <MagnifyingGlassIcon className="w-4 h-4" />
+              {loading ? 'Buscando...' : 'Buscar e importar'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 export default function Prospects() {
   const [prospects, setProspects] = useState([])
   const [campaigns, setCampaigns] = useState([])
@@ -165,10 +242,12 @@ export default function Prospects() {
   const [filterStatus, setFilterStatus] = useState('')
   const [showImport, setShowImport] = useState(false)
   const [showNew, setShowNew] = useState(false)
+  const [showApifySearch, setShowApifySearch] = useState(false)
   const [callingId, setCallingId] = useState(null)
   const [historyProspect, setHistoryProspect] = useState(null)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const isFree = user.plan === 'free'
+  const apifyEnabled = user.apify_enabled === true
   const [demoStatus, setDemoStatus] = useState(null)
 
   const handleCall = async (p) => {
@@ -252,6 +331,12 @@ export default function Prospects() {
           )}
           {!isFree && (
             <>
+            {apifyEnabled && (
+              <button onClick={() => setShowApifySearch(true)}
+                className="flex items-center gap-2 px-4 py-2 border border-purple-500 text-purple-400 hover:bg-purple-500/10 font-semibold rounded-lg text-sm transition-colors">
+                <MagnifyingGlassIcon className="w-4 h-4" /> Buscar prospectos
+              </button>
+            )}
             <button onClick={() => setShowNew(true)}
               className="flex items-center gap-2 px-4 py-2 border border-z-blue text-z-blue-light hover:bg-z-blue/10 font-semibold rounded-lg text-sm transition-colors">
               <PlusIcon className="w-4 h-4" /> Nuevo prospecto
@@ -361,6 +446,11 @@ export default function Prospects() {
             </div>
           : <ImportCSVModal campaigns={campaigns} onClose={() => setShowImport(false)}
               onImported={() => { setShowImport(false); load() }} />
+      )}
+
+      {showApifySearch && (
+        <ApifySearchModal campaigns={campaigns} onClose={() => setShowApifySearch(false)}
+          onImported={() => { setShowApifySearch(false); load() }} />
       )}
 
       {historyProspect && (

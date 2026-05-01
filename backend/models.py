@@ -25,6 +25,7 @@ class Organization(SQLModel, table=True):
     whatsapp_access_token: Optional[str] = None
     whatsapp_verify_token: Optional[str] = None
     whatsapp_enabled: bool = Field(default=False)
+    apify_enabled: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")
