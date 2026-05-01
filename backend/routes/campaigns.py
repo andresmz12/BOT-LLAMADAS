@@ -1,4 +1,5 @@
 import asyncio
+from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlmodel import Session, select
 from pydantic import BaseModel, Field
@@ -17,6 +18,7 @@ class CampaignCreate(BaseModel):
     agent_config_id: int
     calls_per_minute: int = Field(default=10, ge=1, le=100)
     sequential_calls: bool = False
+    scheduled_start_at: Optional[datetime] = None
 
 
 @router.post("")
@@ -25,13 +27,19 @@ def create_campaign(
     current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
+    now_utc = datetime.now(timezone.utc)
+    sched = data.scheduled_start_at
+    if sched and sched.tzinfo is None:
+        sched = sched.replace(tzinfo=timezone.utc)
+    status = "scheduled" if sched and sched > now_utc else "draft"
     campaign = Campaign(
         name=data.name,
         description=data.description,
         agent_config_id=data.agent_config_id,
         calls_per_minute=data.calls_per_minute,
         sequential_calls=data.sequential_calls,
-        status="draft",
+        scheduled_start_at=data.scheduled_start_at,
+        status=status,
         organization_id=current_user.organization_id if current_user.role != "superadmin" else None,
     )
     session.add(campaign)
@@ -89,6 +97,8 @@ async def start_campaign(
         raise HTTPException(status_code=403, detail="Acceso denegado")
     if campaign.status == "running":
         raise HTTPException(status_code=400, detail="Campaign already running")
+    if campaign.status == "completed":
+        raise HTTPException(status_code=400, detail="Campaign already completed")
     campaign.status = "running"
     session.add(campaign)
     session.commit()
@@ -132,6 +142,9 @@ def delete_campaign(
     task = call_orchestrator.running_tasks.pop(campaign_id, None)
     if task:
         task.cancel()
+    # Delete associated prospects first to avoid FK constraint issues
+    for p in session.exec(select(Prospect).where(Prospect.campaign_id == campaign_id)).all():
+        session.delete(p)
     session.delete(campaign)
     session.commit()
     return {"ok": True}

@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
@@ -51,6 +52,35 @@ ws_manager = WebSocketManager()
 webhook_module.ws_manager = ws_manager
 
 
+async def _campaign_scheduler():
+    """Poll every 30s and auto-start campaigns whose scheduled_start_at has arrived."""
+    import asyncio as _asyncio
+    from datetime import datetime as _dt, timezone as _tz
+    from sqlmodel import Session as _S, select as _sel
+    from models import Campaign as _Campaign
+    from services import call_orchestrator as _orch
+
+    while True:
+        await _asyncio.sleep(30)
+        try:
+            with _S(engine) as s:
+                due = s.exec(
+                    _sel(_Campaign).where(
+                        _Campaign.status == "scheduled",
+                        _Campaign.scheduled_start_at <= _dt.now(_tz.utc),
+                    )
+                ).all()
+                for campaign in due:
+                    campaign.status = "running"
+                    s.add(campaign)
+                    s.commit()
+                    task = _asyncio.create_task(_orch.start_campaign(campaign.id))
+                    _orch.running_tasks[campaign.id] = task
+                    logger.info(f"[Scheduler] Auto-started campaign {campaign.id} '{campaign.name}'")
+        except Exception as e:
+            logger.error(f"[Scheduler] Error: {e}")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("=== ZYRAVOICE BACKEND v6 STARTING ===")
@@ -61,13 +91,31 @@ async def lifespan(app: FastAPI):
         logger.info("Database initialized")
     except Exception as e:
         logger.error(f"Database initialization error: {e}")
+
+    # Recover prospects stuck in "calling" from a previous crashed/restarted session
+    try:
+        from sqlmodel import Session as _S, select as _sel
+        from models import Prospect as _Prospect
+        with _S(engine) as s:
+            stuck = s.exec(_sel(_Prospect).where(_Prospect.status == "calling")).all()
+            for p in stuck:
+                p.status = "pending"
+                s.add(p)
+            if stuck:
+                s.commit()
+                logger.info(f"[Startup] Reset {len(stuck)} stuck 'calling' prospect(s) → 'pending'")
+    except Exception as e:
+        logger.error(f"[Startup] Failed to recover stuck prospects: {e}")
     if not os.getenv("RETELL_WEBHOOK_SECRET"):
         logger.warning("⚠️  RETELL_WEBHOOK_SECRET not set — webhook signature verification is DISABLED")
     if not os.getenv("JWT_SECRET"):
         logger.warning("⚠️  JWT_SECRET not set — using insecure development key")
     if not os.getenv("SUPERADMIN_PASSWORD"):
         logger.warning("⚠️  SUPERADMIN_PASSWORD not set — using default hardcoded password, CHANGE THIS IN PRODUCTION")
+
+    scheduler = asyncio.create_task(_campaign_scheduler())
     yield
+    scheduler.cancel()
 
 
 app = FastAPI(title="Voice Agent API", lifespan=lifespan, docs_url=None, redoc_url=None)

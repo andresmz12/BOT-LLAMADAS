@@ -57,6 +57,7 @@ export const updateAgent = (id, data) => api.put(`/agents/${id}`, data).then(r =
 export const deleteAgent = (id) => api.delete(`/agents/${id}`).then(r => r.data)
 export const setDefaultAgent = (id) => api.post(`/agents/${id}/set-default`).then(r => r.data)
 export const syncAgent = (id) => api.post(`/agents/${id}/sync`).then(r => r.data)
+export const getAgentPromptPreview = (id) => api.get(`/agents/${id}/prompt-preview`).then(r => r.data)
 export const uploadKnowledgeBase = (id, file) => {
   const form = new FormData()
   form.append('file', file)
@@ -73,10 +74,11 @@ export const deleteCampaign = (id) => api.delete(`/campaigns/${id}`).then(r => r
 // Prospects
 export const getProspects = (params) => api.get('/prospects', { params }).then(r => r.data)
 export const createProspect = (data) => api.post('/prospects', data).then(r => r.data)
-export const importProspects = (campaignId, file) => {
+export const importProspects = (campaignId, file, countryCode = '+1') => {
   const form = new FormData()
   form.append('campaign_id', campaignId)
   form.append('file', file)
+  form.append('phone_country_code', countryCode)
   return api.post('/prospects/import', form).then(r => r.data)
 }
 export const updateProspect = (id, data) => api.put(`/prospects/${id}`, data).then(r => r.data)
@@ -84,6 +86,7 @@ export const deleteProspect = (id) => api.delete(`/prospects/${id}`).then(r => r
 export const deleteAllProspects = (params) => api.delete('/prospects', { params }).then(r => r.data)
 export const retryProspects = (params) => api.post('/prospects/retry', null, { params }).then(r => r.data)
 export const callProspect = (id) => api.post(`/prospects/${id}/call`).then(r => r.data)
+export const searchApifyProspects = (data) => api.post('/prospects/search-apify', data).then(r => r.data)
 
 // Leads
 export const getLeads = (params) => api.get('/leads', { params }).then(r => r.data)

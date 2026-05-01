@@ -307,6 +307,8 @@ function OrgModal({ org, onClose, onSaved }) {
     whatsapp_phone_number_id: org.whatsapp_phone_number_id || '',
     whatsapp_access_token: org.whatsapp_access_token || '',
     whatsapp_verify_token: org.whatsapp_verify_token || '',
+    apify_enabled: org.apify_enabled || false,
+    apify_api_token: org.apify_api_token || '',
   } : {
     name: '', plan: 'pro', retell_api_key: '', retell_phone_number: '',
     anthropic_api_key: '', is_active: true,
@@ -315,6 +317,8 @@ function OrgModal({ org, onClose, onSaved }) {
     crm_api_key: '', crm_board_or_list_id: '', crm_extra_config: null,
     whatsapp_enabled: false, whatsapp_phone_number_id: '',
     whatsapp_access_token: '', whatsapp_verify_token: '',
+    apify_enabled: false,
+    apify_api_token: '',
   })
   const [loading, setLoading] = useState(false)
   const [crmAccordionOpen, setCrmAccordionOpen] = useState(false)
@@ -452,6 +456,28 @@ function OrgModal({ org, onClose, onSaved }) {
                 placeholder="zyra-wa-secreto-2025" className="z-input font-mono" />
               <p className="text-xs text-slate-600 mt-1">String secreto que eliges tú — úsalo al registrar el webhook en Meta</p>
             </div>
+          </div>
+
+          {/* ── Apify Prospect Search ───────────────────────────────────────── */}
+          <div className="border-t border-z-border pt-4 space-y-3">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Búsqueda de Prospectos con IA</h3>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={!!form.apify_enabled} onChange={e => set('apify_enabled', e.target.checked)} className="w-4 h-4 accent-blue-500" />
+              <span className="text-sm text-slate-300">Activar búsqueda de prospectos con IA (Apify)</span>
+            </label>
+            {form.apify_enabled && (
+              <div className="space-y-2">
+                <SecretInput
+                  label="Apify API Token"
+                  value={form.apify_api_token || ''}
+                  onChange={e => set('apify_api_token', e.target.value)}
+                  placeholder="apify_api_xxxxxxxxxxxxxxxxxxxx"
+                />
+                <p className="text-xs text-slate-500">
+                  Token de la cuenta Apify de esta organización. Si se deja vacío se usará el token global de Railway.
+                </p>
+              </div>
+            )}
           </div>
 
           {/* ── CRM Integration ─────────────────────────────────────────────── */}

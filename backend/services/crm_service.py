@@ -196,6 +196,7 @@ async def _send_hubspot(org: Organization, call_data: dict) -> None:
         return
 
     phone = call_data.get("phone") or ""
+    prospect_name = call_data.get("prospect_name") or ""
     call_result = call_data.get("call_result") or ""
     summary = call_data.get("summary") or ""
     campaign = call_data.get("campaign_name") or ""
@@ -203,7 +204,7 @@ async def _send_hubspot(org: Organization, call_data: dict) -> None:
 
     body = {
         "properties": {
-            "firstname": phone,
+            "firstname": prospect_name or phone,
             "phone": phone,
             "hs_lead_status": call_result,
             "notes": notes,
@@ -273,6 +274,7 @@ async def _send_zoho(org: Organization, call_data: dict) -> None:
         return
 
     phone = call_data.get("phone") or ""
+    prospect_name = call_data.get("prospect_name") or ""
     summary = call_data.get("summary") or ""
     campaign = call_data.get("campaign_name") or ""
     description = f"Campaña: {campaign}\n\n{summary}".strip() if campaign else summary
@@ -281,7 +283,7 @@ async def _send_zoho(org: Organization, call_data: dict) -> None:
         "data": [
             {
                 "Phone": phone,
-                "Last_Name": phone or "ZyraVoice Lead",
+                "Last_Name": prospect_name or phone or "ZyraVoice Lead",
                 "Lead_Source": "ZyraVoice",
                 "Description": description,
             }
@@ -321,13 +323,14 @@ async def _send_salesforce(org: Organization, call_data: dict) -> None:
         return
 
     phone = call_data.get("phone") or ""
+    prospect_name = call_data.get("prospect_name") or ""
     summary = call_data.get("summary") or ""
     campaign = call_data.get("campaign_name") or ""
     description = f"Campaña: {campaign}\n\n{summary}".strip() if campaign else summary
 
     body = {
         "Phone": phone,
-        "LastName": phone or "ZyraVoice Lead",
+        "LastName": prospect_name or phone or "ZyraVoice Lead",
         "LeadSource": "ZyraVoice",
         "Description": description,
     }

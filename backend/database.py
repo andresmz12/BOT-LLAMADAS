@@ -38,6 +38,9 @@ def run_migrations():
                 "inbound_retell_agent_id": "VARCHAR(255)",
                 "inbound_retell_llm_id": "VARCHAR(255)",
                 "voicemail_message": "TEXT",
+                "call_objective": "VARCHAR(100)",
+                "target_audience": "TEXT",
+                "custom_objections": "TEXT",
             }
             with engine.begin() as conn:
                 for col, col_type in new_cols.items():
@@ -71,6 +74,9 @@ def run_migrations():
                 if "sequential_calls" not in camp_cols:
                     conn.execute(text("ALTER TABLE campaign ADD COLUMN sequential_calls BOOLEAN DEFAULT FALSE"))
                     log.info("Migration: added campaign.sequential_calls")
+                if "scheduled_start_at" not in camp_cols:
+                    conn.execute(text("ALTER TABLE campaign ADD COLUMN scheduled_start_at TIMESTAMP"))
+                    log.info("Migration: added campaign.scheduled_start_at")
 
         if "organization" in tables:
             org_cols = {c["name"] for c in insp.get_columns("organization")}
@@ -88,6 +94,8 @@ def run_migrations():
                 "whatsapp_access_token": "TEXT",
                 "whatsapp_verify_token": "VARCHAR(255)",
                 "whatsapp_enabled": "BOOLEAN DEFAULT FALSE",
+                "apify_enabled": "BOOLEAN DEFAULT FALSE",
+                "apify_api_token": "TEXT",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():

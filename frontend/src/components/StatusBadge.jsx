@@ -1,5 +1,6 @@
 const CONFIG = {
   draft:                { cls: 'bg-slate-700 text-slate-300',         label: 'Borrador' },
+  scheduled:            { cls: 'bg-orange-500/20 text-orange-400',     label: 'Programada' },
   running:              { cls: 'bg-green-500/20 text-green-400',       label: 'Corriendo' },
   paused:               { cls: 'bg-yellow-500/20 text-yellow-400',     label: 'Pausada' },
   completed:            { cls: 'bg-blue-500/20 text-blue-400',         label: 'Completada' },

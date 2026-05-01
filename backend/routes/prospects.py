@@ -1,5 +1,6 @@
 import csv
 import io
+import re
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlmodel import Session, select
@@ -12,8 +13,23 @@ from routes.auth import get_current_user, require_write_access, require_pro_plan
 router = APIRouter(prefix="/prospects", tags=["prospects"])
 
 
+def normalize_phone(phone: str, country_code: str = "+1") -> str:
+    phone = phone.strip()
+    if not phone:
+        return phone
+    if phone.startswith('+'):
+        digits = re.sub(r'\D', '', phone[1:])
+        return '+' + digits if digits else phone
+    digits = re.sub(r'\D', '', phone)
+    if not digits:
+        return phone
+    cc_digits = re.sub(r'\D', '', country_code)
+    if digits.startswith(cc_digits) and len(digits) > len(cc_digits):
+        return '+' + digits
+    return country_code + digits
+
+
 def _validate_phone(v: str) -> str:
-    import re
     v = v.strip()
     if not re.match(r"^\+?[\d\s\-().]{7,20}$", v):
         raise ValueError("Número de teléfono inválido")
@@ -72,7 +88,7 @@ def create_prospect(
     prospect = Prospect(
         campaign_id=data.campaign_id,
         name=data.name,
-        phone=data.phone,
+        phone=normalize_phone(data.phone),
         company=data.company or None,
         notes=data.notes or None,
         organization_id=current_user.organization_id,
@@ -87,6 +103,7 @@ def create_prospect(
 async def import_file(
     campaign_id: int = Form(...),
     file: UploadFile = File(...),
+    phone_country_code: str = Form(default="+1"),
     current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
@@ -117,8 +134,6 @@ async def import_file(
     for row in rows:
         # Phone: "phone" or "phone number"
         phone = (row.get("phone") or row.get("phone number") or "").strip()
-        # When file has "contact" column → contact=person name, name=company
-        # When file has only "name" column → name=person name
         has_contact = "contact" in row
         name = (row.get("contact") or row.get("name") or "").strip()
         company = (row.get("company") or (row.get("name") if has_contact else "") or "").strip()
@@ -126,6 +141,7 @@ async def import_file(
         import re
         if not phone or not re.match(r"^\+?[\d\s\-().]{7,20}$", phone):
             continue
+        phone = normalize_phone(phone, phone_country_code)
         session.add(Prospect(
             campaign_id=campaign_id,
             name=name,
@@ -137,6 +153,155 @@ async def import_file(
         imported += 1
     session.commit()
     return {"imported": imported}
+
+
+class ApifySearchRequest(BaseModel):
+    campaign_id: int
+    search_term: str
+    location: str
+    max_results: int = 50
+    exclude_keywords: str = ""      # comma-separated: "walmart, mcdonald, corp"
+    exclude_chains: bool = True     # exclude obvious chains/franchises
+    min_rating: float = 0.0         # 0 = all, 3.5 = only 3.5+ stars
+    skip_closed: bool = True        # skip permanently closed places
+    require_phone: bool = True      # only import if has phone number
+    language: str = "en"
+
+
+# Common chain/franchise keywords to filter out automatically
+_CHAIN_KEYWORDS = [
+    "walmart", "mcdonald", "starbucks", "burger king", "wendy's", "taco bell",
+    "domino", "pizza hut", "subway", "dunkin", "7-eleven", "cvs", "walgreens",
+    "dollar general", "dollar tree", "family dollar", "target", "costco",
+    "home depot", "lowe's", "autozone", "advance auto", "o'reilly",
+    "chase bank", "wells fargo", "bank of america", "citibank", "td bank",
+    "h&r block", "jackson hewitt", "liberty tax",
+    "shell", "exxon", "chevron", "bp ", "circle k", "speedway",
+]
+
+
+@router.post("/search-apify")
+async def search_apify_prospects(
+    data: ApifySearchRequest,
+    current_user: User = Depends(require_pro_plan),
+    session: Session = Depends(get_session),
+):
+    import asyncio
+    import httpx
+    from models import Organization
+
+    org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
+    if not org or not org.apify_enabled:
+        raise HTTPException(status_code=403, detail="Búsqueda con IA no habilitada para esta organización")
+
+    api_token = (org.apify_api_token or "").strip() or os.getenv("APIFY_API_TOKEN", "")
+    if not api_token:
+        raise HTTPException(status_code=503, detail="Token de Apify no configurado para esta organización")
+
+    campaign = session.get(Campaign, data.campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaña no encontrada")
+
+    # Build exclude list
+    user_excludes = [kw.strip().lower() for kw in data.exclude_keywords.split(",") if kw.strip()]
+    chain_excludes = _CHAIN_KEYWORDS if data.exclude_chains else []
+    all_excludes = user_excludes + chain_excludes
+
+    search_query = f"{data.search_term} in {data.location}"
+
+    actor_input = {
+        "searchStrings": [search_query],
+        "maxCrawledPlacesPerSearch": min(data.max_results * 3, 500),  # fetch extra to account for filtered-out
+        "includeHistogram": False,
+        "includeOpeningHours": False,
+        "includePeopleAlsoSearchFor": False,
+        "language": data.language,
+        "skipClosedPlaces": data.skip_closed,
+    }
+    if data.min_rating > 0:
+        actor_input["minimumStars"] = data.min_rating
+
+    async with httpx.AsyncClient(timeout=200) as client:
+        run_resp = await client.post(
+            "https://api.apify.com/v2/acts/compass~crawler-google-places/runs",
+            headers={"Authorization": f"Bearer {api_token}"},
+            json=actor_input,
+        )
+        if run_resp.status_code >= 400:
+            raise HTTPException(status_code=502, detail=f"Error Apify: {run_resp.text[:300]}")
+
+        run_id = run_resp.json().get("data", {}).get("id", "")
+        if not run_id:
+            raise HTTPException(status_code=502, detail="Apify no devolvió run_id")
+
+        run_status = ""
+        for _ in range(70):
+            await asyncio.sleep(3)
+            status_resp = await client.get(
+                f"https://api.apify.com/v2/actor-runs/{run_id}",
+                headers={"Authorization": f"Bearer {api_token}"},
+            )
+            run_status = status_resp.json().get("data", {}).get("status", "")
+            if run_status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
+                break
+
+        if run_status != "SUCCEEDED":
+            raise HTTPException(status_code=502, detail=f"Apify run terminó con estado: {run_status}")
+
+        items_resp = await client.get(
+            f"https://api.apify.com/v2/actor-runs/{run_id}/dataset/items",
+            headers={"Authorization": f"Bearer {api_token}"},
+            params={"format": "json", "limit": min(data.max_results * 3, 500)},
+        )
+        items = items_resp.json() if items_resp.status_code == 200 else []
+
+    imported = 0
+    skipped_no_phone = 0
+    skipped_excluded = 0
+
+    for item in items:
+        if imported >= data.max_results:
+            break
+
+        phone_raw = (item.get("phone") or item.get("phoneUnformatted") or "").strip()
+        if data.require_phone and not phone_raw:
+            skipped_no_phone += 1
+            continue
+
+        name = (item.get("title") or item.get("name") or "").strip()
+        name_lower = name.lower()
+
+        # Apply exclude filters
+        if any(kw in name_lower for kw in all_excludes):
+            skipped_excluded += 1
+            continue
+
+        phone = normalize_phone(phone_raw, "+1") if phone_raw else ""
+        address = (item.get("address") or item.get("street") or "").strip()
+        rating = item.get("totalScore") or item.get("rating") or 0
+        notes_parts = []
+        if address:
+            notes_parts.append(address)
+        if rating:
+            notes_parts.append(f"Rating: {rating}")
+
+        session.add(Prospect(
+            campaign_id=data.campaign_id,
+            name=name,
+            phone=phone,
+            company=name,
+            notes=" | ".join(notes_parts) or None,
+            organization_id=current_user.organization_id,
+        ))
+        imported += 1
+
+    session.commit()
+    return {
+        "imported": imported,
+        "total_found": len(items),
+        "skipped_no_phone": skipped_no_phone,
+        "skipped_excluded": skipped_excluded,
+    }
 
 
 @router.get("")

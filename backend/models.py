@@ -25,6 +25,8 @@ class Organization(SQLModel, table=True):
     whatsapp_access_token: Optional[str] = None
     whatsapp_verify_token: Optional[str] = None
     whatsapp_enabled: bool = Field(default=False)
+    apify_enabled: bool = Field(default=False)
+    apify_api_token: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")
@@ -70,6 +72,9 @@ class AgentConfig(SQLModel, table=True):
     inbound_retell_llm_id: Optional[str] = None
     retell_knowledge_base_id: Optional[str] = None
     organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+    call_objective: Optional[str] = None
+    target_audience: Optional[str] = None
+    custom_objections: Optional[str] = None
 
     campaigns: List["Campaign"] = Relationship(back_populates="agent_config")
 
@@ -78,7 +83,7 @@ class Campaign(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     description: Optional[str] = None
-    status: str = Field(default="draft")  # draft/running/paused/completed
+    status: str = Field(default="draft")  # draft/scheduled/running/paused/completed
     agent_config_id: int = Field(foreign_key="agentconfig.id")
     created_at: datetime = Field(default_factory=datetime.utcnow)
     total_calls: int = Field(default=0)
@@ -90,6 +95,7 @@ class Campaign(SQLModel, table=True):
     organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
     calls_per_minute: int = Field(default=10)
     sequential_calls: bool = Field(default=False)
+    scheduled_start_at: Optional[datetime] = Field(default=None)
 
     agent_config: Optional[AgentConfig] = Relationship(back_populates="campaigns")
     prospects: List["Prospect"] = Relationship(back_populates="campaign")
