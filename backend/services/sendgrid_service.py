@@ -18,6 +18,7 @@ DEFAULT_SUBJECT = {
     "callback_requested": "Le llamaremos pronto",
     "voicemail":          "Le dejamos un mensaje de voz",
     "not_interested":     "Fue un gusto hablar con usted",
+    "general":            "Mensaje de seguimiento",
 }
 
 

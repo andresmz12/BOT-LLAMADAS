@@ -6,7 +6,7 @@ from typing import Optional
 from sqlmodel import Session, select
 from sqlalchemy import desc
 from database import get_session
-from models import User, Organization, WebhookLog
+from models import User, Organization, WebhookLog, Prospect, Campaign
 from routes.auth import get_current_user, require_write_access, require_superadmin
 
 router = APIRouter(prefix="/settings", tags=["settings"])
@@ -322,6 +322,106 @@ async def test_email(
         return {"ok": True, "status_code": resp.status_code}
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Error al enviar: {str(e)}")
+
+
+class BulkEmailRequest(BaseModel):
+    campaign_id: Optional[int] = None   # None = all org prospects with email
+    template_key: str = "general"       # which template to use
+
+
+@router.post("/email/bulk-send")
+async def bulk_send_email(
+    data: BulkEmailRequest,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    org = session.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="SendGrid no configurado. Pide al administrador que configure la API key.")
+
+    # Load prospects
+    query = select(Prospect).where(
+        Prospect.organization_id == current_user.organization_id,
+        Prospect.email.is_not(None),
+        Prospect.email != "",
+    )
+    if data.campaign_id:
+        query = query.where(Prospect.campaign_id == data.campaign_id)
+    prospects = session.exec(query).all()
+    if not prospects:
+        raise HTTPException(status_code=400, detail="No hay prospectos con email en esta selección")
+
+    # Load template
+    from services.sendgrid_service import _fill, _build_html, DEFAULT_SUBJECT
+    import json as _json
+    from datetime import datetime as _dt
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail
+    import base64 as _b64
+
+    templates = {}
+    if org.email_templates:
+        try:
+            templates = _json.loads(org.email_templates)
+        except Exception:
+            pass
+    tmpl = templates.get(data.template_key, {})
+
+    from_email = (org.email_from or "").strip() or os.getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
+    from_name  = (org.email_from_name or "").strip() or "ZyraVoice"
+    sg = SendGridAPIClient(api_key)
+
+    sent = 0
+    skipped = 0
+    errors = []
+
+    for prospect in prospects:
+        try:
+            tmpl_vars = {
+                "nombre":   prospect.name or "",
+                "empresa":  prospect.company or "",
+                "agente":   from_name,
+                "resumen":  "",
+                "telefono": prospect.phone or "",
+                "fecha":    _dt.utcnow().strftime("%d/%m/%Y"),
+            }
+            subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(data.template_key, "Mensaje de ZyraVoice"), tmpl_vars)
+            color     = tmpl.get("color") or "#4F46E5"
+            greeting  = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
+            body_text = _fill(tmpl.get("body") or "", tmpl_vars)
+            cta_text  = tmpl.get("cta_text") or ""
+            cta_url   = tmpl.get("cta_url") or ""
+            signature = _fill(tmpl.get("signature") or f"El equipo de {from_name}", tmpl_vars)
+            html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature)
+
+            message = Mail(
+                from_email=(from_email, from_name),
+                to_emails=prospect.email,
+                subject=subject,
+                html_content=html_body,
+            )
+            if org.email_attachment and org.email_attachment_name:
+                from sendgrid.helpers.mail import Attachment, FileContent, FileName, FileType, Disposition
+                ext = org.email_attachment_name.rsplit(".", 1)[-1].lower()
+                mime = "application/pdf" if ext == "pdf" else f"image/{ext}"
+                message.attachment = Attachment(
+                    FileContent(_b64.b64encode(org.email_attachment).decode()),
+                    FileName(org.email_attachment_name),
+                    FileType(mime),
+                    Disposition("attachment"),
+                )
+            sg.send(message)
+            sent += 1
+        except Exception as e:
+            errors.append({"email": prospect.email, "error": str(e)[:80]})
+            skipped += 1
+
+    return {"sent": sent, "skipped": skipped, "errors": errors[:5]}
 
 
 @router.get("/crm/logs")

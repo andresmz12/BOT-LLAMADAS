@@ -121,6 +121,7 @@ export const uploadEmailAttachment = (file) => {
   return api.post('/settings/email/attachment', form).then(r => r.data)
 }
 export const sendTestEmail = (data) => api.post('/settings/email/test', data).then(r => r.data)
+export const bulkSendEmail = (data) => api.post('/settings/email/bulk-send', data).then(r => r.data)
 
 // Admin — CRM
 export const testCRMWebhook = (orgId) =>
