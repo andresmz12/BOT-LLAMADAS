@@ -672,10 +672,21 @@ async def expand_keywords(
     import json
     from anthropic import AsyncAnthropic
 
+    import os as _os
     org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
-    api_key = ((org.anthropic_api_key if org else "") or "").strip() or __import__("os").getenv("ANTHROPIC_API_KEY", "")
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Anthropic API key no configurada para esta organización")
+    org_key = ((org.anthropic_api_key if org else "") or "").strip()
+    env_key = _os.getenv("ANTHROPIC_API_KEY", "").strip()
+
+    # Try org key first; if it fails 401, automatically fall back to the env
+    # key so a stale per-org credential doesn't block the whole feature when
+    # Railway has a valid platform-wide key.
+    candidates = []
+    if org_key:
+        candidates.append(("org", org_key))
+    if env_key and env_key != org_key:
+        candidates.append(("env", env_key))
+    if not candidates:
+        raise HTTPException(status_code=503, detail="Anthropic API key no configurada (ni en la organización ni en el entorno)")
 
     seed = data.seed.strip()
     if not seed:
@@ -693,25 +704,38 @@ async def expand_keywords(
         f"- Return ONLY a JSON array of strings, nothing else."
     )
 
-    client = AsyncAnthropic(api_key=api_key)
-    try:
-        resp = await client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=400,
-            messages=[{"role": "user", "content": prompt}],
-        )
-    except Exception as e:
-        msg = str(e).lower()
+    resp = None
+    last_err: Exception | None = None
+    for source, key in candidates:
+        try:
+            resp = await AsyncAnthropic(api_key=key).messages.create(
+                model="claude-haiku-4-5-20251001",
+                max_tokens=400,
+                messages=[{"role": "user", "content": prompt}],
+            )
+            break
+        except Exception as e:
+            last_err = e
+            msg = str(e).lower()
+            # Only retry the next candidate when it's an auth issue with the
+            # current key. Rate limits / credit issues won't be solved by a
+            # different key, so surface them immediately.
+            if "401" not in msg and "invalid x-api-key" not in msg and "authentication" not in msg:
+                break
+            continue
+
+    if resp is None:
+        msg = str(last_err or "").lower()
         if "401" in msg or "invalid x-api-key" in msg or "authentication" in msg:
             raise HTTPException(
                 status_code=401,
-                detail="API key de Anthropic inválida. Actualízala en Admin Panel → Organizaciones → tu organización."
+                detail="API key de Anthropic inválida tanto en la organización como en el entorno. Actualízala en Admin Panel → Organizaciones."
             )
         if "429" in msg or "rate" in msg:
             raise HTTPException(status_code=429, detail="Anthropic rate limit alcanzado. Intenta en unos segundos.")
         if "credit" in msg or "balance" in msg:
             raise HTTPException(status_code=402, detail="Cuenta de Anthropic sin créditos. Recarga en console.anthropic.com.")
-        raise HTTPException(status_code=502, detail=f"Error de IA: {str(e)[:200]}")
+        raise HTTPException(status_code=502, detail=f"Error de IA: {str(last_err)[:200]}")
 
     text_out = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
     # Strip markdown code fences if present
