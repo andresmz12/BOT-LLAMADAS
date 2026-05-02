@@ -16,6 +16,7 @@ import DemoCall from './pages/DemoCall'
 import WhatsApp from './pages/WhatsApp'
 import Users from './pages/Users'
 import Leads from './pages/Leads'
+import EmailMarketing from './pages/EmailMarketing'
 
 const IDLE_MS = 5 * 60 * 1000 // 5 minutes
 
@@ -89,6 +90,7 @@ export default function App() {
           <Route path="/chatbot" element={<WhatsApp />} />
           <Route path="/team" element={<Users />} />
           <Route path="/leads" element={<Leads />} />
+          <Route path="/email-marketing" element={<EmailMarketing />} />
         </Route>
       </Routes>
     </BrowserRouter>
