@@ -250,6 +250,80 @@ async def upload_email_attachment(
     return {"ok": True, "filename": file.filename}
 
 
+class EmailTestRequest(BaseModel):
+    to_email: str
+    outcome: str = "interested"
+
+
+@router.post("/email/test")
+async def test_email(
+    data: EmailTestRequest,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    org = session.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=400, detail="SendGrid no configurado. Pide al administrador que configure la API key.")
+
+    class _FakeProspect:
+        name = "Prospecto de Prueba"
+        company = "Empresa Demo"
+        phone = "+10000000000"
+        email = data.to_email
+
+    from services.sendgrid_service import _fill, _build_html, DEFAULT_SUBJECT
+    import json as _json
+    from datetime import datetime as _dt
+
+    templates = {}
+    if org.email_templates:
+        try:
+            templates = _json.loads(org.email_templates)
+        except Exception:
+            pass
+    tmpl = templates.get(data.outcome, {})
+
+    tmpl_vars = {
+        "nombre": "Prospecto de Prueba",
+        "empresa": "Empresa Demo",
+        "agente": org.email_from_name or "Isabella",
+        "resumen": "Esta es una llamada de prueba para verificar el correo.",
+        "telefono": "+10000000000",
+        "fecha": _dt.utcnow().strftime("%d/%m/%Y"),
+    }
+    subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(data.outcome, "Email de prueba"), tmpl_vars)
+    color     = tmpl.get("color") or "#4F46E5"
+    greeting  = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
+    body_text = _fill(tmpl.get("body") or "Este es un email de prueba enviado desde ZyraVoice.", tmpl_vars)
+    cta_text  = tmpl.get("cta_text") or ""
+    cta_url   = tmpl.get("cta_url") or ""
+    signature = _fill(tmpl.get("signature") or f"El equipo de {tmpl_vars['agente']}", tmpl_vars)
+    html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature)
+
+    from_email = (org.email_from or "").strip() or os.getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
+    from_name  = (org.email_from_name or "").strip() or "ZyraVoice"
+
+    try:
+        from sendgrid import SendGridAPIClient
+        from sendgrid.helpers.mail import Mail
+        message = Mail(
+            from_email=(from_email, from_name),
+            to_emails=data.to_email,
+            subject=f"[PRUEBA] {subject}",
+            html_content=html_body,
+        )
+        sg = SendGridAPIClient(api_key)
+        resp = sg.send(message)
+        return {"ok": True, "status_code": resp.status_code}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Error al enviar: {str(e)}")
+
+
 @router.get("/crm/logs")
 def get_crm_logs(
     current_user: User = Depends(get_current_user),

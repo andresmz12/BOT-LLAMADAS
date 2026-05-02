@@ -120,6 +120,7 @@ export const uploadEmailAttachment = (file) => {
   form.append('file', file)
   return api.post('/settings/email/attachment', form).then(r => r.data)
 }
+export const sendTestEmail = (data) => api.post('/settings/email/test', data).then(r => r.data)
 
 // Admin — CRM
 export const testCRMWebhook = (orgId) =>

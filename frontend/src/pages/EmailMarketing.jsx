@@ -1,44 +1,35 @@
 import { useState, useEffect, useRef } from 'react'
-import { CheckCircleIcon, EnvelopeIcon, PaperClipIcon } from '@heroicons/react/24/outline'
-import { getEmailSettings, saveEmailSettings, uploadEmailAttachment } from '../api/client'
+import { CheckCircleIcon, EnvelopeIcon, PaperClipIcon, PaperAirplaneIcon } from '@heroicons/react/24/outline'
+import { getEmailSettings, saveEmailSettings, uploadEmailAttachment, sendTestEmail } from '../api/client'
 
-const OUTCOME_LABELS = {
-  interested: 'Interesado',
-  callback_requested: 'Solicita callback',
-  voicemail: 'Buzón de voz',
-  not_interested: 'No interesado',
-}
-
-const OUTCOME_FLAGS = {
-  interested: 'email_send_on_interested',
-  callback_requested: 'email_send_on_callback',
-  voicemail: 'email_send_on_voicemail',
-  not_interested: 'email_send_on_not_interested',
-}
-
-const TEMPLATE_VARS = '{{nombre}}  {{empresa}}  {{agente}}  {{resumen}}  {{telefono}}  {{fecha}}'
+const OUTCOMES = [
+  { key: 'interested',         label: 'Interesado',       flag: 'email_send_on_interested' },
+  { key: 'callback_requested', label: 'Callback',         flag: 'email_send_on_callback' },
+  { key: 'voicemail',          label: 'Buzón de voz',     flag: 'email_send_on_voicemail' },
+  { key: 'not_interested',     label: 'No interesado',    flag: 'email_send_on_not_interested' },
+]
 
 const EMPTY_TMPL = { subject: '', color: '#4F46E5', greeting: '', body: '', cta_text: '', cta_url: '', signature: '' }
 
-function buildPreviewHtml(tmpl) {
+function buildHtml(tmpl) {
   const c = tmpl.color || '#4F46E5'
-  const ctaBlock = tmpl.cta_text && tmpl.cta_url
-    ? `<p style="text-align:center;margin:20px 0"><a href="${tmpl.cta_url}" style="background:${c};color:#fff;padding:10px 24px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">${tmpl.cta_text}</a></p>`
+  const cta = tmpl.cta_text && tmpl.cta_url
+    ? `<p style="text-align:center;margin:20px 0"><a href="${tmpl.cta_url}" style="background:${c};color:#fff;padding:10px 22px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block">${tmpl.cta_text}</a></p>`
     : ''
-  return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
-  <div style="background:${c};padding:18px 24px"><h1 style="color:#fff;margin:0;font-size:16px">Mensaje de seguimiento</h1></div>
-  <div style="padding:24px">
-    <p style="margin-bottom:12px">${tmpl.greeting || '<em style="color:#9ca3af">Ingresa un saludo...</em>'}</p>
-    <div style="white-space:pre-wrap;line-height:1.6">${tmpl.body || '<em style="color:#9ca3af">Ingresa el cuerpo del mensaje...</em>'}</div>
-    ${ctaBlock}
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:20px 0">
-    <p style="color:#6b7280;font-size:12px;margin:0">${tmpl.signature || '<em>Ingresa una firma...</em>'}</p>
+  return `<div style="font-family:Arial,sans-serif;max-width:520px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+  <div style="background:${c};padding:16px 22px"><p style="color:#fff;margin:0;font-size:15px;font-weight:600">Mensaje de seguimiento</p></div>
+  <div style="padding:22px">
+    <p style="margin:0 0 12px">${tmpl.greeting || '<span style="color:#9ca3af;font-style:italic">Saludo...</span>'}</p>
+    <div style="white-space:pre-wrap;line-height:1.65">${tmpl.body || '<span style="color:#9ca3af;font-style:italic">Cuerpo del mensaje...</span>'}</div>
+    ${cta}
+    <hr style="border:none;border-top:1px solid #f0f0f0;margin:18px 0">
+    <p style="color:#9ca3af;font-size:12px;margin:0">${tmpl.signature || '<span style="font-style:italic">Firma...</span>'}</p>
   </div>
 </div>`
 }
 
 export default function EmailMarketing() {
-  const [emailCfg, setEmailCfg] = useState({
+  const [cfg, setCfg] = useState({
     email_enabled: false,
     email_from: '',
     email_from_name: '',
@@ -50,16 +41,24 @@ export default function EmailMarketing() {
     email_templates: {},
     email_attachment_name: null,
   })
-  const [activeOutcome, setActiveOutcome] = useState('interested')
+  const [tab, setTab] = useState('interested')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+
+  // Test email
+  const [testEmail, setTestEmail] = useState('')
+  const [testOutcome, setTestOutcome] = useState('interested')
+  const [testLoading, setTestLoading] = useState(false)
+  const [testResult, setTestResult] = useState(null)
+
+  // Attachment
   const [attachUploading, setAttachUploading] = useState(false)
   const [attachMsg, setAttachMsg] = useState(null)
-  const fileInputRef = useRef(null)
+  const fileRef = useRef(null)
 
   useEffect(() => {
     getEmailSettings().then(data => {
-      setEmailCfg({
+      setCfg({
         email_enabled: data.email_enabled ?? false,
         email_from: data.email_from || '',
         email_from_name: data.email_from_name || '',
@@ -74,302 +73,265 @@ export default function EmailMarketing() {
     }).catch(() => {})
   }, [])
 
-  const getTemplate = (outcome) => emailCfg.email_templates[outcome] || { ...EMPTY_TMPL }
-
-  const setTemplate = (outcome, field, value) => {
-    setEmailCfg(prev => ({
-      ...prev,
-      email_templates: {
-        ...prev.email_templates,
-        [outcome]: { ...getTemplate(outcome), [field]: value },
-      },
-    }))
-  }
+  const getTmpl = (k) => cfg.email_templates[k] || { ...EMPTY_TMPL }
+  const setTmpl = (k, field, val) =>
+    setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [k]: { ...getTmpl(k), [field]: val } } }))
 
   const handleSave = async () => {
-    setSaving(true)
-    setSaved(false)
+    setSaving(true); setSaved(false)
     try {
       await saveEmailSettings({
-        email_enabled: emailCfg.email_enabled,
-        email_from: emailCfg.email_from || null,
-        email_from_name: emailCfg.email_from_name || null,
-        email_send_on_interested: emailCfg.email_send_on_interested,
-        email_send_on_callback: emailCfg.email_send_on_callback,
-        email_send_on_voicemail: emailCfg.email_send_on_voicemail,
-        email_send_on_not_interested: emailCfg.email_send_on_not_interested,
-        email_templates: emailCfg.email_templates,
+        email_enabled: cfg.email_enabled,
+        email_from: cfg.email_from || null,
+        email_from_name: cfg.email_from_name || null,
+        email_send_on_interested: cfg.email_send_on_interested,
+        email_send_on_callback: cfg.email_send_on_callback,
+        email_send_on_voicemail: cfg.email_send_on_voicemail,
+        email_send_on_not_interested: cfg.email_send_on_not_interested,
+        email_templates: cfg.email_templates,
       })
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch (err) {
       alert(err.response?.data?.detail || 'Error al guardar')
-    } finally {
-      setSaving(false)
-    }
+    } finally { setSaving(false) }
   }
 
-  const handleAttachUpload = async (e) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    if (file.size > 5 * 1024 * 1024) {
-      setAttachMsg({ ok: false, text: 'El archivo supera el límite de 5 MB' })
-      return
-    }
-    setAttachUploading(true)
-    setAttachMsg(null)
+  const handleTest = async () => {
+    if (!testEmail) return
+    setTestLoading(true); setTestResult(null)
+    try {
+      await sendTestEmail({ to_email: testEmail, outcome: testOutcome })
+      setTestResult({ ok: true })
+    } catch (err) {
+      setTestResult({ ok: false, msg: err.response?.data?.detail || 'Error al enviar' })
+    } finally { setTestLoading(false) }
+  }
+
+  const handleAttach = async (e) => {
+    const file = e.target.files?.[0]; if (!file) return
+    if (file.size > 5 * 1024 * 1024) { setAttachMsg({ ok: false, text: 'Máximo 5 MB' }); return }
+    setAttachUploading(true); setAttachMsg(null)
     try {
       const res = await uploadEmailAttachment(file)
-      setEmailCfg(prev => ({ ...prev, email_attachment_name: res.filename }))
-      setAttachMsg({ ok: true, text: `Adjunto guardado: ${res.filename}` })
+      setCfg(p => ({ ...p, email_attachment_name: res.filename }))
+      setAttachMsg({ ok: true, text: `Subido: ${res.filename}` })
     } catch (err) {
-      setAttachMsg({ ok: false, text: err.response?.data?.detail || 'Error al subir archivo' })
-    } finally {
-      setAttachUploading(false)
-    }
+      setAttachMsg({ ok: false, text: err.response?.data?.detail || 'Error' })
+    } finally { setAttachUploading(false) }
   }
 
-  const activeTmpl = getTemplate(activeOutcome)
+  const activeTmpl = getTmpl(tab)
+  const activeOutcome = OUTCOMES.find(o => o.key === tab)
 
   return (
-    <div className="p-6 space-y-6 max-w-2xl">
+    <div className="p-6 space-y-5 max-w-2xl">
+
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-            <EnvelopeIcon className="w-6 h-6 text-z-blue-light" />
-            Email Marketing
-          </h1>
-          <p className="text-sm text-slate-500 mt-1">Envía emails automáticos a los prospectos después de cada llamada</p>
-        </div>
+        <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
+          <EnvelopeIcon className="w-6 h-6 text-z-blue-light" /> Email Marketing
+        </h1>
         <span className={`px-2.5 py-1 text-xs rounded-full font-medium ${
-          emailCfg.sendgrid_configured
-            ? 'bg-green-500/20 text-green-400'
-            : 'bg-slate-700 text-slate-500'
+          cfg.sendgrid_configured ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-500'
         }`}>
-          SendGrid {emailCfg.sendgrid_configured ? '✓ Configurado' : '✗ No configurado'}
+          {cfg.sendgrid_configured ? '✓ SendGrid activo' : '✗ SendGrid sin configurar'}
         </span>
       </div>
 
-      {/* Master toggle + sender */}
-      <div className="bg-z-card rounded-xl p-6 border border-z-border space-y-4">
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">General</h2>
-
-        <label className="flex items-center gap-3 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={emailCfg.email_enabled}
-            onChange={e => setEmailCfg(p => ({ ...p, email_enabled: e.target.checked }))}
-            className="w-4 h-4 accent-blue-500 cursor-pointer"
-          />
-          <span className="text-sm text-slate-300">Activar envío automático de emails tras cada llamada</span>
+      {/* Card 1 — Activar + remitente */}
+      <div className="bg-z-card rounded-xl p-5 border border-z-border space-y-4">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <div
+            onClick={() => setCfg(p => ({ ...p, email_enabled: !p.email_enabled }))}
+            className={`relative w-10 h-6 rounded-full transition-colors cursor-pointer ${cfg.email_enabled ? 'bg-blue-500' : 'bg-slate-700'}`}
+          >
+            <span className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${cfg.email_enabled ? 'translate-x-4' : ''}`} />
+          </div>
+          <span className="text-sm font-medium text-slate-200">Activar emails automáticos post-llamada</span>
         </label>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className={`grid grid-cols-2 gap-3 transition-opacity ${!cfg.email_enabled ? 'opacity-40 pointer-events-none' : ''}`}>
           <div>
-            <label className="text-xs font-medium text-slate-400 mb-1 block">Email remitente</label>
-            <input
-              type="email"
-              value={emailCfg.email_from}
-              onChange={e => setEmailCfg(p => ({ ...p, email_from: e.target.value }))}
-              placeholder="info@empresa.com"
-              className="z-input text-sm"
-              disabled={!emailCfg.email_enabled}
-            />
+            <label className="text-xs text-slate-400 mb-1 block">Email remitente</label>
+            <input type="email" value={cfg.email_from}
+              onChange={e => setCfg(p => ({ ...p, email_from: e.target.value }))}
+              placeholder="info@empresa.com" className="z-input text-sm" />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-400 mb-1 block">Nombre remitente</label>
-            <input
-              type="text"
-              value={emailCfg.email_from_name}
-              onChange={e => setEmailCfg(p => ({ ...p, email_from_name: e.target.value }))}
-              placeholder="Isabella - Mi Empresa"
-              className="z-input text-sm"
-              disabled={!emailCfg.email_enabled}
-            />
+            <label className="text-xs text-slate-400 mb-1 block">Nombre remitente</label>
+            <input type="text" value={cfg.email_from_name}
+              onChange={e => setCfg(p => ({ ...p, email_from_name: e.target.value }))}
+              placeholder="Isabella - Mi Empresa" className="z-input text-sm" />
           </div>
         </div>
       </div>
 
-      {/* Per-outcome toggles + template editor */}
-      <div className="bg-z-card rounded-xl p-6 border border-z-border space-y-4">
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Plantillas por resultado</h2>
-        <p className="text-xs text-slate-500">Variables disponibles: <span className="font-mono text-blue-400">{TEMPLATE_VARS}</span></p>
-
-        <div className="space-y-2">
-          {Object.entries(OUTCOME_LABELS).map(([outcome, label]) => {
-            const flagKey = OUTCOME_FLAGS[outcome]
-            const isOn = emailCfg[flagKey]
-            const isActive = activeOutcome === outcome
+      {/* Card 2 — Plantillas por resultado */}
+      <div className={`bg-z-card rounded-xl border border-z-border overflow-hidden transition-opacity ${!cfg.email_enabled ? 'opacity-40 pointer-events-none' : ''}`}>
+        {/* Tabs */}
+        <div className="flex border-b border-z-border">
+          {OUTCOMES.map(o => {
+            const isOn = cfg[o.flag]
             return (
-              <div key={outcome} className="border border-z-border rounded-lg overflow-hidden">
-                <div
-                  className="flex items-center justify-between px-4 py-3 cursor-pointer hover:bg-white/5 transition-colors"
-                  onClick={() => isOn && setActiveOutcome(isActive ? null : outcome)}
-                >
-                  <label className="flex items-center gap-3 cursor-pointer select-none" onClick={e => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={isOn}
-                      disabled={!emailCfg.email_enabled}
-                      onChange={e => {
-                        setEmailCfg(p => ({ ...p, [flagKey]: e.target.checked }))
-                        if (e.target.checked) setActiveOutcome(outcome)
-                      }}
-                      className="w-4 h-4 accent-blue-500 cursor-pointer"
-                    />
-                    <span className="text-sm text-slate-300">{label}</span>
-                  </label>
-                  {isOn && (
-                    <span className="text-xs text-slate-500">{isActive ? '▲ Ocultar' : '▼ Editar plantilla'}</span>
-                  )}
-                </div>
-
-                {isOn && isActive && (
-                  <div className="border-t border-z-border p-4 space-y-3 bg-black/20">
-                    <div>
-                      <label className="text-xs font-medium text-slate-400 mb-1 block">Asunto</label>
-                      <input
-                        type="text"
-                        value={activeTmpl.subject}
-                        onChange={e => setTemplate(outcome, 'subject', e.target.value)}
-                        placeholder="Ej: Gracias por su interés, {{nombre}}"
-                        className="z-input text-sm"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-medium text-slate-400 mb-1 block">Color de cabecera</label>
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="color"
-                            value={activeTmpl.color || '#4F46E5'}
-                            onChange={e => setTemplate(outcome, 'color', e.target.value)}
-                            className="w-10 h-10 rounded cursor-pointer border border-z-border bg-transparent"
-                          />
-                          <input
-                            type="text"
-                            value={activeTmpl.color || '#4F46E5'}
-                            onChange={e => setTemplate(outcome, 'color', e.target.value)}
-                            className="z-input text-sm font-mono flex-1"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-slate-400 mb-1 block">Saludo</label>
-                        <input
-                          type="text"
-                          value={activeTmpl.greeting}
-                          onChange={e => setTemplate(outcome, 'greeting', e.target.value)}
-                          placeholder="Estimado/a {{nombre}},"
-                          className="z-input text-sm"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-medium text-slate-400 mb-1 block">Cuerpo del mensaje</label>
-                      <textarea
-                        rows={4}
-                        value={activeTmpl.body}
-                        onChange={e => setTemplate(outcome, 'body', e.target.value)}
-                        placeholder="Escribe el contenido del email aquí..."
-                        className="z-input text-sm resize-none"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="text-xs font-medium text-slate-400 mb-1 block">Texto del botón (CTA)</label>
-                        <input
-                          type="text"
-                          value={activeTmpl.cta_text}
-                          onChange={e => setTemplate(outcome, 'cta_text', e.target.value)}
-                          placeholder="Agendar cita"
-                          className="z-input text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-slate-400 mb-1 block">URL del botón</label>
-                        <input
-                          type="url"
-                          value={activeTmpl.cta_url}
-                          onChange={e => setTemplate(outcome, 'cta_url', e.target.value)}
-                          placeholder="https://calendly.com/..."
-                          className="z-input text-sm"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="text-xs font-medium text-slate-400 mb-1 block">Firma</label>
-                      <input
-                        type="text"
-                        value={activeTmpl.signature}
-                        onChange={e => setTemplate(outcome, 'signature', e.target.value)}
-                        placeholder="El equipo de {{agente}}"
-                        className="z-input text-sm"
-                      />
-                    </div>
-
-                    {/* Live preview */}
-                    <div>
-                      <p className="text-xs font-medium text-slate-400 mb-2">Vista previa</p>
-                      <div
-                        className="rounded-lg overflow-hidden bg-white text-sm"
-                        dangerouslySetInnerHTML={{ __html: buildPreviewHtml(activeTmpl) }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+              <button
+                key={o.key}
+                onClick={() => setTab(o.key)}
+                className={`flex-1 px-3 py-3 text-xs font-medium transition-colors relative ${
+                  tab === o.key ? 'text-slate-100 bg-black/20' : 'text-slate-500 hover:text-slate-300'
+                }`}
+              >
+                {o.label}
+                <span className={`absolute top-2 right-2 w-1.5 h-1.5 rounded-full ${isOn ? 'bg-green-400' : 'bg-slate-600'}`} />
+              </button>
             )
           })}
         </div>
+
+        <div className="p-5 space-y-4">
+          {/* Outcome toggle */}
+          <label className="flex items-center gap-3 cursor-pointer">
+            <div
+              onClick={() => setCfg(p => ({ ...p, [activeOutcome.flag]: !p[activeOutcome.flag] }))}
+              className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${cfg[activeOutcome.flag] ? 'bg-blue-500' : 'bg-slate-700'}`}
+            >
+              <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${cfg[activeOutcome.flag] ? 'translate-x-4' : ''}`} />
+            </div>
+            <span className="text-sm text-slate-300">Enviar email cuando resultado sea <strong className="text-slate-100">{activeOutcome.label}</strong></span>
+          </label>
+
+          <p className="text-xs text-slate-500">
+            Variables: <span className="font-mono text-blue-400">{'{{nombre}}  {{empresa}}  {{agente}}  {{resumen}}  {{telefono}}  {{fecha}}'}</span>
+          </p>
+
+          {/* Template form */}
+          <div className="space-y-3">
+            <input type="text" value={activeTmpl.subject}
+              onChange={e => setTmpl(tab, 'subject', e.target.value)}
+              placeholder="Asunto del email — ej: Gracias por su interés, {{nombre}}"
+              className="z-input text-sm" />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Saludo</label>
+                <input type="text" value={activeTmpl.greeting}
+                  onChange={e => setTmpl(tab, 'greeting', e.target.value)}
+                  placeholder="Estimado/a {{nombre}}," className="z-input text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Color de cabecera</label>
+                <div className="flex gap-2 items-center">
+                  <input type="color" value={activeTmpl.color || '#4F46E5'}
+                    onChange={e => setTmpl(tab, 'color', e.target.value)}
+                    className="w-9 h-9 rounded border border-z-border cursor-pointer bg-transparent" />
+                  <input type="text" value={activeTmpl.color || '#4F46E5'}
+                    onChange={e => setTmpl(tab, 'color', e.target.value)}
+                    className="z-input text-sm font-mono flex-1" />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Cuerpo del mensaje</label>
+              <textarea rows={4} value={activeTmpl.body}
+                onChange={e => setTmpl(tab, 'body', e.target.value)}
+                placeholder="Escribe el contenido aquí..."
+                className="z-input text-sm resize-none" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Botón (texto)</label>
+                <input type="text" value={activeTmpl.cta_text}
+                  onChange={e => setTmpl(tab, 'cta_text', e.target.value)}
+                  placeholder="Agendar cita" className="z-input text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Botón (URL)</label>
+                <input type="url" value={activeTmpl.cta_url}
+                  onChange={e => setTmpl(tab, 'cta_url', e.target.value)}
+                  placeholder="https://calendly.com/..." className="z-input text-sm" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Firma</label>
+              <input type="text" value={activeTmpl.signature}
+                onChange={e => setTmpl(tab, 'signature', e.target.value)}
+                placeholder="El equipo de {{agente}}" className="z-input text-sm" />
+            </div>
+          </div>
+
+          {/* Preview */}
+          <div>
+            <p className="text-xs text-slate-500 mb-2 uppercase tracking-wide font-medium">Vista previa</p>
+            <div className="rounded-lg overflow-hidden bg-white text-sm"
+              dangerouslySetInnerHTML={{ __html: buildHtml(activeTmpl) }} />
+          </div>
+        </div>
       </div>
 
-      {/* Attachment */}
-      <div className="bg-z-card rounded-xl p-6 border border-z-border space-y-3">
-        <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide flex items-center gap-2">
-          <PaperClipIcon className="w-4 h-4" /> Adjunto
-        </h2>
-        <p className="text-xs text-slate-500">PDF o imagen — máximo 5 MB. Se adjunta a todos los emails enviados.</p>
-        {emailCfg.email_attachment_name && (
-          <div className="flex items-center gap-2 text-sm text-slate-300">
-            <PaperClipIcon className="w-4 h-4 text-slate-500" />
-            <span className="font-mono text-xs bg-slate-800 px-2 py-0.5 rounded">{emailCfg.email_attachment_name}</span>
+      {/* Card 3 — Adjunto + Prueba */}
+      <div className={`bg-z-card rounded-xl p-5 border border-z-border space-y-4 transition-opacity ${!cfg.email_enabled ? 'opacity-40 pointer-events-none' : ''}`}>
+
+        {/* Attachment */}
+        <div>
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <PaperClipIcon className="w-3.5 h-3.5" /> Adjunto (opcional)
+          </h3>
+          <p className="text-xs text-slate-500 mb-2">PDF o imagen, máx. 5 MB — se adjunta a todos los emails.</p>
+          <div className="flex items-center gap-3">
+            <input ref={fileRef} type="file" accept=".pdf,image/*" className="hidden" onChange={handleAttach} />
+            <button onClick={() => fileRef.current?.click()} disabled={attachUploading}
+              className="z-btn-ghost border border-z-border text-sm disabled:opacity-50">
+              {attachUploading ? 'Subiendo...' : cfg.email_attachment_name ? 'Reemplazar' : 'Subir adjunto'}
+            </button>
+            {cfg.email_attachment_name && (
+              <span className="text-xs font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded truncate max-w-[200px]">
+                {cfg.email_attachment_name}
+              </span>
+            )}
           </div>
-        )}
-        <input ref={fileInputRef} type="file" accept=".pdf,image/*" className="hidden" onChange={handleAttachUpload} />
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={attachUploading || !emailCfg.email_enabled}
-          className="z-btn-ghost border border-z-border text-sm disabled:opacity-50"
-        >
-          {attachUploading ? 'Subiendo...' : emailCfg.email_attachment_name ? 'Reemplazar adjunto' : 'Subir adjunto'}
-        </button>
-        {attachMsg && (
-          <p className={`text-xs ${attachMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{attachMsg.text}</p>
-        )}
+          {attachMsg && (
+            <p className={`text-xs mt-1.5 ${attachMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{attachMsg.text}</p>
+          )}
+        </div>
+
+        <div className="border-t border-z-border pt-4">
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-3 flex items-center gap-1.5">
+            <PaperAirplaneIcon className="w-3.5 h-3.5" /> Enviar email de prueba
+          </h3>
+          <div className="flex gap-2">
+            <input type="email" value={testEmail} onChange={e => setTestEmail(e.target.value)}
+              placeholder="tu@correo.com" className="z-input text-sm flex-1" />
+            <select value={testOutcome} onChange={e => setTestOutcome(e.target.value)} className="z-input text-sm w-40">
+              {OUTCOMES.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+            </select>
+            <button onClick={handleTest} disabled={testLoading || !testEmail}
+              className="z-btn-primary text-sm disabled:opacity-50 whitespace-nowrap">
+              {testLoading ? 'Enviando...' : 'Enviar prueba'}
+            </button>
+          </div>
+          {testResult && (
+            <p className={`text-xs mt-2 ${testResult.ok ? 'text-green-400' : 'text-red-400'}`}>
+              {testResult.ok ? '✓ Email de prueba enviado correctamente' : `✗ ${testResult.msg}`}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Save */}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="z-btn-primary disabled:opacity-50"
-        >
+      <div className="flex items-center gap-3 pb-2">
+        <button onClick={handleSave} disabled={saving} className="z-btn-primary disabled:opacity-50">
           {saving ? 'Guardando...' : 'Guardar configuración'}
         </button>
         {saved && (
           <span className="flex items-center gap-1.5 text-sm text-green-400 font-medium">
-            <CheckCircleIcon className="w-4 h-4" /> Guardado correctamente
+            <CheckCircleIcon className="w-4 h-4" /> Guardado
           </span>
         )}
       </div>
+
     </div>
   )
 }
