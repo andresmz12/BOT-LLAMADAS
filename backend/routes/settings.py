@@ -253,6 +253,9 @@ async def upload_email_attachment(
 class EmailTestRequest(BaseModel):
     to_email: str
     outcome: str = "interested"
+    template: Optional[dict] = None
+    from_email_override: Optional[str] = None
+    from_name_override: Optional[str] = None
 
 
 @router.post("/email/test")
@@ -280,18 +283,22 @@ async def test_email(
     import json as _json
     from datetime import datetime as _dt
 
-    templates = {}
-    if org.email_templates:
-        try:
-            templates = _json.loads(org.email_templates)
-        except Exception:
-            pass
-    tmpl = templates.get(data.outcome, {})
+    # Use inline template from frontend if provided, otherwise fall back to saved DB template
+    if data.template is not None:
+        tmpl = data.template
+    else:
+        templates = {}
+        if org.email_templates:
+            try:
+                templates = _json.loads(org.email_templates)
+            except Exception:
+                pass
+        tmpl = templates.get(data.outcome, {})
 
     tmpl_vars = {
         "nombre": "Prospecto de Prueba",
         "empresa": "Empresa Demo",
-        "agente": org.email_from_name or "Isabella",
+        "agente": data.from_name_override or org.email_from_name or "Isabella",
         "resumen": "Esta es una llamada de prueba para verificar el correo.",
         "telefono": "+10000000000",
         "fecha": _dt.utcnow().strftime("%d/%m/%Y"),
@@ -305,8 +312,8 @@ async def test_email(
     signature = _fill(tmpl.get("signature") or f"El equipo de {tmpl_vars['agente']}", tmpl_vars)
     html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature)
 
-    from_email = (org.email_from or "").strip() or os.getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
-    from_name  = (org.email_from_name or "").strip() or "ZyraVoice"
+    from_email = (data.from_email_override or org.email_from or "").strip() or os.getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
+    from_name  = (data.from_name_override or org.email_from_name or "").strip() or "ZyraVoice"
 
     try:
         from sendgrid import SendGridAPIClient

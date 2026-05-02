@@ -114,7 +114,13 @@ export default function EmailMarketing() {
     if (!testAddr) return
     setTestLoading(true); setTestMsg(null)
     try {
-      await sendTestEmail({ to_email: testAddr, outcome: testTmpl })
+      await sendTestEmail({
+        to_email: testAddr,
+        outcome: testTmpl,
+        template: cfg.email_templates[testTmpl] || {},
+        from_email_override: cfg.email_from || null,
+        from_name_override: cfg.email_from_name || null,
+      })
       setTestMsg({ ok: true, text: 'Prueba enviada correctamente' })
     } catch (e) { setTestMsg({ ok: false, text: e.response?.data?.detail || 'Error' }) }
     finally { setTestLoading(false) }
@@ -157,14 +163,14 @@ export default function EmailMarketing() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Campaña</label>
-              <select value={bulkCampaign} onChange={e => setBulkCampaign(e.target.value)} className="z-input text-sm">
+              <select value={bulkCampaign} onChange={e => setBulkCampaign(e.target.value)} className="z-input-light text-sm">
                 <option value="">Todos mis prospectos</option>
                 {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Plantilla</label>
-              <select value={bulkTmpl} onChange={e => setBulkTmpl(e.target.value)} className="z-input text-sm">
+              <select value={bulkTmpl} onChange={e => setBulkTmpl(e.target.value)} className="z-input-light text-sm">
                 {TEMPLATES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
               </select>
             </div>
@@ -218,37 +224,37 @@ export default function EmailMarketing() {
 
         <div className="p-5 space-y-3">
           <input type="text" value={t.subject} onChange={e => setTmplField(editingTmpl, 'subject', e.target.value)}
-            placeholder="Asunto del email" className="z-input text-sm" />
+            placeholder="Asunto del email" className="z-input-light text-sm" />
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Saludo</label>
               <input type="text" value={t.greeting} onChange={e => setTmplField(editingTmpl, 'greeting', e.target.value)}
-                placeholder="Hola {{nombre}}," className="z-input text-sm" />
+                placeholder="Hola {{nombre}}," className="z-input-light text-sm" />
             </div>
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Color</label>
               <div className="flex gap-2">
                 <input type="color" value={t.color || '#4F46E5'} onChange={e => setTmplField(editingTmpl, 'color', e.target.value)}
-                  className="w-9 h-9 rounded border border-z-border cursor-pointer bg-transparent flex-shrink-0" />
+                  className="w-9 h-9 rounded border border-gray-300 cursor-pointer bg-white flex-shrink-0" />
                 <input type="text" value={t.color || '#4F46E5'} onChange={e => setTmplField(editingTmpl, 'color', e.target.value)}
-                  className="z-input text-sm font-mono flex-1" />
+                  className="z-input-light text-sm font-mono flex-1" />
               </div>
             </div>
           </div>
 
           <textarea rows={4} value={t.body} onChange={e => setTmplField(editingTmpl, 'body', e.target.value)}
-            placeholder="Cuerpo del mensaje..." className="z-input text-sm resize-none" />
+            placeholder="Cuerpo del mensaje..." className="z-input-light text-sm resize-none" />
 
           <div className="grid grid-cols-2 gap-3">
             <input type="text" value={t.cta_text} onChange={e => setTmplField(editingTmpl, 'cta_text', e.target.value)}
-              placeholder="Texto del botón (opcional)" className="z-input text-sm" />
+              placeholder="Texto del botón (opcional)" className="z-input-light text-sm" />
             <input type="url" value={t.cta_url} onChange={e => setTmplField(editingTmpl, 'cta_url', e.target.value)}
-              placeholder="URL del botón" className="z-input text-sm" />
+              placeholder="URL del botón" className="z-input-light text-sm" />
           </div>
 
           <input type="text" value={t.signature} onChange={e => setTmplField(editingTmpl, 'signature', e.target.value)}
-            placeholder="Firma — ej: El equipo de {{agente}}" className="z-input text-sm" />
+            placeholder="Firma — ej: El equipo de {{agente}}" className="z-input-light text-sm" />
 
           {/* Preview collapsible */}
           <button onClick={() => setPreviewOpen(p => !p)}
@@ -275,12 +281,12 @@ export default function EmailMarketing() {
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Email remitente</label>
               <input type="email" value={cfg.email_from} onChange={e => setCfg(p => ({ ...p, email_from: e.target.value }))}
-                placeholder="info@empresa.com" className="z-input text-sm" />
+                placeholder="info@empresa.com" className="z-input-light text-sm" />
             </div>
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Nombre remitente</label>
               <input type="text" value={cfg.email_from_name} onChange={e => setCfg(p => ({ ...p, email_from_name: e.target.value }))}
-                placeholder="Isabella - Mi Empresa" className="z-input text-sm" />
+                placeholder="Isabella - Mi Empresa" className="z-input-light text-sm" />
             </div>
           </div>
 
