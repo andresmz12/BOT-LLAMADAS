@@ -1,6 +1,7 @@
 from typing import Optional, List
 from datetime import datetime
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column, LargeBinary
 
 
 class Organization(SQLModel, table=True):
@@ -27,6 +28,18 @@ class Organization(SQLModel, table=True):
     whatsapp_enabled: bool = Field(default=False)
     apify_enabled: bool = Field(default=False)
     apify_api_token: Optional[str] = None
+    # Email marketing
+    email_enabled: bool = Field(default=False)
+    sendgrid_api_key: Optional[str] = None
+    email_from: Optional[str] = None
+    email_from_name: Optional[str] = None
+    email_send_on_interested: bool = Field(default=True)
+    email_send_on_callback: bool = Field(default=False)
+    email_send_on_voicemail: bool = Field(default=False)
+    email_send_on_not_interested: bool = Field(default=False)
+    email_templates: Optional[str] = None
+    email_attachment: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary))
+    email_attachment_name: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")

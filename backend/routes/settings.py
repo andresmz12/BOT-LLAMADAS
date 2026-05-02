@@ -1,6 +1,6 @@
 import json
 import os
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from pydantic import BaseModel
 from typing import Optional
 from sqlmodel import Session, select
@@ -153,6 +153,101 @@ def save_whatsapp_settings(
     session.add(org)
     session.commit()
     return {"ok": True}
+
+
+class EmailSettingsRequest(BaseModel):
+    email_enabled: bool = False
+    email_from: Optional[str] = None
+    email_from_name: Optional[str] = None
+    email_send_on_interested: bool = True
+    email_send_on_callback: bool = False
+    email_send_on_voicemail: bool = False
+    email_send_on_not_interested: bool = False
+    email_templates: Optional[dict] = None
+
+
+@router.get("/email")
+def get_email_settings(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
+    if not org:
+        return {
+            "email_enabled": False,
+            "email_from": None,
+            "email_from_name": None,
+            "sendgrid_configured": False,
+            "email_send_on_interested": True,
+            "email_send_on_callback": False,
+            "email_send_on_voicemail": False,
+            "email_send_on_not_interested": False,
+            "email_templates": {},
+            "email_attachment_name": None,
+        }
+    sg_configured = bool((org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", ""))
+    try:
+        templates = json.loads(org.email_templates) if org.email_templates else {}
+    except Exception:
+        templates = {}
+    return {
+        "email_enabled": org.email_enabled,
+        "email_from": org.email_from,
+        "email_from_name": org.email_from_name,
+        "sendgrid_configured": sg_configured,
+        "email_send_on_interested": org.email_send_on_interested,
+        "email_send_on_callback": org.email_send_on_callback,
+        "email_send_on_voicemail": org.email_send_on_voicemail,
+        "email_send_on_not_interested": org.email_send_on_not_interested,
+        "email_templates": templates,
+        "email_attachment_name": org.email_attachment_name,
+    }
+
+
+@router.post("/email")
+def save_email_settings(
+    data: EmailSettingsRequest,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    org = session.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    org.email_enabled = data.email_enabled
+    org.email_from = data.email_from or None
+    org.email_from_name = data.email_from_name or None
+    org.email_send_on_interested = data.email_send_on_interested
+    org.email_send_on_callback = data.email_send_on_callback
+    org.email_send_on_voicemail = data.email_send_on_voicemail
+    org.email_send_on_not_interested = data.email_send_on_not_interested
+    if data.email_templates is not None:
+        org.email_templates = json.dumps(data.email_templates)
+    session.add(org)
+    session.commit()
+    return {"ok": True}
+
+
+@router.post("/email/attachment")
+async def upload_email_attachment(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    org = session.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    contents = await file.read()
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="El archivo supera el límite de 5 MB")
+    org.email_attachment = contents
+    org.email_attachment_name = file.filename
+    session.add(org)
+    session.commit()
+    return {"ok": True, "filename": file.filename}
 
 
 @router.get("/crm/logs")

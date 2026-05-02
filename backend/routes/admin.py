@@ -11,7 +11,7 @@ from routes.auth import require_superadmin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-_SENSITIVE = {"retell_api_key", "anthropic_api_key", "crm_api_key", "crm_webhook_secret", "whatsapp_access_token", "apify_api_token"}
+_SENSITIVE = {"retell_api_key", "anthropic_api_key", "crm_api_key", "crm_webhook_secret", "whatsapp_access_token", "apify_api_token", "sendgrid_api_key"}
 
 def _mask(key: str | None) -> str:
     if not key:
@@ -49,6 +49,10 @@ class OrgCreate(BaseModel):
     whatsapp_verify_token: Optional[str] = None
     apify_enabled: bool = False
     apify_api_token: Optional[str] = None
+    email_enabled: bool = False
+    sendgrid_api_key: Optional[str] = None
+    email_from: Optional[str] = None
+    email_from_name: Optional[str] = None
 
 
 class UserCreate(BaseModel):
@@ -149,6 +153,7 @@ def get_org_secrets(
         "crm_api_key": org.crm_api_key or "",
         "crm_webhook_secret": org.crm_webhook_secret or "",
         "apify_api_token": org.apify_api_token or "",
+        "sendgrid_api_key": org.sendgrid_api_key or "",
     }
 
 

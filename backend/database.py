@@ -88,6 +88,7 @@ def run_migrations():
 
         if "organization" in tables:
             org_cols = {c["name"] for c in insp.get_columns("organization")}
+            is_pg = not DATABASE_URL.startswith("sqlite")
             org_new = {
                 "crm_webhook_url": "VARCHAR(500)",
                 "crm_webhook_enabled": "BOOLEAN DEFAULT FALSE",
@@ -104,6 +105,17 @@ def run_migrations():
                 "whatsapp_enabled": "BOOLEAN DEFAULT FALSE",
                 "apify_enabled": "BOOLEAN DEFAULT FALSE",
                 "apify_api_token": "TEXT",
+                "email_enabled": "BOOLEAN DEFAULT FALSE",
+                "sendgrid_api_key": "TEXT",
+                "email_from": "VARCHAR(255)",
+                "email_from_name": "VARCHAR(255)",
+                "email_send_on_interested": "BOOLEAN DEFAULT TRUE",
+                "email_send_on_callback": "BOOLEAN DEFAULT FALSE",
+                "email_send_on_voicemail": "BOOLEAN DEFAULT FALSE",
+                "email_send_on_not_interested": "BOOLEAN DEFAULT FALSE",
+                "email_templates": "TEXT",
+                "email_attachment": "BYTEA" if is_pg else "BLOB",
+                "email_attachment_name": "VARCHAR(255)",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():

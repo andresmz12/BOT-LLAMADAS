@@ -112,6 +112,15 @@ export const getCampaignStats = (id) => api.get(`/stats/${id}`).then(r => r.data
 export const getSettings = () => api.get('/settings').then(r => r.data)
 export const saveSettings = (data) => api.post('/settings', data).then(r => r.data)
 
+// Email marketing settings
+export const getEmailSettings = () => api.get('/settings/email').then(r => r.data)
+export const saveEmailSettings = (data) => api.post('/settings/email', data).then(r => r.data)
+export const uploadEmailAttachment = (file) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/settings/email/attachment', form).then(r => r.data)
+}
+
 // Admin — CRM
 export const testCRMWebhook = (orgId) =>
   api.post(`/admin/organizations/${orgId}/crm/test`).then(r => r.data)
