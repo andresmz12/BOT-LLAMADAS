@@ -137,6 +137,23 @@ async def _bg_analyze_and_sync(
             except Exception as e:
                 logger.error(f"[BG] CRM sync failed: {e}", exc_info=True)
 
+        # Email marketing — fire-and-forget, never fails the webhook
+        try:
+            from services.sendgrid_service import send_post_call_email
+            if org and call.outcome:
+                email_prospect = s.get(Prospect, prospect_id) if prospect_id else None
+                email_camp = s.get(Campaign, campaign_id) if campaign_id else None
+                email_agent = s.get(AgentConfig, email_camp.agent_config_id) if email_camp else None
+                await send_post_call_email(
+                    org,
+                    email_prospect,
+                    call.outcome,
+                    call.notes,
+                    email_agent.agent_name if email_agent else "Isabella",
+                )
+        except Exception as e:
+            logger.error(f"[BG] Email dispatch failed: {e}", exc_info=True)
+
         if ws_manager and campaign_id:
             try:
                 await ws_manager.broadcast(campaign_id, {
