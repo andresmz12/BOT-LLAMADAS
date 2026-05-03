@@ -20,14 +20,14 @@ function buildHtml(t) {
   const cta = t.cta_text && t.cta_url
     ? `<p style="text-align:center;margin:18px 0"><a href="${t.cta_url}" style="background:${c};color:#fff;padding:9px 20px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;font-size:13px">${t.cta_text}</a></p>`
     : ''
-  return `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
+  return `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;color:#111827">
   <div style="background:${c};padding:14px 20px"><p style="color:#fff;margin:0;font-size:14px;font-weight:600">Mensaje</p></div>
-  <div style="padding:20px;font-size:13px">
-    <p style="margin:0 0 10px">${t.greeting || '<span style="color:#aaa;font-style:italic">Saludo...</span>'}</p>
-    <div style="white-space:pre-wrap;line-height:1.6">${t.body || '<span style="color:#aaa;font-style:italic">Cuerpo del mensaje...</span>'}</div>
+  <div style="padding:20px;font-size:13px;color:#111827">
+    <p style="margin:0 0 10px;color:#111827">${t.greeting || '<span style="color:#9ca3af;font-style:italic">Saludo...</span>'}</p>
+    <div style="white-space:pre-wrap;line-height:1.6;color:#111827">${t.body || '<span style="color:#9ca3af;font-style:italic">Cuerpo del mensaje...</span>'}</div>
     ${cta}
     <hr style="border:none;border-top:1px solid #f0f0f0;margin:16px 0">
-    <p style="color:#aaa;font-size:11px;margin:0">${t.signature || '<span style="font-style:italic">Firma...</span>'}</p>
+    <p style="color:#6b7280;font-size:11px;margin:0">${t.signature || '<span style="font-style:italic;color:#9ca3af">Firma...</span>'}</p>
   </div>
 </div>`
 }
