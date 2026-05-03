@@ -16,17 +16,16 @@ const TEMPLATES = [
 const EMPTY_TMPL = { subject: '', color: '#4F46E5', greeting: '', body: '', cta_text: '', cta_url: '', signature: '' }
 
 function buildHtml(t) {
-  const c = t.color || '#4F46E5'
   const cta = t.cta_text && t.cta_url
-    ? `<p style="text-align:center;margin:18px 0"><a href="${t.cta_url}" style="background:${c};color:#fff;padding:9px 20px;border-radius:6px;text-decoration:none;font-weight:600;display:inline-block;font-size:13px">${t.cta_text}</a></p>`
+    ? `<p style="text-align:center;margin:18px 0"><a href="${t.cta_url}" style="background:#1e40af;color:#fff;padding:9px 20px;border-radius:4px;text-decoration:none;font-weight:600;display:inline-block;font-size:13px">${t.cta_text}</a></p>`
     : ''
-  return `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;color:#111827">
-  <div style="background:${c};padding:14px 20px"><p style="color:#fff;margin:0;font-size:14px;font-weight:600">Mensaje</p></div>
-  <div style="padding:20px;font-size:13px;color:#111827">
-    <p style="margin:0 0 10px;color:#111827">${t.greeting || '<span style="color:#9ca3af;font-style:italic">Saludo...</span>'}</p>
-    <div style="white-space:pre-wrap;line-height:1.6;color:#111827">${t.body || '<span style="color:#9ca3af;font-style:italic">Cuerpo del mensaje...</span>'}</div>
+  return `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;color:#111827">
+  <div style="padding:24px 28px;border-bottom:1px solid #e5e7eb">
+    <p style="margin:0 0 14px;color:#111827">${t.greeting || '<span style="color:#9ca3af;font-style:italic">Saludo...</span>'}</p>
+    <div style="white-space:pre-wrap;line-height:1.7;color:#374151">${t.body || '<span style="color:#9ca3af;font-style:italic">Cuerpo del mensaje...</span>'}</div>
     ${cta}
-    <hr style="border:none;border-top:1px solid #f0f0f0;margin:16px 0">
+  </div>
+  <div style="padding:14px 28px;background:#f9fafb">
     <p style="color:#6b7280;font-size:11px;margin:0">${t.signature || '<span style="font-style:italic;color:#9ca3af">Firma...</span>'}</p>
   </div>
 </div>`
@@ -226,21 +225,10 @@ export default function EmailMarketing() {
           <input type="text" value={t.subject} onChange={e => setTmplField(editingTmpl, 'subject', e.target.value)}
             placeholder="Asunto del email" className="z-input-light text-sm" />
 
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Saludo</label>
-              <input type="text" value={t.greeting} onChange={e => setTmplField(editingTmpl, 'greeting', e.target.value)}
-                placeholder="Hola {{nombre}}," className="z-input-light text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Color</label>
-              <div className="flex gap-2">
-                <input type="color" value={t.color || '#4F46E5'} onChange={e => setTmplField(editingTmpl, 'color', e.target.value)}
-                  className="w-9 h-9 rounded border border-gray-300 cursor-pointer bg-white flex-shrink-0" />
-                <input type="text" value={t.color || '#4F46E5'} onChange={e => setTmplField(editingTmpl, 'color', e.target.value)}
-                  className="z-input-light text-sm font-mono flex-1" />
-              </div>
-            </div>
+          <div>
+            <label className="text-xs text-slate-400 mb-1 block">Saludo</label>
+            <input type="text" value={t.greeting} onChange={e => setTmplField(editingTmpl, 'greeting', e.target.value)}
+              placeholder="Hola {{nombre}}," className="z-input-light text-sm" />
           </div>
 
           <textarea rows={4} value={t.body} onChange={e => setTmplField(editingTmpl, 'body', e.target.value)}
