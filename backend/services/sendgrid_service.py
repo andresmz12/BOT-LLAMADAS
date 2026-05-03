@@ -114,18 +114,16 @@ def _build_html(color: str, greeting: str, body: str, cta_text: str, cta_url: st
     if cta_text and cta_url:
         cta_block = (
             f'<p style="text-align:center;margin:24px 0">'
-            f'<a href="{cta_url}" style="background:{color};color:#fff;padding:12px 28px;'
-            f'border-radius:6px;text-decoration:none;font-weight:600">{cta_text}</a></p>'
+            f'<a href="{cta_url}" style="background:#1e40af;color:#fff;padding:12px 28px;'
+            f'border-radius:4px;text-decoration:none;font-weight:600">{cta_text}</a></p>'
         )
-    return f"""<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
-  <div style="background:{color};padding:20px 28px">
-    <h1 style="color:#fff;margin:0;font-size:18px">Mensaje de seguimiento</h1>
-  </div>
-  <div style="padding:28px">
-    <p style="margin-bottom:16px">{greeting}</p>
-    <div style="white-space:pre-wrap;line-height:1.6">{body}</div>
+    return f"""<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;color:#111827">
+  <div style="padding:28px 32px;border-bottom:1px solid #e5e7eb">
+    <p style="margin:0 0 16px;color:#111827;font-size:14px">{greeting}</p>
+    <div style="white-space:pre-wrap;line-height:1.75;color:#374151;font-size:14px">{body}</div>
     {cta_block}
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">
-    <p style="color:#6b7280;font-size:13px;margin:0">{signature}</p>
+  </div>
+  <div style="padding:16px 32px;background:#f9fafb">
+    <p style="color:#6b7280;font-size:12px;margin:0;white-space:pre-wrap">{signature}</p>
   </div>
 </div>"""

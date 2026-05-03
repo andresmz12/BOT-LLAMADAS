@@ -1,32 +1,75 @@
 import { useState, useEffect, useRef } from 'react'
-import { CheckCircleIcon, EnvelopeIcon, PaperClipIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
+import { CheckCircleIcon, EnvelopeIcon, PaperClipIcon, ChevronDownIcon, PencilSquareIcon, SparklesIcon } from '@heroicons/react/24/outline'
 import {
   getEmailSettings, saveEmailSettings, uploadEmailAttachment,
   sendTestEmail, bulkSendEmail, getCampaigns,
 } from '../api/client'
 
 const TEMPLATES = [
-  { key: 'general',            label: 'General' },
-  { key: 'interested',         label: 'Interesado' },
-  { key: 'callback_requested', label: 'Callback' },
-  { key: 'voicemail',          label: 'Buzón de voz' },
-  { key: 'not_interested',     label: 'No interesado' },
+  { key: 'general',            label: 'General',        desc: 'Primer contacto o seguimiento' },
+  { key: 'interested',         label: 'Interesado',     desc: 'Prospecto mostró interés en la llamada' },
+  { key: 'callback_requested', label: 'Callback',       desc: 'Acordaron llamar de nuevo' },
+  { key: 'voicemail',          label: 'Buzón de voz',   desc: 'No se pudo hablar, se dejó buzón' },
+  { key: 'not_interested',     label: 'No interesado',  desc: 'Prospecto declinó en la llamada' },
 ]
 
-const EMPTY_TMPL = { subject: '', color: '#4F46E5', greeting: '', body: '', cta_text: '', cta_url: '', signature: '' }
+const EMPTY_TMPL = { subject: '', greeting: '', body: '', cta_text: '', cta_url: '', signature: '' }
+
+const PRO_TEMPLATES = {
+  general: {
+    subject: 'Información sobre nuestros servicios — {{empresa}}',
+    greeting: 'Estimado/a {{nombre}},',
+    body: 'Me pongo en contacto para presentarle cómo podemos ayudar a {{empresa}} a mejorar sus resultados.\n\nNuestro equipo ha trabajado con empresas de su sector obteniendo resultados concretos y medibles. Me encantaría agendar una breve llamada de 15 minutos para contarle los detalles.\n\n¿Tendría disponibilidad esta semana?',
+    cta_text: 'Agendar llamada',
+    cta_url: '',
+    signature: 'Atentamente,\n{{agente}}',
+  },
+  interested: {
+    subject: 'Próximos pasos — {{empresa}}',
+    greeting: 'Estimado/a {{nombre}},',
+    body: 'Fue un placer hablar con usted hoy. Me alegra mucho su interés.\n\nTal como conversamos, estos son los próximos pasos:\n\n1. Le preparamos una propuesta personalizada para {{empresa}}\n2. La revisamos juntos en una videollamada\n3. Definimos el plan de trabajo\n\nEsperamos su confirmación para comenzar cuanto antes. Si tiene alguna pregunta antes, responda directamente a este correo.',
+    cta_text: 'Confirmar reunión',
+    cta_url: '',
+    signature: 'Con gusto le atiendo,\n{{agente}}',
+  },
+  callback_requested: {
+    subject: 'Le contactaremos pronto — {{empresa}}',
+    greeting: 'Estimado/a {{nombre}},',
+    body: 'Gracias por tomarse el tiempo de hablar con nosotros hoy.\n\nTal como acordamos, uno de nuestros asesores le contactará en breve para continuar la conversación y resolver todas sus dudas sin compromiso.\n\nSi prefiere comunicarse antes o cambiar el horario, no dude en responder a este correo.',
+    cta_text: '',
+    cta_url: '',
+    signature: 'Hasta pronto,\n{{agente}}',
+  },
+  voicemail: {
+    subject: 'Intentamos contactarle — {{empresa}}',
+    greeting: 'Estimado/a {{nombre}},',
+    body: 'Intentamos comunicarnos con usted hoy y lamentamos no haberle podido hablar directamente.\n\nTenemos una propuesta que podría ser de gran valor para {{empresa}} y nos gustaría presentársela personalmente.\n\nPor favor, indíquenos el mejor momento para llamarle respondiendo a este correo, o agéndese directamente en el enlace de abajo.',
+    cta_text: 'Elegir horario',
+    cta_url: '',
+    signature: 'Quedamos a su disposición,\n{{agente}}',
+  },
+  not_interested: {
+    subject: 'Gracias por su tiempo — {{empresa}}',
+    greeting: 'Estimado/a {{nombre}},',
+    body: 'Gracias por dedicarnos su tiempo hoy.\n\nEntendemos perfectamente que en este momento no es la prioridad. Las circunstancias cambian, y cuando llegue el momento adecuado, estaremos aquí para ayudarle.\n\nSi en el futuro necesita apoyo en esta área, no dude en contactarnos. Será un placer atenderle.',
+    cta_text: '',
+    cta_url: '',
+    signature: 'Muchas gracias,\n{{agente}}',
+  },
+}
 
 function buildHtml(t) {
   const cta = t.cta_text && t.cta_url
-    ? `<p style="text-align:center;margin:18px 0"><a href="${t.cta_url}" style="background:#1e40af;color:#fff;padding:9px 20px;border-radius:4px;text-decoration:none;font-weight:600;display:inline-block;font-size:13px">${t.cta_text}</a></p>`
+    ? `<p style="text-align:center;margin:20px 0"><a href="${t.cta_url}" style="background:#1e40af;color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;font-weight:600;display:inline-block;font-size:13px">${t.cta_text}</a></p>`
     : ''
-  return `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;color:#111827">
-  <div style="padding:24px 28px;border-bottom:1px solid #e5e7eb">
-    <p style="margin:0 0 14px;color:#111827">${t.greeting || '<span style="color:#9ca3af;font-style:italic">Saludo...</span>'}</p>
-    <div style="white-space:pre-wrap;line-height:1.7;color:#374151">${t.body || '<span style="color:#9ca3af;font-style:italic">Cuerpo del mensaje...</span>'}</div>
+  return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;color:#111827">
+  <div style="padding:28px 32px;border-bottom:1px solid #e5e7eb">
+    <p style="margin:0 0 16px;color:#111827;font-size:14px">${t.greeting || '<span style="color:#9ca3af;font-style:italic">Saludo...</span>'}</p>
+    <div style="white-space:pre-wrap;line-height:1.75;color:#374151;font-size:14px">${t.body || '<span style="color:#9ca3af;font-style:italic">Cuerpo del mensaje...</span>'}</div>
     ${cta}
   </div>
-  <div style="padding:14px 28px;background:#f9fafb">
-    <p style="color:#6b7280;font-size:11px;margin:0">${t.signature || '<span style="font-style:italic;color:#9ca3af">Firma...</span>'}</p>
+  <div style="padding:16px 32px;background:#f9fafb">
+    <p style="color:#6b7280;font-size:12px;margin:0;white-space:pre-wrap">${t.signature || '<span style="font-style:italic;color:#9ca3af">Firma...</span>'}</p>
   </div>
 </div>`
 }
@@ -43,26 +86,23 @@ export default function EmailMarketing() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  // Envío masivo
   const [bulkCampaign, setBulkCampaign] = useState('')
   const [bulkTmpl, setBulkTmpl] = useState('general')
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkResult, setBulkResult] = useState(null)
 
-  // Prueba
   const [testAddr, setTestAddr] = useState('')
   const [testTmpl, setTestTmpl] = useState('general')
   const [testLoading, setTestLoading] = useState(false)
   const [testMsg, setTestMsg] = useState(null)
 
-  // Editor de plantilla activa
-  const [editingTmpl, setEditingTmpl] = useState('general')
+  const [editingTmpl, setEditingTmpl] = useState(null)
   const [previewOpen, setPreviewOpen] = useState(false)
 
-  // Adjunto
   const [attachLoading, setAttachLoading] = useState(false)
   const [attachMsg, setAttachMsg] = useState(null)
   const fileRef = useRef(null)
+  const editorRef = useRef(null)
 
   useEffect(() => {
     getEmailSettings().then(d => setCfg({
@@ -81,6 +121,23 @@ export default function EmailMarketing() {
   const getTmpl = k => cfg.email_templates[k] || { ...EMPTY_TMPL }
   const setTmplField = (k, f, v) =>
     setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [k]: { ...getTmpl(k), [f]: v } } }))
+
+  const openEditor = (key) => {
+    setEditingTmpl(key)
+    setPreviewOpen(false)
+    setTimeout(() => editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
+  }
+
+  const loadProTemplate = (key) => {
+    const pro = PRO_TEMPLATES[key]
+    if (!pro) return
+    setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [key]: { ...pro } } }))
+  }
+
+  const isFilled = (key) => {
+    const t = cfg.email_templates[key]
+    return t && (t.subject || t.body)
+  }
 
   const save = async () => {
     setSaving(true); setSaved(false)
@@ -137,10 +194,10 @@ export default function EmailMarketing() {
     finally { setAttachLoading(false) }
   }
 
-  const t = getTmpl(editingTmpl)
+  const t = editingTmpl ? getTmpl(editingTmpl) : null
 
   return (
-    <div className="p-6 space-y-5 max-w-xl">
+    <div className="p-6 space-y-5 max-w-2xl">
 
       {/* ── Título ── */}
       <div className="flex items-center justify-between">
@@ -152,7 +209,110 @@ export default function EmailMarketing() {
         </span>
       </div>
 
-      {/* ── 1. ENVIAR ── */}
+      {/* ── 1. MIS PLANTILLAS ── */}
+      <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
+        <div className="px-5 py-4 border-b border-z-border">
+          <h2 className="text-sm font-semibold text-slate-200">Mis plantillas</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Haz clic en una plantilla para editarla. Las plantillas configuradas se envían automáticamente post-llamada.</p>
+        </div>
+        <div className="divide-y divide-z-border">
+          {TEMPLATES.map(({ key, label, desc }) => {
+            const filled = isFilled(key)
+            const tmpl = cfg.email_templates[key]
+            return (
+              <div key={key}
+                className={`flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-white/5 transition-colors ${editingTmpl === key ? 'bg-blue-500/10 border-l-2 border-blue-500' : ''}`}
+                onClick={() => openEditor(editingTmpl === key ? null : key)}>
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className={`w-2 h-2 rounded-full flex-shrink-0 ${filled ? 'bg-green-400' : 'bg-slate-600'}`} />
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-slate-200">{label}</p>
+                    <p className="text-xs text-slate-500 truncate">
+                      {filled && tmpl?.subject ? tmpl.subject : desc}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 ml-3">
+                  {filled && <span className="text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">Configurada</span>}
+                  <PencilSquareIcon className="w-4 h-4 text-slate-500" />
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── 2. EDITOR ── */}
+      {editingTmpl && t && (
+        <div ref={editorRef} className="bg-z-card rounded-xl border border-z-border overflow-hidden">
+          <div className="px-5 py-4 border-b border-z-border flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-200">
+                Editando: <span className="text-blue-400">{TEMPLATES.find(x => x.key === editingTmpl)?.label}</span>
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Variables: <span className="font-mono text-blue-400">{'{{nombre}}  {{empresa}}  {{telefono}}  {{fecha}}  {{agente}}'}</span>
+              </p>
+            </div>
+            <button onClick={() => loadProTemplate(editingTmpl)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-400 border border-amber-400/30 rounded-lg hover:bg-amber-400/10 transition-colors">
+              <SparklesIcon className="w-3.5 h-3.5" />
+              Cargar plantilla profesional
+            </button>
+          </div>
+
+          <div className="p-5 space-y-3">
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Asunto del email</label>
+              <input type="text" value={t.subject} onChange={e => setTmplField(editingTmpl, 'subject', e.target.value)}
+                placeholder="ej: Próximos pasos — {{empresa}}" className="z-input-light text-sm" />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Saludo</label>
+              <input type="text" value={t.greeting} onChange={e => setTmplField(editingTmpl, 'greeting', e.target.value)}
+                placeholder="Estimado/a {{nombre}}," className="z-input-light text-sm" />
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Cuerpo del mensaje</label>
+              <textarea rows={6} value={t.body} onChange={e => setTmplField(editingTmpl, 'body', e.target.value)}
+                placeholder="Escribe el contenido del email aquí..." className="z-input-light text-sm resize-none" />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">Texto del botón (opcional)</label>
+                <input type="text" value={t.cta_text} onChange={e => setTmplField(editingTmpl, 'cta_text', e.target.value)}
+                  placeholder="Agendar llamada" className="z-input-light text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1 block">URL del botón</label>
+                <input type="url" value={t.cta_url} onChange={e => setTmplField(editingTmpl, 'cta_url', e.target.value)}
+                  placeholder="https://calendly.com/..." className="z-input-light text-sm" />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Firma</label>
+              <textarea rows={2} value={t.signature} onChange={e => setTmplField(editingTmpl, 'signature', e.target.value)}
+                placeholder={'Atentamente,\n{{agente}}'} className="z-input-light text-sm resize-none" />
+            </div>
+
+            <button onClick={() => setPreviewOpen(p => !p)}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors">
+              <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${previewOpen ? 'rotate-180' : ''}`} />
+              {previewOpen ? 'Ocultar vista previa' : 'Ver vista previa del email'}
+            </button>
+            {previewOpen && (
+              <div className="rounded-lg overflow-hidden border border-gray-200"
+                dangerouslySetInnerHTML={{ __html: buildHtml(t) }} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── 3. ENVIAR ── */}
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
         <div className="px-5 py-4 border-b border-z-border">
           <h2 className="text-sm font-semibold text-slate-200">Enviar emails</h2>
@@ -189,13 +349,12 @@ export default function EmailMarketing() {
             </div>
           )}
 
-          {/* Prueba */}
           <div className="border-t border-z-border pt-3 space-y-2">
             <p className="text-xs text-slate-400 font-medium">Enviar prueba a mi correo</p>
             <div className="flex gap-2">
               <input type="email" value={testAddr} onChange={e => setTestAddr(e.target.value)}
-                placeholder="mi@correo.com" className="z-input text-sm flex-1" />
-              <select value={testTmpl} onChange={e => setTestTmpl(e.target.value)} className="z-input text-sm w-36">
+                placeholder="mi@correo.com" className="z-input-light text-sm flex-1" />
+              <select value={testTmpl} onChange={e => setTestTmpl(e.target.value)} className="z-input-light text-sm w-36">
                 {TEMPLATES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
               </select>
               <button onClick={sendTest} disabled={testLoading || !testAddr}
@@ -208,63 +367,13 @@ export default function EmailMarketing() {
         </div>
       </div>
 
-      {/* ── 2. PLANTILLA ── */}
-      <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
-        <div className="px-5 py-4 border-b border-z-border flex items-center justify-between">
-          <div>
-            <h2 className="text-sm font-semibold text-slate-200">Editar plantilla</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Variables: <span className="font-mono text-blue-400 text-xs">{'{{nombre}}  {{empresa}}  {{telefono}}  {{fecha}}'}</span></p>
-          </div>
-          <select value={editingTmpl} onChange={e => { setEditingTmpl(e.target.value); setPreviewOpen(false) }}
-            className="z-input text-sm w-40">
-            {TEMPLATES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
-          </select>
-        </div>
-
-        <div className="p-5 space-y-3">
-          <input type="text" value={t.subject} onChange={e => setTmplField(editingTmpl, 'subject', e.target.value)}
-            placeholder="Asunto del email" className="z-input-light text-sm" />
-
-          <div>
-            <label className="text-xs text-slate-400 mb-1 block">Saludo</label>
-            <input type="text" value={t.greeting} onChange={e => setTmplField(editingTmpl, 'greeting', e.target.value)}
-              placeholder="Hola {{nombre}}," className="z-input-light text-sm" />
-          </div>
-
-          <textarea rows={4} value={t.body} onChange={e => setTmplField(editingTmpl, 'body', e.target.value)}
-            placeholder="Cuerpo del mensaje..." className="z-input-light text-sm resize-none" />
-
-          <div className="grid grid-cols-2 gap-3">
-            <input type="text" value={t.cta_text} onChange={e => setTmplField(editingTmpl, 'cta_text', e.target.value)}
-              placeholder="Texto del botón (opcional)" className="z-input-light text-sm" />
-            <input type="url" value={t.cta_url} onChange={e => setTmplField(editingTmpl, 'cta_url', e.target.value)}
-              placeholder="URL del botón" className="z-input-light text-sm" />
-          </div>
-
-          <input type="text" value={t.signature} onChange={e => setTmplField(editingTmpl, 'signature', e.target.value)}
-            placeholder="Firma — ej: El equipo de {{agente}}" className="z-input-light text-sm" />
-
-          {/* Preview collapsible */}
-          <button onClick={() => setPreviewOpen(p => !p)}
-            className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors">
-            <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${previewOpen ? 'rotate-180' : ''}`} />
-            {previewOpen ? 'Ocultar vista previa' : 'Ver vista previa'}
-          </button>
-          {previewOpen && (
-            <div className="rounded-lg overflow-hidden bg-white"
-              dangerouslySetInnerHTML={{ __html: buildHtml(t) }} />
-          )}
-        </div>
-      </div>
-
-      {/* ── 3. CONFIGURACIÓN ── */}
+      {/* ── 4. CONFIGURACIÓN ── */}
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
         <div className="px-5 py-4 border-b border-z-border">
           <h2 className="text-sm font-semibold text-slate-200">Configuración</h2>
         </div>
         <div className="p-5 space-y-4">
 
-          {/* Remitente */}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Email remitente</label>
@@ -278,7 +387,6 @@ export default function EmailMarketing() {
             </div>
           </div>
 
-          {/* Adjunto */}
           <div>
             <label className="text-xs text-slate-400 mb-1.5 block flex items-center gap-1">
               <PaperClipIcon className="w-3.5 h-3.5" /> Adjunto a todos los emails (PDF o imagen, máx. 5 MB)
@@ -296,7 +404,6 @@ export default function EmailMarketing() {
             {attachMsg && <p className={`text-xs mt-1 ${attachMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{attachMsg.ok ? `✓ ${attachMsg.text}` : attachMsg.text}</p>}
           </div>
 
-          {/* Auto post-llamada */}
           <div className="border-t border-z-border pt-4 space-y-2">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Automático post-llamada</p>
@@ -310,10 +417,10 @@ export default function EmailMarketing() {
             </div>
             <p className="text-xs text-slate-500">Envía automáticamente al terminar una llamada según el resultado:</p>
             {[
-              { flag: 'email_send_on_interested', label: 'Interesado' },
-              { flag: 'email_send_on_callback',   label: 'Callback' },
-              { flag: 'email_send_on_voicemail',  label: 'Buzón de voz' },
-              { flag: 'email_send_on_not_interested', label: 'No interesado' },
+              { flag: 'email_send_on_interested',     label: 'Interesado' },
+              { flag: 'email_send_on_callback',        label: 'Callback' },
+              { flag: 'email_send_on_voicemail',       label: 'Buzón de voz' },
+              { flag: 'email_send_on_not_interested',  label: 'No interesado' },
             ].map(({ flag, label }) => (
               <label key={flag} className={`flex items-center gap-2.5 cursor-pointer ${!cfg.email_enabled ? 'opacity-40 pointer-events-none' : ''}`}>
                 <input type="checkbox" checked={cfg[flag]}
@@ -329,7 +436,7 @@ export default function EmailMarketing() {
       {/* Guardar */}
       <div className="flex items-center gap-3 pb-4">
         <button onClick={save} disabled={saving} className="z-btn-primary disabled:opacity-50">
-          {saving ? 'Guardando...' : 'Guardar'}
+          {saving ? 'Guardando...' : 'Guardar cambios'}
         </button>
         {saved && <span className="flex items-center gap-1.5 text-sm text-green-400"><CheckCircleIcon className="w-4 h-4" /> Guardado</span>}
       </div>
