@@ -797,22 +797,6 @@ export default function EmailMarketing() {
                 placeholder="Isabella - Mi Empresa" className="z-input-light text-sm" />
             </div>
           </div>
-          <div>
-            <label className="text-xs text-slate-400 mb-1.5 block flex items-center gap-1">
-              <PaperClipIcon className="w-3.5 h-3.5" /> Adjunto a todos los emails (PDF o imagen, máx. 5 MB)
-            </label>
-            <div className="flex items-center gap-3">
-              <input ref={fileRef} type="file" accept=".pdf,image/*" className="hidden" onChange={uploadAttach} />
-              <button onClick={() => fileRef.current?.click()} disabled={attachLoading}
-                className="z-btn-ghost border border-z-border text-sm disabled:opacity-50">
-                {attachLoading ? 'Subiendo...' : cfg.email_attachment_name ? 'Reemplazar' : 'Subir archivo'}
-              </button>
-              {cfg.email_attachment_name && (
-                <span className="text-xs font-mono text-slate-400 truncate max-w-[160px]">{cfg.email_attachment_name}</span>
-              )}
-            </div>
-            {attachMsg && <p className={`text-xs mt-1 ${attachMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{attachMsg.ok ? `✓ ${attachMsg.text}` : attachMsg.text}</p>}
-          </div>
           <div className="border-t border-z-border pt-4">
             <label className="text-xs text-slate-400 mb-1.5 block">Delay entre envíos</label>
             <select value={cfg.email_send_delay_ms} onChange={e => setCfg(p => ({ ...p, email_send_delay_ms: Number(e.target.value) }))}
