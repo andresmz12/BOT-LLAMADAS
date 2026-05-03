@@ -1,6 +1,6 @@
 import os
 from sqlmodel import SQLModel, create_engine, Session, select
-from models import AgentConfig, Organization, User, WebhookLog  # noqa: F401 — ensures table is registered
+from models import AgentConfig, Organization, User, WebhookLog, EmailSendLog  # noqa: F401 — ensures table is registered
 
 _raw_url = os.getenv("DATABASE_URL", "sqlite:///./calls.db")
 # Railway PostgreSQL URLs start with "postgres://" but SQLAlchemy requires "postgresql://"
@@ -56,6 +56,9 @@ def run_migrations():
                 "place_id": "VARCHAR(255)",
                 "last_review_at": "TIMESTAMP",
                 "quality_score": "INTEGER",
+                "email_unsubscribed": "BOOLEAN DEFAULT FALSE",
+                "last_email_sent_at": "TIMESTAMP",
+                "email_send_count": "INTEGER DEFAULT 0",
             }
             with engine.begin() as conn:
                 for col, col_type in prospect_new.items():
@@ -116,6 +119,7 @@ def run_migrations():
                 "email_templates": "TEXT",
                 "email_attachment": "BYTEA" if is_pg else "BLOB",
                 "email_attachment_name": "VARCHAR(255)",
+                "email_send_delay_ms": "INTEGER DEFAULT 0",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():

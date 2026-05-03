@@ -40,6 +40,7 @@ class Organization(SQLModel, table=True):
     email_templates: Optional[str] = None
     email_attachment: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary))
     email_attachment_name: Optional[str] = None
+    email_send_delay_ms: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")
@@ -132,6 +133,9 @@ class Prospect(SQLModel, table=True):
     place_id: Optional[str] = Field(default=None, index=True)
     last_review_at: Optional[datetime] = None
     quality_score: Optional[int] = None
+    email_unsubscribed: bool = Field(default=False)
+    last_email_sent_at: Optional[datetime] = None
+    email_send_count: int = Field(default=0)
 
     campaign: Optional[Campaign] = Relationship(back_populates="prospects")
     calls: List["Call"] = Relationship(back_populates="prospect")
@@ -186,6 +190,21 @@ class WhatsAppMessage(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     conversation: Optional[WhatsAppConversation] = Relationship(back_populates="messages")
+
+
+class EmailSendLog(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: int = Field(index=True)
+    sent_at: datetime = Field(default_factory=datetime.utcnow)
+    template_key: str = Field(default="")
+    template_subject: Optional[str] = None
+    campaign_id: Optional[int] = None
+    campaign_name: Optional[str] = None
+    total_sent: int = Field(default=0)
+    total_skipped: int = Field(default=0)
+    total_errors: int = Field(default=0)
+    error_details: Optional[str] = None
+    initiated_by: Optional[str] = None
 
 
 class Settings(SQLModel, table=True):

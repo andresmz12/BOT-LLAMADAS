@@ -41,6 +41,8 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
         to_email = (getattr(prospect, "email", "") or "").strip()
         if not to_email:
             return
+        if getattr(prospect, "email_unsubscribed", False):
+            return
 
         tmpl_vars = {
             "nombre":   prospect.name or "",
@@ -67,7 +69,12 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
         cta_url   = tmpl.get("cta_url") or ""
         signature = _fill(tmpl.get("signature") or f"El equipo de {tmpl_vars['agente']}", tmpl_vars)
 
-        html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature)
+        try:
+            from routes.settings import _unsub_url
+            unsub = _unsub_url(prospect.id, org.id)
+        except Exception:
+            unsub = ""
+        html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature, unsubscribe_url=unsub)
 
         from_email = (org.email_from or "").strip() or os.getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
         from_name  = (org.email_from_name or "").strip() or agent_name or "Bot Llamadas"
@@ -84,16 +91,18 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
             html_content=html_body,
         )
 
-        if org.email_attachment and org.email_attachment_name:
-            ext = org.email_attachment_name.rsplit(".", 1)[-1].lower()
+        # Per-template attachment takes priority over global attachment
+        att_b64 = tmpl.get("attachment_b64") or ""
+        att_name = tmpl.get("attachment_name") or ""
+        if not att_b64 and org.email_attachment and org.email_attachment_name:
+            att_b64 = base64.b64encode(org.email_attachment).decode()
+            att_name = org.email_attachment_name
+        if att_b64 and att_name:
+            ext = att_name.rsplit(".", 1)[-1].lower()
             mime = "application/pdf" if ext == "pdf" else f"image/{ext}"
-            att = Attachment(
-                FileContent(base64.b64encode(org.email_attachment).decode()),
-                FileName(org.email_attachment_name),
-                FileType(mime),
-                Disposition("attachment"),
+            message.attachment = Attachment(
+                FileContent(att_b64), FileName(att_name), FileType(mime), Disposition("attachment"),
             )
-            message.attachment = att
 
         sg = SendGridAPIClient(api_key)
         resp = sg.send(message)
@@ -109,13 +118,19 @@ def _fill(text: str, variables: dict) -> str:
     return text
 
 
-def _build_html(color: str, greeting: str, body: str, cta_text: str, cta_url: str, signature: str) -> str:
+def _build_html(color: str, greeting: str, body: str, cta_text: str, cta_url: str, signature: str, unsubscribe_url: str = "") -> str:
     cta_block = ""
     if cta_text and cta_url:
         cta_block = (
             f'<p style="text-align:center;margin:24px 0">'
             f'<a href="{cta_url}" style="background:#1e40af;color:#fff;padding:12px 28px;'
             f'border-radius:4px;text-decoration:none;font-weight:600">{cta_text}</a></p>'
+        )
+    unsub_block = ""
+    if unsubscribe_url:
+        unsub_block = (
+            f'<p style="margin:10px 0 0;font-size:11px;color:#9ca3af">'
+            f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">Cancelar suscripción</a></p>'
         )
     return f"""<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;color:#111827">
   <div style="padding:28px 32px;border-bottom:1px solid #e5e7eb">
@@ -125,5 +140,6 @@ def _build_html(color: str, greeting: str, body: str, cta_text: str, cta_url: st
   </div>
   <div style="padding:16px 32px;background:#f9fafb">
     <p style="color:#6b7280;font-size:12px;margin:0;white-space:pre-wrap">{signature}</p>
+    {unsub_block}
   </div>
 </div>"""

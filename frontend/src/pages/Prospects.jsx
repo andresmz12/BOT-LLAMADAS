@@ -622,7 +622,7 @@ export default function Prospects() {
         <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-black/20">
             <tr>
-              {['Nombre', 'Empresa', 'Teléfono', 'Score', 'Campaña', 'Estado', 'Intentos', 'Última llamada', 'Acciones'].map(h => (
+              {['Nombre', 'Empresa', 'Teléfono', 'Score', 'Campaña', 'Estado', 'Intentos', 'Última llamada', 'Email', 'Acciones'].map(h => (
                 <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
               ))}
             </tr>
@@ -647,6 +647,22 @@ export default function Prospects() {
                   {fmtDate(p.last_called_at)}
                 </td>
                 <td className="px-6 py-3">
+                  {p.email_unsubscribed ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-slate-600" title="Desuscrito">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-600 inline-block" /> Des.
+                    </span>
+                  ) : p.last_email_sent_at ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-blue-400" title={`${p.email_send_count || 1} email(s) enviado(s)\nÚltimo: ${fmtDate(p.last_email_sent_at)}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+                      {fmtDate(p.last_email_sent_at)}
+                    </span>
+                  ) : p.email ? (
+                    <span className="text-xs text-slate-600">—</span>
+                  ) : (
+                    <span className="text-xs text-slate-700 italic">Sin email</span>
+                  )}
+                </td>
+                <td className="px-6 py-3">
                   <div className="flex items-center gap-2">
                     <button onClick={() => handleCall(p)} disabled={callingId === p.id}
                       className="text-slate-600 hover:text-z-blue-light transition-colors disabled:opacity-40" title="Llamar">
@@ -663,7 +679,7 @@ export default function Prospects() {
               </tr>
             ))}
             {prospects.length === 0 && (
-              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-500">No hay prospectos</td></tr>
+              <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-500">No hay prospectos</td></tr>
             )}
           </tbody>
         </table>

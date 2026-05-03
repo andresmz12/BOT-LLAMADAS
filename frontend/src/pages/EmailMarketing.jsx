@@ -2,10 +2,12 @@ import { useState, useEffect, useRef } from 'react'
 import {
   CheckCircleIcon, EnvelopeIcon, PaperClipIcon, ChevronDownIcon,
   PencilSquareIcon, SparklesIcon, PlusIcon, TrashIcon, EyeIcon,
+  ClockIcon, UserMinusIcon,
 } from '@heroicons/react/24/outline'
 import {
   getEmailSettings, saveEmailSettings, uploadEmailAttachment,
   sendTestEmail, bulkSendEmail, getCampaigns,
+  getEmailHistory, validateEmailRecipients, uploadTemplateAttachment,
 } from '../api/client'
 
 const FIXED_TEMPLATES = [
@@ -89,6 +91,7 @@ export default function EmailMarketing() {
     email_send_on_interested: false, email_send_on_callback: false,
     email_send_on_voicemail: false, email_send_on_not_interested: false,
     email_templates: {}, email_attachment_name: null,
+    email_send_delay_ms: 0,
   })
   const [campaigns, setCampaigns] = useState([])
   const [saving, setSaving] = useState(false)
@@ -100,6 +103,8 @@ export default function EmailMarketing() {
   const [bulkResult, setBulkResult] = useState(null)
   const [confirmStep, setConfirmStep] = useState(false)
   const [errorsOpen, setErrorsOpen] = useState(false)
+  const [recipientStats, setRecipientStats] = useState(null)
+  const [recipientLoading, setRecipientLoading] = useState(false)
 
   const [testAddr, setTestAddr] = useState('')
   const [testTmpl, setTestTmpl] = useState('general')
@@ -113,9 +118,15 @@ export default function EmailMarketing() {
 
   const [attachLoading, setAttachLoading] = useState(false)
   const [attachMsg, setAttachMsg] = useState(null)
+  const [tmplAttachLoading, setTmplAttachLoading] = useState(false)
+  const [tmplAttachMsg, setTmplAttachMsg] = useState(null)
   const [previewProKey, setPreviewProKey] = useState(null)
+  const [emailHistory, setEmailHistory] = useState([])
   const fileRef = useRef(null)
+  const tmplAttachRef = useRef(null)
   const editorRef = useRef(null)
+
+  const loadHistory = () => getEmailHistory().then(setEmailHistory).catch(() => {})
 
   useEffect(() => {
     getEmailSettings().then(d => setCfg({
@@ -127,8 +138,10 @@ export default function EmailMarketing() {
       email_send_on_voicemail: d.email_send_on_voicemail ?? false,
       email_send_on_not_interested: d.email_send_on_not_interested ?? false,
       email_templates: d.email_templates || {}, email_attachment_name: d.email_attachment_name || null,
+      email_send_delay_ms: d.email_send_delay_ms ?? 0,
     })).catch(() => {})
     getCampaigns().then(setCampaigns).catch(() => {})
+    loadHistory()
   }, [])
 
   // All templates: fixed + custom
@@ -207,6 +220,7 @@ export default function EmailMarketing() {
         email_send_on_voicemail: cfg.email_send_on_voicemail,
         email_send_on_not_interested: cfg.email_send_on_not_interested,
         email_templates: cfg.email_templates,
+        email_send_delay_ms: cfg.email_send_delay_ms ?? 0,
       })
       setSaved(true); setTimeout(() => setSaved(false), 3000)
     } catch (e) { alert(e.response?.data?.detail || 'Error') }
@@ -218,8 +232,38 @@ export default function EmailMarketing() {
     try {
       const r = await bulkSendEmail({ campaign_id: bulkCampaign ? Number(bulkCampaign) : null, template_key: bulkTmpl })
       setBulkResult(r)
+      loadHistory()
     } catch (e) { setBulkResult({ error: e.response?.data?.detail || 'Error' }) }
     finally { setBulkLoading(false) }
+  }
+
+  const prepareSend = async () => {
+    setConfirmStep(true); setBulkResult(null); setRecipientStats(null)
+    setRecipientLoading(true)
+    try {
+      const params = bulkCampaign ? { campaign_id: Number(bulkCampaign) } : {}
+      const stats = await validateEmailRecipients(params)
+      setRecipientStats(stats)
+    } catch (e) { /* non-critical */ }
+    finally { setRecipientLoading(false) }
+  }
+
+  const uploadTmplAttach = async (e) => {
+    const f = e.target.files?.[0]; if (!f || !editingTmpl) return
+    if (f.size > 5 * 1024 * 1024) { setTmplAttachMsg({ ok: false, text: 'Máximo 5 MB' }); return }
+    setTmplAttachLoading(true); setTmplAttachMsg(null)
+    try {
+      const r = await uploadTemplateAttachment(editingTmpl, f)
+      setCfg(p => ({
+        ...p,
+        email_templates: {
+          ...p.email_templates,
+          [editingTmpl]: { ...(p.email_templates[editingTmpl] || {}), attachment_name: r.filename }
+        }
+      }))
+      setTmplAttachMsg({ ok: true, text: r.filename })
+    } catch (e) { setTmplAttachMsg({ ok: false, text: 'Error al subir' }) }
+    finally { setTmplAttachLoading(false) }
   }
 
   const sendTest = async () => {
@@ -468,6 +512,30 @@ export default function EmailMarketing() {
                 placeholder={'Atentamente,\n{{agente}}'} className="z-input-light text-sm resize-none" />
             </div>
 
+            {/* Per-template attachment */}
+            <div>
+              <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
+                <PaperClipIcon className="w-3.5 h-3.5" /> Adjunto para esta plantilla (PDF o imagen, máx. 5 MB)
+              </label>
+              <div className="flex items-center gap-3">
+                <input ref={tmplAttachRef} type="file" accept=".pdf,image/*" className="hidden" onChange={uploadTmplAttach} />
+                <button onClick={() => tmplAttachRef.current?.click()} disabled={tmplAttachLoading}
+                  className="z-btn-ghost border border-z-border text-xs disabled:opacity-50">
+                  {tmplAttachLoading ? 'Subiendo...' : cfg.email_templates[editingTmpl]?.attachment_name ? 'Reemplazar adjunto' : 'Subir adjunto'}
+                </button>
+                {cfg.email_templates[editingTmpl]?.attachment_name && (
+                  <span className="text-xs font-mono text-slate-400 truncate max-w-[180px]">
+                    ✓ {cfg.email_templates[editingTmpl].attachment_name}
+                  </span>
+                )}
+              </div>
+              {tmplAttachMsg && (
+                <p className={`text-xs mt-1 ${tmplAttachMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
+                  {tmplAttachMsg.ok ? `✓ ${tmplAttachMsg.text}` : tmplAttachMsg.text}
+                </p>
+              )}
+            </div>
+
             <button onClick={() => setPreviewOpen(p => !p)}
               className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors">
               <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${previewOpen ? 'rotate-180' : ''}`} />
@@ -525,7 +593,7 @@ export default function EmailMarketing() {
           {/* Botón preparar / panel confirmación */}
           {!confirmStep && !bulkResult && (
             <button
-              onClick={() => { setConfirmStep(true); setBulkResult(null) }}
+              onClick={prepareSend}
               disabled={!cfg.sendgrid_configured}
               className="z-btn-primary w-full disabled:opacity-40">
               Preparar envío
@@ -550,19 +618,47 @@ export default function EmailMarketing() {
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">Adjunto</span>
-                  <span className={cfg.email_attachment_name ? 'text-green-400' : 'text-slate-500'}>
-                    {cfg.email_attachment_name ? `✓ ${cfg.email_attachment_name}` : '—'}
+                  <span className={cfg.email_templates[bulkTmpl]?.attachment_name || cfg.email_attachment_name ? 'text-green-400' : 'text-slate-500'}>
+                    {cfg.email_templates[bulkTmpl]?.attachment_name
+                      ? `✓ ${cfg.email_templates[bulkTmpl].attachment_name}`
+                      : cfg.email_attachment_name ? `✓ ${cfg.email_attachment_name}` : '—'}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">Remitente</span>
                   <span className="text-slate-200">{cfg.email_from_name || '—'} &lt;{cfg.email_from || '—'}&gt;</span>
                 </div>
+                {/* Recipient validation stats */}
+                {recipientLoading && (
+                  <div className="pt-1 text-xs text-slate-500 animate-pulse">Calculando destinatarios...</div>
+                )}
+                {!recipientLoading && recipientStats && (
+                  <div className="pt-1 border-t border-z-border mt-2 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-slate-400">Recibirán el email</span>
+                      <span className="text-green-400 font-bold">{recipientStats.will_receive}</span>
+                    </div>
+                    {recipientStats.without_email > 0 && (
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>Sin email registrado</span><span>{recipientStats.without_email}</span>
+                      </div>
+                    )}
+                    {recipientStats.unsubscribed > 0 && (
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>Desuscritos</span><span>{recipientStats.unsubscribed}</span>
+                      </div>
+                    )}
+                    {recipientStats.will_receive === 0 && (
+                      <p className="text-xs text-amber-400">⚠ No hay destinatarios válidos para este envío.</p>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="px-4 py-3 border-t border-z-border flex gap-2">
                 <button onClick={sendBulk}
-                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">
-                  Confirmar envío
+                  disabled={recipientStats?.will_receive === 0}
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
+                  Confirmar envío {recipientStats ? `(${recipientStats.will_receive})` : ''}
                 </button>
                 <button onClick={() => setConfirmStep(false)}
                   className="px-4 py-2 text-slate-400 hover:text-slate-200 text-sm border border-z-border rounded-lg hover:bg-white/5 transition-colors">
@@ -717,6 +813,19 @@ export default function EmailMarketing() {
             </div>
             {attachMsg && <p className={`text-xs mt-1 ${attachMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{attachMsg.ok ? `✓ ${attachMsg.text}` : attachMsg.text}</p>}
           </div>
+          <div className="border-t border-z-border pt-4">
+            <label className="text-xs text-slate-400 mb-1.5 block">Delay entre envíos</label>
+            <select value={cfg.email_send_delay_ms} onChange={e => setCfg(p => ({ ...p, email_send_delay_ms: Number(e.target.value) }))}
+              className="z-input-light text-sm w-full sm:w-auto">
+              <option value={0}>Sin delay (máxima velocidad)</option>
+              <option value={500}>500 ms</option>
+              <option value={1000}>1 segundo</option>
+              <option value={2000}>2 segundos</option>
+              <option value={5000}>5 segundos</option>
+            </select>
+            <p className="text-xs text-slate-500 mt-1">Un delay evita que grandes envíos activen filtros de spam.</p>
+          </div>
+
           <div className="border-t border-z-border pt-4 space-y-2">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Automático post-llamada</p>
@@ -753,6 +862,53 @@ export default function EmailMarketing() {
         </button>
         {saved && <span className="flex items-center gap-1.5 text-sm text-green-400"><CheckCircleIcon className="w-4 h-4" /> Guardado</span>}
       </div>
+
+      {/* ── 5. HISTORIAL DE ENVÍOS ── */}
+      {emailHistory.length > 0 && (
+        <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
+          <div className="px-5 py-4 border-b border-z-border flex items-center gap-2">
+            <ClockIcon className="w-4 h-4 text-slate-400" />
+            <div>
+              <h2 className="text-sm font-semibold text-slate-200">Historial de envíos</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Últimos {emailHistory.length} envíos masivos realizados</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[520px]">
+              <thead className="bg-black/20">
+                <tr>
+                  {['Fecha', 'Plantilla', 'Campaña', 'Enviados', 'Fallidos', 'Por'].map(h => (
+                    <th key={h} className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-z-border">
+                {emailHistory.map(h => (
+                  <tr key={h.id} className="hover:bg-white/[0.02]">
+                    <td className="px-4 py-2.5 text-xs text-slate-400 whitespace-nowrap">
+                      {new Date(h.sent_at).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-slate-300 max-w-[160px]">
+                      <p className="font-medium truncate">{allTemplates.find(t => t.key === h.template_key)?.label || h.template_key}</p>
+                      {h.template_subject && <p className="text-slate-500 truncate">{h.template_subject}</p>}
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-slate-400">{h.campaign_name || 'Todos'}</td>
+                    <td className="px-4 py-2.5">
+                      <span className="text-green-400 font-bold text-sm">{h.total_sent}</span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className={h.total_errors > 0 ? 'text-red-400 font-medium text-sm' : 'text-slate-600 text-xs'}>
+                        {h.total_errors > 0 ? h.total_errors : '—'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-xs text-slate-500 truncate max-w-[120px]">{h.initiated_by || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
     </div>
   )

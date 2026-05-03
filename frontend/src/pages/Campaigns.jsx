@@ -29,7 +29,8 @@ export default function Campaigns() {
     catch (err) { alert(err.response?.data?.detail || 'Error al pausar') }
   }
   const handleDelete = async (c) => {
-    if (!confirm(`¿Eliminar campaña "${c.name}"?`)) return
+    const warning = c.status === 'running' ? '\n\n⚠ Esta campaña está en ejecución. Se detendrá y todos sus prospectos serán eliminados.' : ''
+    if (!confirm(`¿Eliminar campaña "${c.name}"?${warning}`)) return
     try { await deleteCampaign(c.id); load() }
     catch (err) { alert(err.response?.data?.detail || 'Error al eliminar') }
   }
@@ -104,12 +105,10 @@ export default function Campaigns() {
                           <PauseIcon className="w-3.5 h-3.5" /> Pausar
                         </button>
                       )}
-                      {c.status !== 'running' && (
-                        <button onClick={() => handleDelete(c)}
-                          className="flex items-center gap-1 px-2.5 py-1 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs font-medium rounded-lg">
-                          <TrashIcon className="w-3.5 h-3.5" /> Eliminar
-                        </button>
-                      )}
+                      <button onClick={() => handleDelete(c)}
+                        className="flex items-center gap-1 px-2.5 py-1 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs font-medium rounded-lg">
+                        <TrashIcon className="w-3.5 h-3.5" /> Eliminar
+                      </button>
                     </div>
                   </td>
                 </tr>
