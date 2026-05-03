@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
   CheckCircleIcon, EnvelopeIcon, PaperClipIcon, ChevronDownIcon,
-  PencilSquareIcon, SparklesIcon, PlusIcon, TrashIcon,
+  PencilSquareIcon, SparklesIcon, PlusIcon, TrashIcon, EyeIcon,
 } from '@heroicons/react/24/outline'
 import {
   getEmailSettings, saveEmailSettings, uploadEmailAttachment,
@@ -14,6 +14,15 @@ const FIXED_TEMPLATES = [
   { key: 'callback_requested', label: 'Callback',      desc: 'Acordaron llamar de nuevo' },
   { key: 'voicemail',          label: 'Buzón de voz',  desc: 'No se pudo hablar, se dejó buzón' },
   { key: 'not_interested',     label: 'No interesado', desc: 'Prospecto declinó en la llamada' },
+]
+
+// Gallery labels + context for each pro template card
+const PRO_GALLERY = [
+  { key: 'general',            label: 'Primer contacto',   tag: 'General',       tagColor: 'bg-slate-500/20 text-slate-400' },
+  { key: 'interested',         label: 'Prospecto caliente', tag: 'Interesado',    tagColor: 'bg-green-500/20 text-green-400' },
+  { key: 'callback_requested', label: 'Recordatorio amable',tag: 'Callback',      tagColor: 'bg-blue-500/20 text-blue-400' },
+  { key: 'voicemail',          label: 'Buzón sin respuesta',tag: 'Buzón de voz',  tagColor: 'bg-amber-500/20 text-amber-400' },
+  { key: 'not_interested',     label: 'Cierre cordial',    tag: 'No interesado', tagColor: 'bg-red-500/20 text-red-400' },
 ]
 const FIXED_KEYS = new Set(FIXED_TEMPLATES.map(t => t.key))
 
@@ -102,6 +111,7 @@ export default function EmailMarketing() {
 
   const [attachLoading, setAttachLoading] = useState(false)
   const [attachMsg, setAttachMsg] = useState(null)
+  const [previewProKey, setPreviewProKey] = useState(null)
   const fileRef = useRef(null)
   const editorRef = useRef(null)
 
@@ -252,6 +262,51 @@ export default function EmailMarketing() {
         <span className={`px-2.5 py-1 text-xs rounded-full font-medium ${cfg.sendgrid_configured ? 'bg-green-500/20 text-green-400' : 'bg-amber-500/20 text-amber-400'}`}>
           {cfg.sendgrid_configured ? '✓ Activo' : '⚠ Sin configurar'}
         </span>
+      </div>
+
+      {/* ── 0. GALERÍA DE PLANTILLAS PROFESIONALES ── */}
+      <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
+        <div className="px-5 py-4 border-b border-z-border flex items-center gap-2">
+          <SparklesIcon className="w-4 h-4 text-amber-400" />
+          <div>
+            <h2 className="text-sm font-semibold text-slate-200">Plantillas profesionales</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Correos corporativos listos para usar. Haz clic en "Ver" para previsualizar y "Usar" para cargarlo en tu plantilla.</p>
+          </div>
+        </div>
+        <div className="divide-y divide-z-border">
+          {PRO_GALLERY.map(({ key, label, tag, tagColor }) => {
+            const pro = PRO_TEMPLATES[key]
+            const isOpen = previewProKey === key
+            return (
+              <div key={key} className="px-5 py-4 space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${tagColor}`}>{tag}</span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-200">{label}</p>
+                      <p className="text-xs text-slate-500 truncate">{pro.subject.replace(/{{empresa}}/g, 'Empresa')}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button onClick={() => setPreviewProKey(isOpen ? null : key)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-400 border border-z-border rounded-lg hover:bg-white/5 transition-colors">
+                      <EyeIcon className="w-3.5 h-3.5" />
+                      {isOpen ? 'Cerrar' : 'Ver'}
+                    </button>
+                    <button onClick={() => { loadProTemplate(key); setEditingTmpl(key); setPreviewOpen(false); setTimeout(() => editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80) }}
+                      className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-amber-400 border border-amber-400/30 rounded-lg hover:bg-amber-400/10 transition-colors font-medium">
+                      <SparklesIcon className="w-3.5 h-3.5" /> Usar
+                    </button>
+                  </div>
+                </div>
+                {isOpen && (
+                  <div className="rounded-lg overflow-hidden border border-gray-200 bg-white"
+                    dangerouslySetInnerHTML={{ __html: buildHtml({ ...pro, greeting: pro.greeting.replace(/{{nombre}}/g, 'Carlos'), body: pro.body.replace(/{{nombre}}/g, 'Carlos').replace(/{{empresa}}/g, 'Empresa ABC').replace(/{{agente}}/g, 'Isabella'), signature: pro.signature.replace(/{{agente}}/g, 'Isabella') }) }} />
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
 
       {/* ── 1. MIS PLANTILLAS ── */}
