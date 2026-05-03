@@ -98,6 +98,8 @@ export default function EmailMarketing() {
   const [bulkTmpl, setBulkTmpl] = useState('general')
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkResult, setBulkResult] = useState(null)
+  const [confirmStep, setConfirmStep] = useState(false)
+  const [errorsOpen, setErrorsOpen] = useState(false)
 
   const [testAddr, setTestAddr] = useState('')
   const [testTmpl, setTestTmpl] = useState('general')
@@ -212,8 +214,7 @@ export default function EmailMarketing() {
   }
 
   const sendBulk = async () => {
-    if (!confirm('¿Enviar emails a los prospectos seleccionados?')) return
-    setBulkLoading(true); setBulkResult(null)
+    setBulkLoading(true); setBulkResult(null); setConfirmStep(false); setErrorsOpen(false)
     try {
       const r = await bulkSendEmail({ campaign_id: bulkCampaign ? Number(bulkCampaign) : null, template_key: bulkTmpl })
       setBulkResult(r)
@@ -480,55 +481,205 @@ export default function EmailMarketing() {
         </div>
       )}
 
-      {/* ── 3. ENVIAR ── */}
+      {/* ── 3. ENVÍO A PROSPECTOS ── */}
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
         <div className="px-5 py-4 border-b border-z-border">
-          <h2 className="text-sm font-semibold text-slate-200">Enviar emails</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Envía a tus prospectos ahora mismo, sin necesidad de llamadas</p>
+          <h2 className="text-sm font-semibold text-slate-200">Envío a prospectos</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Selecciona el segmento y la plantilla, revisa el resumen y confirma el envío</p>
         </div>
-        <div className="p-5 space-y-3">
+        <div className="p-5 space-y-4">
+
+          {/* Selectores */}
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Campaña</label>
-              <select value={bulkCampaign} onChange={e => setBulkCampaign(e.target.value)} className="z-input-light text-sm">
+              <label className="text-xs text-slate-400 mb-1 block">Destinatarios</label>
+              <select value={bulkCampaign} onChange={e => { setBulkCampaign(e.target.value); setConfirmStep(false); setBulkResult(null) }}
+                className="z-input-light text-sm">
                 <option value="">Todos mis prospectos</option>
                 {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Plantilla</label>
-              <select value={bulkTmpl} onChange={e => setBulkTmpl(e.target.value)} className="z-input-light text-sm">
+              <select value={bulkTmpl} onChange={e => { setBulkTmpl(e.target.value); setConfirmStep(false); setBulkResult(null) }}
+                className="z-input-light text-sm">
                 {allTemplates.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
               </select>
             </div>
           </div>
-          <button onClick={sendBulk} disabled={bulkLoading || !cfg.sendgrid_configured}
-            className="z-btn-primary w-full disabled:opacity-50">
-            {bulkLoading ? 'Enviando...' : 'Enviar ahora'}
-          </button>
+
+          {/* Asunto de la plantilla seleccionada */}
+          {(() => {
+            const subj = cfg.email_templates[bulkTmpl]?.subject
+            return subj
+              ? <p className="text-xs text-slate-400">Asunto: <span className="text-slate-300 italic">"{subj}"</span></p>
+              : <p className="text-xs text-amber-400">⚠ La plantilla seleccionada no tiene asunto configurado</p>
+          })()}
+
           {!cfg.sendgrid_configured && (
-            <p className="text-xs text-amber-400">El administrador debe configurar SendGrid primero.</p>
+            <p className="text-xs text-amber-400 bg-amber-400/5 border border-amber-400/20 rounded-lg px-3 py-2">
+              ⚠ El administrador debe configurar SendGrid antes de poder enviar emails.
+            </p>
           )}
-          {bulkResult && (
-            <div className={`text-xs rounded-lg px-3 py-2 ${bulkResult.error ? 'bg-red-500/10 text-red-400 border border-red-500/20' : 'bg-green-500/10 text-green-400 border border-green-500/20'}`}>
-              {bulkResult.error ? `✗ ${bulkResult.error}` : `✓ ${bulkResult.sent} emails enviados${bulkResult.skipped ? ` · ${bulkResult.skipped} fallaron` : ''}`}
+
+          {/* Botón preparar / panel confirmación */}
+          {!confirmStep && !bulkResult && (
+            <button
+              onClick={() => { setConfirmStep(true); setBulkResult(null) }}
+              disabled={!cfg.sendgrid_configured}
+              className="z-btn-primary w-full disabled:opacity-40">
+              Preparar envío
+            </button>
+          )}
+
+          {confirmStep && !bulkLoading && (
+            <div className="rounded-xl border border-z-border bg-white/5 overflow-hidden">
+              <div className="px-4 py-3 border-b border-z-border">
+                <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Resumen del envío</p>
+              </div>
+              <div className="px-4 py-3 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Destinatarios</span>
+                  <span className="text-slate-200 font-medium">
+                    {bulkCampaign ? campaigns.find(c => String(c.id) === bulkCampaign)?.name || 'Campaña' : 'Todos los prospectos con email'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Plantilla</span>
+                  <span className="text-slate-200 font-medium">{allTemplates.find(t => t.key === bulkTmpl)?.label}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Adjunto</span>
+                  <span className={cfg.email_attachment_name ? 'text-green-400' : 'text-slate-500'}>
+                    {cfg.email_attachment_name ? `✓ ${cfg.email_attachment_name}` : '—'}
+                  </span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Remitente</span>
+                  <span className="text-slate-200">{cfg.email_from_name || '—'} &lt;{cfg.email_from || '—'}&gt;</span>
+                </div>
+              </div>
+              <div className="px-4 py-3 border-t border-z-border flex gap-2">
+                <button onClick={sendBulk}
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold rounded-lg transition-colors">
+                  Confirmar envío
+                </button>
+                <button onClick={() => setConfirmStep(false)}
+                  className="px-4 py-2 text-slate-400 hover:text-slate-200 text-sm border border-z-border rounded-lg hover:bg-white/5 transition-colors">
+                  Cancelar
+                </button>
+              </div>
             </div>
           )}
-          <div className="border-t border-z-border pt-3 space-y-2">
-            <p className="text-xs text-slate-400 font-medium">Enviar prueba a mi correo</p>
-            <div className="flex gap-2">
+
+          {bulkLoading && (
+            <div className="flex items-center justify-center gap-3 py-6 text-slate-400">
+              <svg className="animate-spin w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+              </svg>
+              <span className="text-sm">Enviando emails...</span>
+            </div>
+          )}
+
+          {/* Resultado */}
+          {bulkResult && !bulkLoading && (
+            <div className={`rounded-xl border overflow-hidden ${bulkResult.error ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/30 bg-green-500/5'}`}>
+              <div className="px-5 py-4 flex items-center gap-4">
+                <div className={`text-4xl font-black ${bulkResult.error ? 'text-red-400' : 'text-green-400'}`}>
+                  {bulkResult.error ? '✗' : bulkResult.sent}
+                </div>
+                <div>
+                  <p className={`text-sm font-semibold ${bulkResult.error ? 'text-red-300' : 'text-green-300'}`}>
+                    {bulkResult.error ? 'Error al enviar' : `email${bulkResult.sent !== 1 ? 's' : ''} enviado${bulkResult.sent !== 1 ? 's' : ''} correctamente`}
+                  </p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    {bulkResult.error ? bulkResult.error : bulkResult.skipped ? `${bulkResult.skipped} no pudieron enviarse` : 'Todos los emails fueron entregados'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Barra progreso */}
+              {!bulkResult.error && bulkResult.sent + (bulkResult.skipped || 0) > 0 && (
+                <div className="px-5 pb-3">
+                  <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
+                    <div className="h-full bg-green-400 rounded-full"
+                      style={{ width: `${(bulkResult.sent / (bulkResult.sent + (bulkResult.skipped || 0))) * 100}%` }} />
+                  </div>
+                  <div className="flex justify-between text-xs text-slate-500 mt-1">
+                    <span>{bulkResult.sent} enviados</span>
+                    {bulkResult.skipped > 0 && <span>{bulkResult.skipped} fallidos</span>}
+                  </div>
+                </div>
+              )}
+
+              {/* Errores colapsables */}
+              {bulkResult.errors?.length > 0 && (
+                <div className="border-t border-red-500/20">
+                  <button onClick={() => setErrorsOpen(p => !p)}
+                    className="flex items-center gap-1.5 w-full px-5 py-2 text-xs text-red-400 hover:bg-red-500/5 transition-colors">
+                    <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${errorsOpen ? 'rotate-180' : ''}`} />
+                    Ver detalle de errores ({bulkResult.errors.length})
+                  </button>
+                  {errorsOpen && (
+                    <div className="px-5 pb-3 space-y-1">
+                      {bulkResult.errors.map((e, i) => (
+                        <div key={i} className="flex justify-between text-xs">
+                          <span className="text-slate-400 font-mono">{e.email}</span>
+                          <span className="text-red-400 truncate max-w-[200px]">{e.error}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div className="px-5 py-3 border-t border-white/5">
+                <button onClick={() => { setBulkResult(null); setErrorsOpen(false) }}
+                  className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                  Nuevo envío
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ── 4. ENVÍO DE PRUEBA ── */}
+      <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
+        <div className="px-5 py-4 border-b border-z-border">
+          <h2 className="text-sm font-semibold text-slate-200">Envío de prueba</h2>
+          <p className="text-xs text-slate-500 mt-0.5">Verifica que el email se ve bien antes de enviarlo a tus prospectos. Se envía con datos de ejemplo.</p>
+        </div>
+        <div className="p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Tu correo</label>
               <input type="email" value={testAddr} onChange={e => setTestAddr(e.target.value)}
-                placeholder="mi@correo.com" className="z-input-light text-sm flex-1" />
-              <select value={testTmpl} onChange={e => setTestTmpl(e.target.value)} className="z-input-light text-sm w-36">
+                placeholder="mi@correo.com" className="z-input-light text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Plantilla a probar</label>
+              <select value={testTmpl} onChange={e => setTestTmpl(e.target.value)} className="z-input-light text-sm">
                 {allTemplates.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
               </select>
-              <button onClick={sendTest} disabled={testLoading || !testAddr}
-                className="z-btn-ghost border border-z-border text-sm disabled:opacity-50 whitespace-nowrap">
-                {testLoading ? '...' : 'Probar'}
-              </button>
             </div>
-            {testMsg && <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{testMsg.text}</p>}
           </div>
+          {(() => {
+            const subj = cfg.email_templates[testTmpl]?.subject
+            return subj
+              ? <p className="text-xs text-slate-400">Asunto: <span className="italic">"{subj}"</span></p>
+              : <p className="text-xs text-amber-400">⚠ Sin asunto configurado</p>
+          })()}
+          <button onClick={sendTest} disabled={testLoading || !testAddr || !cfg.sendgrid_configured}
+            className="z-btn-primary disabled:opacity-50">
+            {testLoading ? 'Enviando...' : 'Enviar prueba'}
+          </button>
+          {testMsg && (
+            <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
+              {testMsg.ok ? '✓' : '✗'} {testMsg.text}
+            </p>
+          )}
         </div>
       </div>
 
