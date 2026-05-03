@@ -1,17 +1,21 @@
 import { useState, useEffect, useRef } from 'react'
-import { CheckCircleIcon, EnvelopeIcon, PaperClipIcon, ChevronDownIcon, PencilSquareIcon, SparklesIcon } from '@heroicons/react/24/outline'
+import {
+  CheckCircleIcon, EnvelopeIcon, PaperClipIcon, ChevronDownIcon,
+  PencilSquareIcon, SparklesIcon, PlusIcon, TrashIcon,
+} from '@heroicons/react/24/outline'
 import {
   getEmailSettings, saveEmailSettings, uploadEmailAttachment,
   sendTestEmail, bulkSendEmail, getCampaigns,
 } from '../api/client'
 
-const TEMPLATES = [
-  { key: 'general',            label: 'General',        desc: 'Primer contacto o seguimiento' },
-  { key: 'interested',         label: 'Interesado',     desc: 'Prospecto mostró interés en la llamada' },
-  { key: 'callback_requested', label: 'Callback',       desc: 'Acordaron llamar de nuevo' },
-  { key: 'voicemail',          label: 'Buzón de voz',   desc: 'No se pudo hablar, se dejó buzón' },
-  { key: 'not_interested',     label: 'No interesado',  desc: 'Prospecto declinó en la llamada' },
+const FIXED_TEMPLATES = [
+  { key: 'general',            label: 'General',       desc: 'Primer contacto o seguimiento' },
+  { key: 'interested',         label: 'Interesado',    desc: 'Prospecto mostró interés en la llamada' },
+  { key: 'callback_requested', label: 'Callback',      desc: 'Acordaron llamar de nuevo' },
+  { key: 'voicemail',          label: 'Buzón de voz',  desc: 'No se pudo hablar, se dejó buzón' },
+  { key: 'not_interested',     label: 'No interesado', desc: 'Prospecto declinó en la llamada' },
 ]
+const FIXED_KEYS = new Set(FIXED_TEMPLATES.map(t => t.key))
 
 const EMPTY_TMPL = { subject: '', greeting: '', body: '', cta_text: '', cta_url: '', signature: '' }
 
@@ -20,40 +24,35 @@ const PRO_TEMPLATES = {
     subject: 'Información sobre nuestros servicios — {{empresa}}',
     greeting: 'Estimado/a {{nombre}},',
     body: 'Me pongo en contacto para presentarle cómo podemos ayudar a {{empresa}} a mejorar sus resultados.\n\nNuestro equipo ha trabajado con empresas de su sector obteniendo resultados concretos y medibles. Me encantaría agendar una breve llamada de 15 minutos para contarle los detalles.\n\n¿Tendría disponibilidad esta semana?',
-    cta_text: 'Agendar llamada',
-    cta_url: '',
+    cta_text: 'Agendar llamada', cta_url: '',
     signature: 'Atentamente,\n{{agente}}',
   },
   interested: {
     subject: 'Próximos pasos — {{empresa}}',
     greeting: 'Estimado/a {{nombre}},',
-    body: 'Fue un placer hablar con usted hoy. Me alegra mucho su interés.\n\nTal como conversamos, estos son los próximos pasos:\n\n1. Le preparamos una propuesta personalizada para {{empresa}}\n2. La revisamos juntos en una videollamada\n3. Definimos el plan de trabajo\n\nEsperamos su confirmación para comenzar cuanto antes. Si tiene alguna pregunta antes, responda directamente a este correo.',
-    cta_text: 'Confirmar reunión',
-    cta_url: '',
+    body: 'Fue un placer hablar con usted hoy. Me alegra mucho su interés.\n\nTal como conversamos, estos son los próximos pasos:\n\n1. Le preparamos una propuesta personalizada para {{empresa}}\n2. La revisamos juntos en una videollamada\n3. Definimos el plan de trabajo\n\nEsperamos su confirmación para comenzar cuanto antes.',
+    cta_text: 'Confirmar reunión', cta_url: '',
     signature: 'Con gusto le atiendo,\n{{agente}}',
   },
   callback_requested: {
     subject: 'Le contactaremos pronto — {{empresa}}',
     greeting: 'Estimado/a {{nombre}},',
     body: 'Gracias por tomarse el tiempo de hablar con nosotros hoy.\n\nTal como acordamos, uno de nuestros asesores le contactará en breve para continuar la conversación y resolver todas sus dudas sin compromiso.\n\nSi prefiere comunicarse antes o cambiar el horario, no dude en responder a este correo.',
-    cta_text: '',
-    cta_url: '',
+    cta_text: '', cta_url: '',
     signature: 'Hasta pronto,\n{{agente}}',
   },
   voicemail: {
     subject: 'Intentamos contactarle — {{empresa}}',
     greeting: 'Estimado/a {{nombre}},',
     body: 'Intentamos comunicarnos con usted hoy y lamentamos no haberle podido hablar directamente.\n\nTenemos una propuesta que podría ser de gran valor para {{empresa}} y nos gustaría presentársela personalmente.\n\nPor favor, indíquenos el mejor momento para llamarle respondiendo a este correo, o agéndese directamente en el enlace de abajo.',
-    cta_text: 'Elegir horario',
-    cta_url: '',
+    cta_text: 'Elegir horario', cta_url: '',
     signature: 'Quedamos a su disposición,\n{{agente}}',
   },
   not_interested: {
     subject: 'Gracias por su tiempo — {{empresa}}',
     greeting: 'Estimado/a {{nombre}},',
-    body: 'Gracias por dedicarnos su tiempo hoy.\n\nEntendemos perfectamente que en este momento no es la prioridad. Las circunstancias cambian, y cuando llegue el momento adecuado, estaremos aquí para ayudarle.\n\nSi en el futuro necesita apoyo en esta área, no dude en contactarnos. Será un placer atenderle.',
-    cta_text: '',
-    cta_url: '',
+    body: 'Gracias por dedicarnos su tiempo hoy.\n\nEntendemos perfectamente que en este momento no es la prioridad. Las circunstancias cambian, y cuando llegue el momento adecuado, estaremos aquí para ayudarle.\n\nSi en el futuro necesita apoyo en esta área, no dude en contactarnos.',
+    cta_text: '', cta_url: '',
     signature: 'Muchas gracias,\n{{agente}}',
   },
 }
@@ -78,7 +77,7 @@ export default function EmailMarketing() {
   const [cfg, setCfg] = useState({
     email_enabled: false, email_from: '', email_from_name: '',
     sendgrid_configured: false,
-    email_send_on_interested: true, email_send_on_callback: false,
+    email_send_on_interested: false, email_send_on_callback: false,
     email_send_on_voicemail: false, email_send_on_not_interested: false,
     email_templates: {}, email_attachment_name: null,
   })
@@ -98,6 +97,8 @@ export default function EmailMarketing() {
 
   const [editingTmpl, setEditingTmpl] = useState(null)
   const [previewOpen, setPreviewOpen] = useState(false)
+  const [newTmplName, setNewTmplName] = useState('')
+  const [showNewInput, setShowNewInput] = useState(false)
 
   const [attachLoading, setAttachLoading] = useState(false)
   const [attachMsg, setAttachMsg] = useState(null)
@@ -109,7 +110,7 @@ export default function EmailMarketing() {
       email_enabled: d.email_enabled ?? false,
       email_from: d.email_from || '', email_from_name: d.email_from_name || '',
       sendgrid_configured: d.sendgrid_configured ?? false,
-      email_send_on_interested: d.email_send_on_interested ?? true,
+      email_send_on_interested: d.email_send_on_interested ?? false,
       email_send_on_callback: d.email_send_on_callback ?? false,
       email_send_on_voicemail: d.email_send_on_voicemail ?? false,
       email_send_on_not_interested: d.email_send_on_not_interested ?? false,
@@ -118,20 +119,64 @@ export default function EmailMarketing() {
     getCampaigns().then(setCampaigns).catch(() => {})
   }, [])
 
-  const getTmpl = k => cfg.email_templates[k] || { ...EMPTY_TMPL }
+  // All templates: fixed + custom
+  const customTemplates = Object.keys(cfg.email_templates)
+    .filter(k => !FIXED_KEYS.has(k))
+    .map(k => ({ key: k, label: cfg.email_templates[k]._label || k, isCustom: true, desc: 'Plantilla personalizada' }))
+  const allTemplates = [...FIXED_TEMPLATES.map(t => ({ ...t, isCustom: false })), ...customTemplates]
+
+  const getTmpl = k => {
+    const base = cfg.email_templates[k] || { ...EMPTY_TMPL }
+    const { _label, ...rest } = base
+    return rest
+  }
   const setTmplField = (k, f, v) =>
-    setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [k]: { ...getTmpl(k), [f]: v } } }))
+    setCfg(p => {
+      const existing = p.email_templates[k] || {}
+      return { ...p, email_templates: { ...p.email_templates, [k]: { ...existing, [f]: v } } }
+    })
 
   const openEditor = (key) => {
-    setEditingTmpl(key)
+    setEditingTmpl(editingTmpl === key ? null : key)
     setPreviewOpen(false)
     setTimeout(() => editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
   }
 
+  const createTemplate = () => {
+    const name = newTmplName.trim()
+    if (!name) return
+    const key = `tmpl_${Date.now()}`
+    setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [key]: { _label: name, ...EMPTY_TMPL } } }))
+    setNewTmplName('')
+    setShowNewInput(false)
+    setEditingTmpl(key)
+    setPreviewOpen(false)
+    setTimeout(() => editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
+  }
+
+  const deleteTemplate = (key) => {
+    if (!confirm('¿Eliminar esta plantilla?')) return
+    setCfg(p => {
+      const templates = { ...p.email_templates }
+      delete templates[key]
+      return { ...p, email_templates: templates }
+    })
+    if (editingTmpl === key) setEditingTmpl(null)
+  }
+
+  const renameTemplate = (key, newName) => {
+    setCfg(p => ({
+      ...p,
+      email_templates: { ...p.email_templates, [key]: { ...p.email_templates[key], _label: newName } }
+    }))
+  }
+
   const loadProTemplate = (key) => {
-    const pro = PRO_TEMPLATES[key]
-    if (!pro) return
-    setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [key]: { ...pro } } }))
+    const pro = PRO_TEMPLATES[key] || PRO_TEMPLATES.general
+    setCfg(p => {
+      const existing = p.email_templates[key] || {}
+      return { ...p, email_templates: { ...p.email_templates, [key]: { ...existing, ...pro } } }
+    })
   }
 
   const isFilled = (key) => {
@@ -171,8 +216,7 @@ export default function EmailMarketing() {
     setTestLoading(true); setTestMsg(null)
     try {
       await sendTestEmail({
-        to_email: testAddr,
-        outcome: testTmpl,
+        to_email: testAddr, outcome: testTmpl,
         template: cfg.email_templates[testTmpl] || {},
         from_email_override: cfg.email_from || null,
         from_name_override: cfg.email_from_name || null,
@@ -194,7 +238,8 @@ export default function EmailMarketing() {
     finally { setAttachLoading(false) }
   }
 
-  const t = editingTmpl ? getTmpl(editingTmpl) : null
+  const editingData = editingTmpl ? getTmpl(editingTmpl) : null
+  const editingMeta = editingTmpl ? allTemplates.find(t => t.key === editingTmpl) : null
 
   return (
     <div className="p-6 space-y-5 max-w-2xl">
@@ -211,25 +256,50 @@ export default function EmailMarketing() {
 
       {/* ── 1. MIS PLANTILLAS ── */}
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
-        <div className="px-5 py-4 border-b border-z-border">
-          <h2 className="text-sm font-semibold text-slate-200">Mis plantillas</h2>
-          <p className="text-xs text-slate-500 mt-0.5">Haz clic en una plantilla para editarla. Las plantillas configuradas se envían automáticamente post-llamada.</p>
+        <div className="px-5 py-4 border-b border-z-border flex items-center justify-between">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-200">Mis plantillas</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Haz clic en una para editarla. Las 5 fijas se usan en envíos automáticos post-llamada.</p>
+          </div>
+          <button onClick={() => setShowNewInput(p => !p)}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-400 border border-blue-400/30 rounded-lg hover:bg-blue-400/10 transition-colors">
+            <PlusIcon className="w-3.5 h-3.5" /> Nueva
+          </button>
         </div>
+
+        {showNewInput && (
+          <div className="px-5 py-3 border-b border-z-border bg-white/5 flex gap-2">
+            <input
+              autoFocus
+              type="text" value={newTmplName}
+              onChange={e => setNewTmplName(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') createTemplate(); if (e.key === 'Escape') { setShowNewInput(false); setNewTmplName('') } }}
+              placeholder="Nombre de la plantilla..."
+              className="z-input-light text-sm flex-1" />
+            <button onClick={createTemplate} disabled={!newTmplName.trim()}
+              className="z-btn-primary text-xs disabled:opacity-50 whitespace-nowrap">Crear</button>
+            <button onClick={() => { setShowNewInput(false); setNewTmplName('') }}
+              className="z-btn-ghost text-xs">Cancelar</button>
+          </div>
+        )}
+
         <div className="divide-y divide-z-border">
-          {TEMPLATES.map(({ key, label, desc }) => {
+          {/* Fixed templates */}
+          <div className="px-4 py-2 bg-white/3">
+            <p className="text-xs text-slate-600 uppercase tracking-wide font-medium">Automáticas post-llamada</p>
+          </div>
+          {FIXED_TEMPLATES.map(({ key, label, desc }) => {
             const filled = isFilled(key)
-            const tmpl = cfg.email_templates[key]
+            const subject = cfg.email_templates[key]?.subject
             return (
               <div key={key}
                 className={`flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-white/5 transition-colors ${editingTmpl === key ? 'bg-blue-500/10 border-l-2 border-blue-500' : ''}`}
-                onClick={() => openEditor(editingTmpl === key ? null : key)}>
+                onClick={() => openEditor(key)}>
                 <div className="flex items-center gap-3 min-w-0">
                   <span className={`w-2 h-2 rounded-full flex-shrink-0 ${filled ? 'bg-green-400' : 'bg-slate-600'}`} />
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-slate-200">{label}</p>
-                    <p className="text-xs text-slate-500 truncate">
-                      {filled && tmpl?.subject ? tmpl.subject : desc}
-                    </p>
+                    <p className="text-xs text-slate-500 truncate">{filled && subject ? subject : desc}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0 ml-3">
@@ -239,63 +309,106 @@ export default function EmailMarketing() {
               </div>
             )
           })}
+
+          {/* Custom templates */}
+          {customTemplates.length > 0 && (
+            <>
+              <div className="px-4 py-2 bg-white/3">
+                <p className="text-xs text-slate-600 uppercase tracking-wide font-medium">Mis plantillas personalizadas</p>
+              </div>
+              {customTemplates.map(({ key, label }) => {
+                const filled = isFilled(key)
+                const subject = cfg.email_templates[key]?.subject
+                return (
+                  <div key={key}
+                    className={`flex items-center justify-between px-5 py-3.5 cursor-pointer hover:bg-white/5 transition-colors ${editingTmpl === key ? 'bg-blue-500/10 border-l-2 border-blue-500' : ''}`}
+                    onClick={() => openEditor(key)}>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`w-2 h-2 rounded-full flex-shrink-0 ${filled ? 'bg-green-400' : 'bg-slate-600'}`} />
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-slate-200">{label}</p>
+                        <p className="text-xs text-slate-500 truncate">{filled && subject ? subject : 'Plantilla personalizada'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0 ml-3" onClick={e => e.stopPropagation()}>
+                      {filled && <span className="text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">Configurada</span>}
+                      <button onClick={() => deleteTemplate(key)}
+                        className="p-1 text-slate-600 hover:text-red-400 transition-colors">
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </>
+          )}
         </div>
       </div>
 
       {/* ── 2. EDITOR ── */}
-      {editingTmpl && t && (
+      {editingTmpl && editingData && (
         <div ref={editorRef} className="bg-z-card rounded-xl border border-z-border overflow-hidden">
           <div className="px-5 py-4 border-b border-z-border flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-semibold text-slate-200">
-                Editando: <span className="text-blue-400">{TEMPLATES.find(x => x.key === editingTmpl)?.label}</span>
-              </h2>
+              {editingMeta?.isCustom ? (
+                <input
+                  type="text"
+                  defaultValue={editingMeta.label}
+                  onBlur={e => renameTemplate(editingTmpl, e.target.value)}
+                  className="text-sm font-semibold bg-transparent text-blue-400 border-b border-blue-400/40 focus:outline-none focus:border-blue-400 pb-0.5"
+                />
+              ) : (
+                <h2 className="text-sm font-semibold text-slate-200">
+                  Editando: <span className="text-blue-400">{editingMeta?.label}</span>
+                </h2>
+              )}
               <p className="text-xs text-slate-500 mt-0.5">
                 Variables: <span className="font-mono text-blue-400">{'{{nombre}}  {{empresa}}  {{telefono}}  {{fecha}}  {{agente}}'}</span>
               </p>
             </div>
             <button onClick={() => loadProTemplate(editingTmpl)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-400 border border-amber-400/30 rounded-lg hover:bg-amber-400/10 transition-colors">
-              <SparklesIcon className="w-3.5 h-3.5" />
-              Cargar plantilla profesional
+              <SparklesIcon className="w-3.5 h-3.5" /> Plantilla profesional
             </button>
           </div>
 
           <div className="p-5 space-y-3">
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Asunto del email</label>
-              <input type="text" value={t.subject} onChange={e => setTmplField(editingTmpl, 'subject', e.target.value)}
+              <input type="text" value={editingData.subject}
+                onChange={e => setTmplField(editingTmpl, 'subject', e.target.value)}
                 placeholder="ej: Próximos pasos — {{empresa}}" className="z-input-light text-sm" />
             </div>
-
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Saludo</label>
-              <input type="text" value={t.greeting} onChange={e => setTmplField(editingTmpl, 'greeting', e.target.value)}
+              <input type="text" value={editingData.greeting}
+                onChange={e => setTmplField(editingTmpl, 'greeting', e.target.value)}
                 placeholder="Estimado/a {{nombre}}," className="z-input-light text-sm" />
             </div>
-
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Cuerpo del mensaje</label>
-              <textarea rows={6} value={t.body} onChange={e => setTmplField(editingTmpl, 'body', e.target.value)}
+              <textarea rows={6} value={editingData.body}
+                onChange={e => setTmplField(editingTmpl, 'body', e.target.value)}
                 placeholder="Escribe el contenido del email aquí..." className="z-input-light text-sm resize-none" />
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">Texto del botón (opcional)</label>
-                <input type="text" value={t.cta_text} onChange={e => setTmplField(editingTmpl, 'cta_text', e.target.value)}
+                <input type="text" value={editingData.cta_text}
+                  onChange={e => setTmplField(editingTmpl, 'cta_text', e.target.value)}
                   placeholder="Agendar llamada" className="z-input-light text-sm" />
               </div>
               <div>
                 <label className="text-xs text-slate-400 mb-1 block">URL del botón</label>
-                <input type="url" value={t.cta_url} onChange={e => setTmplField(editingTmpl, 'cta_url', e.target.value)}
+                <input type="url" value={editingData.cta_url}
+                  onChange={e => setTmplField(editingTmpl, 'cta_url', e.target.value)}
                   placeholder="https://calendly.com/..." className="z-input-light text-sm" />
               </div>
             </div>
-
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Firma</label>
-              <textarea rows={2} value={t.signature} onChange={e => setTmplField(editingTmpl, 'signature', e.target.value)}
+              <textarea rows={2} value={editingData.signature}
+                onChange={e => setTmplField(editingTmpl, 'signature', e.target.value)}
                 placeholder={'Atentamente,\n{{agente}}'} className="z-input-light text-sm resize-none" />
             </div>
 
@@ -306,7 +419,7 @@ export default function EmailMarketing() {
             </button>
             {previewOpen && (
               <div className="rounded-lg overflow-hidden border border-gray-200"
-                dangerouslySetInnerHTML={{ __html: buildHtml(t) }} />
+                dangerouslySetInnerHTML={{ __html: buildHtml(editingData) }} />
             )}
           </div>
         </div>
@@ -330,16 +443,14 @@ export default function EmailMarketing() {
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Plantilla</label>
               <select value={bulkTmpl} onChange={e => setBulkTmpl(e.target.value)} className="z-input-light text-sm">
-                {TEMPLATES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                {allTemplates.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
               </select>
             </div>
           </div>
-
           <button onClick={sendBulk} disabled={bulkLoading || !cfg.sendgrid_configured}
             className="z-btn-primary w-full disabled:opacity-50">
             {bulkLoading ? 'Enviando...' : 'Enviar ahora'}
           </button>
-
           {!cfg.sendgrid_configured && (
             <p className="text-xs text-amber-400">El administrador debe configurar SendGrid primero.</p>
           )}
@@ -348,14 +459,13 @@ export default function EmailMarketing() {
               {bulkResult.error ? `✗ ${bulkResult.error}` : `✓ ${bulkResult.sent} emails enviados${bulkResult.skipped ? ` · ${bulkResult.skipped} fallaron` : ''}`}
             </div>
           )}
-
           <div className="border-t border-z-border pt-3 space-y-2">
             <p className="text-xs text-slate-400 font-medium">Enviar prueba a mi correo</p>
             <div className="flex gap-2">
               <input type="email" value={testAddr} onChange={e => setTestAddr(e.target.value)}
                 placeholder="mi@correo.com" className="z-input-light text-sm flex-1" />
               <select value={testTmpl} onChange={e => setTestTmpl(e.target.value)} className="z-input-light text-sm w-36">
-                {TEMPLATES.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                {allTemplates.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
               </select>
               <button onClick={sendTest} disabled={testLoading || !testAddr}
                 className="z-btn-ghost border border-z-border text-sm disabled:opacity-50 whitespace-nowrap">
@@ -373,7 +483,6 @@ export default function EmailMarketing() {
           <h2 className="text-sm font-semibold text-slate-200">Configuración</h2>
         </div>
         <div className="p-5 space-y-4">
-
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-slate-400 mb-1 block">Email remitente</label>
@@ -386,7 +495,6 @@ export default function EmailMarketing() {
                 placeholder="Isabella - Mi Empresa" className="z-input-light text-sm" />
             </div>
           </div>
-
           <div>
             <label className="text-xs text-slate-400 mb-1.5 block flex items-center gap-1">
               <PaperClipIcon className="w-3.5 h-3.5" /> Adjunto a todos los emails (PDF o imagen, máx. 5 MB)
@@ -403,7 +511,6 @@ export default function EmailMarketing() {
             </div>
             {attachMsg && <p className={`text-xs mt-1 ${attachMsg.ok ? 'text-green-400' : 'text-red-400'}`}>{attachMsg.ok ? `✓ ${attachMsg.text}` : attachMsg.text}</p>}
           </div>
-
           <div className="border-t border-z-border pt-4 space-y-2">
             <div className="flex items-center justify-between mb-1">
               <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Automático post-llamada</p>
@@ -415,12 +522,12 @@ export default function EmailMarketing() {
                 <span className="text-xs text-slate-400">{cfg.email_enabled ? 'Activo' : 'Inactivo'}</span>
               </label>
             </div>
-            <p className="text-xs text-slate-500">Envía automáticamente al terminar una llamada según el resultado:</p>
+            <p className="text-xs text-slate-500">Selecciona para qué resultados enviar email automáticamente:</p>
             {[
-              { flag: 'email_send_on_interested',     label: 'Interesado' },
-              { flag: 'email_send_on_callback',        label: 'Callback' },
-              { flag: 'email_send_on_voicemail',       label: 'Buzón de voz' },
-              { flag: 'email_send_on_not_interested',  label: 'No interesado' },
+              { flag: 'email_send_on_interested',    label: 'Interesado' },
+              { flag: 'email_send_on_callback',       label: 'Callback' },
+              { flag: 'email_send_on_voicemail',      label: 'Buzón de voz' },
+              { flag: 'email_send_on_not_interested', label: 'No interesado' },
             ].map(({ flag, label }) => (
               <label key={flag} className={`flex items-center gap-2.5 cursor-pointer ${!cfg.email_enabled ? 'opacity-40 pointer-events-none' : ''}`}>
                 <input type="checkbox" checked={cfg[flag]}
