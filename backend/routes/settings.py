@@ -317,13 +317,23 @@ async def test_email(
 
     try:
         from sendgrid import SendGridAPIClient
-        from sendgrid.helpers.mail import Mail
+        from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
+        import base64 as _b64
         message = Mail(
             from_email=(from_email, from_name),
             to_emails=data.to_email,
             subject=f"[PRUEBA] {subject}",
             html_content=html_body,
         )
+        if org.email_attachment and org.email_attachment_name:
+            ext = org.email_attachment_name.rsplit(".", 1)[-1].lower()
+            mime = "application/pdf" if ext == "pdf" else f"image/{ext}"
+            message.attachment = Attachment(
+                FileContent(_b64.b64encode(org.email_attachment).decode()),
+                FileName(org.email_attachment_name),
+                FileType(mime),
+                Disposition("attachment"),
+            )
         sg = SendGridAPIClient(api_key)
         resp = sg.send(message)
         return {"ok": True, "status_code": resp.status_code}
