@@ -759,14 +759,24 @@ async def import_email_contacts(
         reader_obj = csv.DictReader(io.StringIO(text))
         rows = [{k.strip().lower(): v for k, v in r.items()} for r in reader_obj]
 
-    # Fetch existing emails in org to deduplicate
-    existing = {
-        (p.email or "").lower()
-        for p in session.exec(
-            select(Prospect).where(Prospect.organization_id == current_user.organization_id)
-        ).all()
-        if p.email
-    }
+    # Fetch existing emails to deduplicate — scope to the list if one is specified,
+    # otherwise check org-wide to avoid cross-campaign duplicates.
+    if email_list_id:
+        existing = {
+            (p.email or "").lower()
+            for p in session.exec(
+                select(Prospect).where(Prospect.email_list_id == email_list_id)
+            ).all()
+            if p.email
+        }
+    else:
+        existing = {
+            (p.email or "").lower()
+            for p in session.exec(
+                select(Prospect).where(Prospect.organization_id == current_user.organization_id)
+            ).all()
+            if p.email
+        }
 
     imported = 0
     skipped = 0
