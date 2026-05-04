@@ -173,25 +173,105 @@ class ApifySearchRequest(BaseModel):
 
 
 def _brand_key(name: str) -> str:
-    """Normalize a business name to its 'brand key' for deduplication."""
+    """Normalize a business name to its 'brand key' for deduplication.
+    All-caps acronyms (CFSC, ACE, CVS...) are used as-is so all branches collapse to one key."""
+    words_raw = name.strip().split()
+    if words_raw and re.match(r'^[A-Z&]{2,6}$', words_raw[0]):
+        return words_raw[0].lower()
     n = name.lower()
-    n = re.sub(r'\b(inc|llc|corp|ltd|co|no|num|sucursal|branch|location|store)\b', '', n)
-    n = re.sub(r'#\s*\d+', '', n)       # remove #123
-    n = re.sub(r'\b\d+\b', '', n)       # remove standalone numbers
-    n = re.sub(r'[^\w\s]', '', n)       # remove punctuation
+    n = re.sub(r'\b(inc|llc|corp|ltd|co|no|num|sucursal|branch|location|store|express)\b', '', n)
+    n = re.sub(r'#\s*\d+', '', n)
+    n = re.sub(r'\b\d+\b', '', n)
+    n = re.sub(r'[^\w\s]', '', n)
     n = re.sub(r'\s+', ' ', n).strip()
     return n
 
 
-# Common chain/franchise keywords to filter out automatically
+# Common chain/franchise keywords — any business whose name contains one of these is skipped
 _CHAIN_KEYWORDS = [
-    "walmart", "mcdonald", "starbucks", "burger king", "wendy's", "taco bell",
-    "domino", "pizza hut", "subway", "dunkin", "7-eleven", "cvs", "walgreens",
-    "dollar general", "dollar tree", "family dollar", "target", "costco",
-    "home depot", "lowe's", "autozone", "advance auto", "o'reilly",
+    # Check cashing / currency exchange chains
+    "cfsc", "ace cash", "money mart", "check into cash", "cash america", "first cash",
+    "checksmart", "speedy cash", "advance america", "titlemax", "titlebucks",
+    "western union", "moneygram", "check n go", "check city", "world acceptance",
+
+    # Banks / credit unions (large national)
     "chase bank", "wells fargo", "bank of america", "citibank", "td bank",
+    "us bank", "pnc bank", "regions bank", "fifth third", "santander bank",
+    "keybank", "suntrust", "bb&t", "truist", "huntington bank", "citizens bank",
+    "capital one", "ally bank", "discover bank", "navy federal", "usaa",
+
+    # Tax preparation chains
     "h&r block", "jackson hewitt", "liberty tax",
-    "shell", "exxon", "chevron", "bp ", "circle k", "speedway",
+
+    # Big-box retail
+    "walmart", "target", "costco", "sam's club", "bj's wholesale",
+    "home depot", "lowe's", "menards", "ace hardware", "true value",
+    "best buy", "staples", "office depot", "officemax",
+
+    # Grocery chains
+    "kroger", "safeway", "albertsons", "publix", "h-e-b", "aldi",
+    "whole foods", "trader joe's", "meijer", "food lion", "giant eagle",
+    "stop & shop", "wegmans", "sprouts", "smart & final",
+
+    # Dollar / discount stores
+    "dollar general", "dollar tree", "family dollar", "five below",
+
+    # Pharmacy chains
+    "cvs pharmacy", "walgreens", "rite aid", "duane reade",
+
+    # Fast food / QSR
+    "mcdonald", "burger king", "wendy's", "taco bell", "subway",
+    "domino", "pizza hut", "papa john", "little caesars", "papa murphy",
+    "kfc", "popeyes", "chick-fil-a", "raising cane",
+    "chipotle", "qdoba", "moe's southwest",
+    "dunkin", "starbucks", "tim hortons", "peet's coffee",
+    "sonic drive", "dairy queen", "baskin robbins", "cold stone",
+    "five guys", "shake shack", "whataburger", "culver's",
+    "arby's", "hardee's", "carl's jr",
+    "ihop", "denny's", "cracker barrel", "applebee's", "chili's",
+    "olive garden", "red lobster", "outback steakhouse", "longhorn steakhouse",
+    "panda express", "wingstop", "buffalo wild wings", "wingstop",
+    "panera bread", "jersey mike", "jimmy john", "firehouse subs",
+    "moe's", "el pollo loco", "del taco", "jack in the box",
+
+    # Auto parts / service chains
+    "autozone", "advance auto", "o'reilly", "napa auto",
+    "jiffy lube", "valvoline", "pep boys", "midas", "meineke",
+    "firestone", "goodyear", "discount tire", "mavis discount",
+    "oil can henry", "express oil",
+
+    # Gas stations / convenience
+    "shell", "exxon", "chevron", "bp station", "circle k", "speedway",
+    "marathon oil", "marathon gas", "mobil", "sunoco", "gulf station",
+    "pilot travel", "flying j", "wawa", "sheetz", "kwik trip",
+    "casey's general", "love's travel", "road ranger",
+
+    # Telecom retail
+    "t-mobile", "at&t store", "verizon wireless", "sprint store",
+    "metro by t-mobile", "cricket wireless", "boost mobile",
+
+    # Hotels / lodging chains
+    "marriott", "hilton", "hyatt", "holiday inn", "hampton inn",
+    "comfort inn", "best western", "motel 6", "super 8", "days inn",
+    "extended stay", "residence inn", "courtyard by marriott",
+    "fairfield inn", "la quinta", "quality inn",
+
+    # Shipping / postal chains
+    "ups store", "fedex office", "the ups store",
+
+    # Fitness chains
+    "planet fitness", "anytime fitness", "la fitness", "24 hour fitness",
+    "gold's gym", "ymca", "crunch fitness", "equinox",
+
+    # Urgent care / healthcare chains
+    "minuteclinic", "concentra", "nextcare", "american family care",
+    "patient first", "gohealth urgent", "medexpress",
+
+    # Insurance chains
+    "state farm", "allstate", "farmers insurance", "liberty mutual",
+
+    # Real estate chains
+    "re/max", "keller williams", "century 21", "coldwell banker",
 ]
 
 
