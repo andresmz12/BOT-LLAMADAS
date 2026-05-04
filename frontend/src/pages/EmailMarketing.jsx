@@ -10,7 +10,7 @@ import {
   getEmailHistory, validateEmailRecipients, uploadTemplateAttachment,
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
   getEmailLists, createEmailList, deleteEmailList,
-  getEmailListContacts, deleteEmailListContact, importEmailContactsToList,
+  getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList,
 } from '../api/client'
 
 const FIXED_TEMPLATES = [
@@ -152,6 +152,7 @@ export default function EmailMarketing() {
   const [showNewListInput, setShowNewListInput] = useState(false)
   const [creatingList, setCreatingList] = useState(false)
   const [listContacts, setListContacts] = useState({ id: null, contacts: [], loading: false })
+  const [addContactForm, setAddContactForm] = useState({ listId: null, name: '', email: '', company: '', saving: false, error: '' })
   const listImportRefs = useRef({})
 
   // Bulk send
@@ -318,14 +319,31 @@ export default function EmailMarketing() {
   const handleDeleteContact = async (listId, contactId) => {
     try {
       await deleteEmailListContact(listId, contactId)
-      setListContacts(prev => ({
-        ...prev,
-        contacts: prev.contacts.filter(c => c.id !== contactId),
-      }))
+      setListContacts(prev => ({ ...prev, contacts: prev.contacts.filter(c => c.id !== contactId) }))
       setEmailLists(prev => prev.map(l =>
         l.id === listId ? { ...l, total: l.total - 1, with_email: l.with_email - 1 } : l
       ))
     } catch (e) { alert('Error al eliminar contacto') }
+  }
+
+  const handleAddContact = async () => {
+    const { listId, name, email, company } = addContactForm
+    if (!email.trim()) return
+    setAddContactForm(p => ({ ...p, saving: true, error: '' }))
+    try {
+      const created = await addEmailListContact(listId, { name: name.trim(), email: email.trim(), company: company.trim() || null })
+      setListContacts(prev =>
+        prev.id === listId
+          ? { ...prev, contacts: [created, ...prev.contacts] }
+          : prev
+      )
+      setEmailLists(prev => prev.map(l =>
+        l.id === listId ? { ...l, total: l.total + 1, with_email: l.with_email + 1 } : l
+      ))
+      setAddContactForm({ listId: null, name: '', email: '', company: '', saving: false, error: '' })
+    } catch (e) {
+      setAddContactForm(p => ({ ...p, saving: false, error: e.response?.data?.detail || 'Error al agregar' }))
+    }
   }
 
   const handleImportToList = async (listId, file) => {
@@ -506,7 +524,15 @@ export default function EmailMarketing() {
                       <button
                         onClick={() => listImportRefs.current[list.id]?.click()}
                         className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-blue-400 border border-blue-400/30 rounded-lg hover:bg-blue-400/10 transition-colors">
-                        <PlusIcon className="w-3 h-3" /> Importar CSV
+                        <PlusIcon className="w-3 h-3" /> CSV
+                      </button>
+                      <button
+                        onClick={() => setAddContactForm(p => p.listId === list.id
+                          ? { listId: null, name: '', email: '', company: '', saving: false, error: '' }
+                          : { listId: list.id, name: '', email: '', company: '', saving: false, error: '' }
+                        )}
+                        className={`flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${addContactForm.listId === list.id ? 'text-slate-200 border-slate-400/40 bg-white/10' : 'text-blue-400 border-blue-400/30 hover:bg-blue-400/10'}`}>
+                        <PlusIcon className="w-3 h-3" /> Manual
                       </button>
                       <button
                         onClick={() => handleViewContacts(list.id)}
@@ -521,6 +547,37 @@ export default function EmailMarketing() {
                       </button>
                     </div>
                   </div>
+
+                  {/* Inline add-contact form */}
+                  {addContactForm.listId === list.id && (
+                    <div className="border-t border-z-border bg-white/3 px-4 py-3 space-y-2">
+                      <p className="text-xs font-medium text-slate-400">Agregar contacto manualmente</p>
+                      <div className="grid grid-cols-3 gap-2">
+                        <input
+                          type="text" placeholder="Nombre" value={addContactForm.name}
+                          onChange={e => setAddContactForm(p => ({ ...p, name: e.target.value }))}
+                          className="z-input-light text-xs" />
+                        <input
+                          type="email" placeholder="Email *" value={addContactForm.email}
+                          onChange={e => setAddContactForm(p => ({ ...p, email: e.target.value }))}
+                          onKeyDown={e => e.key === 'Enter' && handleAddContact()}
+                          className="z-input-light text-xs" />
+                        <input
+                          type="text" placeholder="Empresa" value={addContactForm.company}
+                          onChange={e => setAddContactForm(p => ({ ...p, company: e.target.value }))}
+                          className="z-input-light text-xs" />
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button onClick={handleAddContact} disabled={!addContactForm.email.trim() || addContactForm.saving}
+                          className="z-btn-primary text-xs disabled:opacity-50">
+                          {addContactForm.saving ? 'Guardando...' : 'Agregar'}
+                        </button>
+                        <button onClick={() => setAddContactForm({ listId: null, name: '', email: '', company: '', saving: false, error: '' })}
+                          className="z-btn-ghost text-xs">Cancelar</button>
+                        {addContactForm.error && <p className="text-xs text-red-400">{addContactForm.error}</p>}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Contacts panel */}
                   {listContacts.id === list.id && (

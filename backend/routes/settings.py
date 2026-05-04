@@ -947,6 +947,50 @@ def get_email_list_contacts(
     ]
 
 
+class EmailListContactCreate(BaseModel):
+    name: str
+    email: str
+    company: Optional[str] = None
+
+
+@router.post("/email/lists/{list_id}/contacts")
+def add_email_list_contact(
+    list_id: int,
+    data: EmailListContactCreate,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    el = session.get(EmailList, list_id)
+    if not el or el.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404)
+    email = (data.email or "").strip().lower()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Email inválido")
+    # Check duplicate within this list
+    existing = session.exec(
+        select(Prospect).where(
+            Prospect.email_list_id == list_id,
+            Prospect.email == email,
+        )
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Este email ya está en la lista")
+    p = Prospect(
+        campaign_id=None,
+        email_list_id=list_id,
+        organization_id=current_user.organization_id,
+        name=data.name.strip() or email.split("@")[0],
+        phone=None,
+        email=email,
+        company=data.company or None,
+        status="email_only",
+    )
+    session.add(p)
+    session.commit()
+    session.refresh(p)
+    return {"id": p.id, "name": p.name, "email": p.email, "company": p.company, "unsubscribed": False}
+
+
 @router.delete("/email/lists/{list_id}/contacts/{contact_id}")
 def delete_email_list_contact(
     list_id: int,

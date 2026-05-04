@@ -136,6 +136,7 @@ export const createEmailList = (data) => api.post('/settings/email/lists', data)
 export const deleteEmailList = (id) => api.delete(`/settings/email/lists/${id}`).then(r => r.data)
 export const getEmailListContacts = (id) => api.get(`/settings/email/lists/${id}/contacts`).then(r => r.data)
 export const deleteEmailListContact = (listId, contactId) => api.delete(`/settings/email/lists/${listId}/contacts/${contactId}`).then(r => r.data)
+export const addEmailListContact = (listId, data) => api.post(`/settings/email/lists/${listId}/contacts`, data).then(r => r.data)
 export const importEmailContactsToList = (listId, file) => {
   const form = new FormData()
   form.append('file', file)
