@@ -63,7 +63,10 @@ export default function ImportCSVModal({ campaigns, onClose, onImported }) {
     setLoading(true)
     try {
       const result = await importProspects(campaignId, file, countryCode)
-      alert(`${result.imported} prospectos importados`)
+      const msg = result.skipped_existing
+        ? `${result.imported} prospectos importados.\n${result.skipped_existing} omitidos por duplicado (ya existen en tu organización).`
+        : `${result.imported} prospectos importados.`
+      alert(msg)
       onImported()
     } catch (err) {
       alert('Error: ' + (err.response?.data?.detail || err.message))

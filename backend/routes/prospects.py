@@ -130,7 +130,18 @@ async def import_file(
         reader = csv.DictReader(io.StringIO(text))
         rows = [{k.strip().lower(): v for k, v in r.items()} for r in reader]
 
+    # Pre-load existing phones in the org to skip duplicates across all campaigns
+    existing_phones: set[str] = set()
+    if current_user.organization_id:
+        existing_phones = {
+            p for p in session.exec(
+                select(Prospect.phone).where(Prospect.organization_id == current_user.organization_id)
+            ).all()
+            if p
+        }
+
     imported = 0
+    skipped_existing = 0
     for row in rows:
         # Phone: "phone" or "phone number"
         phone = (row.get("phone") or row.get("phone number") or "").strip()
@@ -142,6 +153,10 @@ async def import_file(
         if not phone or not re.match(r"^\+?[\d\s\-().]{7,20}$", phone):
             continue
         phone = normalize_phone(phone, phone_country_code)
+        if phone in existing_phones:
+            skipped_existing += 1
+            continue
+        existing_phones.add(phone)  # prevent duplicates within the same file too
         session.add(Prospect(
             campaign_id=campaign_id,
             name=name,
@@ -152,7 +167,7 @@ async def import_file(
         ))
         imported += 1
     session.commit()
-    return {"imported": imported}
+    return {"imported": imported, "skipped_existing": skipped_existing}
 
 
 @router.get("")
