@@ -137,6 +137,8 @@ export const uploadTemplateAttachment = (templateKey, file) => {
   return api.post('/settings/email/template-attachment', form).then(r => r.data)
 }
 
+export const getEmailStats = () => api.get('/stats/email').then(r => r.data)
+
 // Admin — CRM
 export const testCRMWebhook = (orgId) =>
   api.post(`/admin/organizations/${orgId}/crm/test`).then(r => r.data)

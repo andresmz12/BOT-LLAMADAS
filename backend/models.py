@@ -207,6 +207,18 @@ class EmailSendLog(SQLModel, table=True):
     initiated_by: Optional[str] = None
 
 
+class EmailEvent(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: int = Field(index=True)
+    prospect_email: str = Field(index=True)
+    event_type: str = Field(index=True)   # delivered, open, click, bounce, unsubscribe, spamreport
+    template_key: Optional[str] = None
+    sg_message_id: Optional[str] = None
+    sg_event_id: Optional[str] = Field(default=None, index=True)  # deduplication
+    url: Optional[str] = None             # for click events
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+
+
 class Settings(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     key: str = Field(unique=True)

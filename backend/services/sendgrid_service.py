@@ -81,7 +81,7 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
 
         from sendgrid import SendGridAPIClient
         from sendgrid.helpers.mail import (
-            Mail, Attachment, FileContent, FileName, FileType, Disposition
+            Mail, Attachment, FileContent, FileName, FileType, Disposition, CustomArg
         )
 
         message = Mail(
@@ -90,6 +90,10 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
             subject=subject,
             html_content=html_body,
         )
+        message.custom_arg = [
+            CustomArg(key="org_id", value=str(org.id)),
+            CustomArg(key="template_key", value=outcome),
+        ]
 
         # Per-template attachment takes priority over global attachment
         att_b64 = tmpl.get("attachment_b64") or ""

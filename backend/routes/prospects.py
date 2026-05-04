@@ -173,6 +173,7 @@ async def import_file(
 @router.get("")
 def list_prospects(
     campaign_id: int | None = None,
+    email_only: bool = False,
     status: str | None = None,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -180,7 +181,9 @@ def list_prospects(
     query = select(Prospect)
     if current_user.role != "superadmin":
         query = query.where(Prospect.organization_id == current_user.organization_id)
-    if campaign_id:
+    if email_only:
+        query = query.where(Prospect.campaign_id == None)  # noqa: E711
+    elif campaign_id:
         query = query.where(Prospect.campaign_id == campaign_id)
     if status:
         query = query.where(Prospect.status == status)
@@ -272,6 +275,7 @@ async def call_prospect(
 @router.post("/retry")
 def retry_prospects(
     campaign_id: int | None = None,
+    email_only: bool = False,
     status: str | None = None,
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
@@ -280,7 +284,9 @@ def retry_prospects(
     query = select(Prospect)
     if current_user.role != "superadmin":
         query = query.where(Prospect.organization_id == current_user.organization_id)
-    if campaign_id:
+    if email_only:
+        query = query.where(Prospect.campaign_id == None)  # noqa: E711
+    elif campaign_id:
         query = query.where(Prospect.campaign_id == campaign_id)
     if status:
         query = query.where(Prospect.status == status)
@@ -299,13 +305,16 @@ def retry_prospects(
 @router.delete("")
 def delete_all_prospects(
     campaign_id: int | None = None,
+    email_only: bool = False,
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
     query = select(Prospect)
     if current_user.role != "superadmin":
         query = query.where(Prospect.organization_id == current_user.organization_id)
-    if campaign_id:
+    if email_only:
+        query = query.where(Prospect.campaign_id == None)  # noqa: E711
+    elif campaign_id:
         query = query.where(Prospect.campaign_id == campaign_id)
     prospects = session.exec(query).all()
     for p in prospects:

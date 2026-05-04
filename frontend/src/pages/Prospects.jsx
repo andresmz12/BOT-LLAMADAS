@@ -499,7 +499,8 @@ export default function Prospects() {
 
   const load = () => {
     const params = {}
-    if (filterCampaign) params.campaign_id = filterCampaign
+    if (filterCampaign === 'email_only') params.email_only = true
+    else if (filterCampaign) params.campaign_id = filterCampaign
     if (filterStatus) params.status = filterStatus
     getProspects(params).then(setProspects).catch(() => {})
   }
@@ -523,7 +524,8 @@ export default function Prospects() {
     if (!confirm(`¿Reintentar llamadas para ${label}?\n\nSe resetearán a "pending" para la próxima ejecución de campaña.`)) return
     try {
       const params = {}
-      if (filterCampaign) params.campaign_id = filterCampaign
+      if (filterCampaign === 'email_only') params.email_only = true
+      else if (filterCampaign) params.campaign_id = filterCampaign
       if (filterStatus) params.status = filterStatus
       const res = await retryProspects(params)
       alert(`${res.reset} prospectos marcados para reintento.`)
@@ -532,12 +534,16 @@ export default function Prospects() {
   }
 
   const handleDeleteAll = async () => {
-    const scope = filterCampaign
-      ? `los ${prospects.length} prospectos de esta campaña`
-      : `TODOS los ${prospects.length} prospectos`
+    const scope = filterCampaign === 'email_only'
+      ? `los ${prospects.length} contactos de email`
+      : filterCampaign
+        ? `los ${prospects.length} prospectos de esta campaña`
+        : `TODOS los ${prospects.length} prospectos`
     if (!confirm(`¿Eliminar ${scope}? Esta acción no se puede deshacer.`)) return
     try {
-      const params = filterCampaign ? { campaign_id: filterCampaign } : {}
+      const params = filterCampaign === 'email_only'
+        ? { email_only: true }
+        : filterCampaign ? { campaign_id: filterCampaign } : {}
       const res = await deleteAllProspects(params)
       alert(`${res.deleted} prospectos eliminados.`)
       load()
@@ -598,6 +604,7 @@ export default function Prospects() {
       <div className="flex gap-3 flex-wrap items-center">
         <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-full sm:w-auto">
           <option value="">Todas las campañas</option>
+          <option value="email_only">Contactos de email</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="z-input w-full sm:w-auto">

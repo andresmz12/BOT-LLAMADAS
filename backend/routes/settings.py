@@ -5,14 +5,14 @@ import os
 import asyncio
 import base64 as _b64
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
 from sqlmodel import Session, select
 from sqlalchemy import desc, func
 from database import get_session
-from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog
+from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent
 from routes.auth import get_current_user, require_write_access, require_superadmin
 
 APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")
@@ -406,7 +406,7 @@ async def bulk_send_email(
 
     from services.sendgrid_service import _fill, _build_html, DEFAULT_SUBJECT
     from sendgrid import SendGridAPIClient
-    from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
+    from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition, CustomArg
 
     templates = {}
     if org.email_templates:
@@ -467,6 +467,10 @@ async def bulk_send_email(
                 subject=subject,
                 html_content=html_body,
             )
+            message.custom_arg = [
+                CustomArg(key="org_id", value=str(org.id)),
+                CustomArg(key="template_key", value=data.template_key),
+            ]
             if att_b64 and att_name:
                 ext = att_name.rsplit(".", 1)[-1].lower()
                 mime = "application/pdf" if ext == "pdf" else f"image/{ext}"
@@ -720,6 +724,73 @@ async def import_email_contacts(
 
     session.commit()
     return {"imported": imported, "skipped": skipped, "errors": errors[:10]}
+
+
+@router.post("/email/events")
+async def sendgrid_events(
+    request: Request,
+    session: Session = Depends(get_session),
+):
+    """Public endpoint that receives SendGrid event webhooks (no auth required)."""
+    try:
+        body = await request.json()
+    except Exception:
+        return {"ok": False}
+
+    if not isinstance(body, list):
+        body = [body]
+
+    for event in body:
+        try:
+            event_type = event.get("event", "")
+            prospect_email = event.get("email", "")
+            org_id_str = event.get("org_id") or (event.get("unique_args") or {}).get("org_id", "")
+            template_key = event.get("template_key") or (event.get("unique_args") or {}).get("template_key", "")
+            sg_event_id = event.get("sg_event_id") or ""
+            sg_message_id = event.get("sg_message_id") or ""
+            url = event.get("url") or ""
+
+            if not prospect_email or not org_id_str:
+                continue
+
+            org_id = int(org_id_str)
+
+            # Deduplicate by sg_event_id
+            if sg_event_id:
+                existing = session.exec(
+                    select(EmailEvent).where(EmailEvent.sg_event_id == sg_event_id)
+                ).first()
+                if existing:
+                    continue
+
+            ev = EmailEvent(
+                organization_id=org_id,
+                prospect_email=prospect_email,
+                event_type=event_type,
+                template_key=template_key or None,
+                sg_message_id=sg_message_id or None,
+                sg_event_id=sg_event_id or None,
+                url=url or None,
+            )
+            session.add(ev)
+
+            # If unsubscribe event, mark prospect
+            if event_type in ("unsubscribe", "spamreport"):
+                prospect = session.exec(
+                    select(Prospect).where(
+                        Prospect.organization_id == org_id,
+                        Prospect.email == prospect_email,
+                    )
+                ).first()
+                if prospect:
+                    prospect.email_unsubscribed = True
+                    session.add(prospect)
+
+        except Exception:
+            continue
+
+    session.commit()
+    return {"ok": True}
 
 
 @router.get("/crm/logs")
