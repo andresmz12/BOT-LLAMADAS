@@ -1,6 +1,6 @@
 import os
 from sqlmodel import SQLModel, create_engine, Session, select
-from models import AgentConfig, Organization, User, WebhookLog  # noqa: F401 — ensures table is registered
+from models import AgentConfig, Organization, User, WebhookLog, EmailSendLog  # noqa: F401 — ensures table is registered
 
 _raw_url = os.getenv("DATABASE_URL", "sqlite:///./calls.db")
 # Railway PostgreSQL URLs start with "postgres://" but SQLAlchemy requires "postgresql://"
@@ -50,10 +50,21 @@ def run_migrations():
 
         if "prospect" in tables:
             prospect_cols = {c["name"] for c in insp.get_columns("prospect")}
+            prospect_new = {
+                "email": "VARCHAR(255)",
+                "website": "VARCHAR(500)",
+                "place_id": "VARCHAR(255)",
+                "last_review_at": "TIMESTAMP",
+                "quality_score": "INTEGER",
+                "email_unsubscribed": "BOOLEAN DEFAULT FALSE",
+                "last_email_sent_at": "TIMESTAMP",
+                "email_send_count": "INTEGER DEFAULT 0",
+            }
             with engine.begin() as conn:
-                if "email" not in prospect_cols:
-                    conn.execute(text("ALTER TABLE prospect ADD COLUMN email VARCHAR(255)"))
-                    log.info("Migration: added prospect.email")
+                for col, col_type in prospect_new.items():
+                    if col not in prospect_cols:
+                        conn.execute(text(f"ALTER TABLE prospect ADD COLUMN {col} {col_type}"))
+                        log.info(f"Migration: added prospect.{col}")
 
         if "call" in tables:
             call_cols = {c["name"] for c in insp.get_columns("call")}
@@ -80,6 +91,7 @@ def run_migrations():
 
         if "organization" in tables:
             org_cols = {c["name"] for c in insp.get_columns("organization")}
+            is_pg = not DATABASE_URL.startswith("sqlite")
             org_new = {
                 "crm_webhook_url": "VARCHAR(500)",
                 "crm_webhook_enabled": "BOOLEAN DEFAULT FALSE",
@@ -96,6 +108,18 @@ def run_migrations():
                 "whatsapp_enabled": "BOOLEAN DEFAULT FALSE",
                 "apify_enabled": "BOOLEAN DEFAULT FALSE",
                 "apify_api_token": "TEXT",
+                "email_enabled": "BOOLEAN DEFAULT FALSE",
+                "sendgrid_api_key": "TEXT",
+                "email_from": "VARCHAR(255)",
+                "email_from_name": "VARCHAR(255)",
+                "email_send_on_interested": "BOOLEAN DEFAULT TRUE",
+                "email_send_on_callback": "BOOLEAN DEFAULT FALSE",
+                "email_send_on_voicemail": "BOOLEAN DEFAULT FALSE",
+                "email_send_on_not_interested": "BOOLEAN DEFAULT FALSE",
+                "email_templates": "TEXT",
+                "email_attachment": "BYTEA" if is_pg else "BLOB",
+                "email_attachment_name": "VARCHAR(255)",
+                "email_send_delay_ms": "INTEGER DEFAULT 0",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():

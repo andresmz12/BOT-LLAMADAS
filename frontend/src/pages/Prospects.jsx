@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
-import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon, ClockIcon, ArrowDownTrayIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon, ClockIcon, ArrowDownTrayIcon, MagnifyingGlassIcon, SparklesIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
 import UpgradeBanner from '../components/UpgradeBanner'
 import CallDetailModal from '../components/CallDetailModal'
-import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus, getCalls, searchApifyProspects } from '../api/client'
+import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus, getCalls, searchApifyProspects, expandKeywords } from '../api/client'
 import { exportToCsv } from '../utils/exportCsv'
 import { fmtDate } from '../utils/date'
 
@@ -169,14 +169,47 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
     exclude_chains: true,
     dedupe_by_brand: true,
     min_reviews: 0,
+    max_reviews: 0,
     min_rating: 0,
     skip_closed: true,
     require_phone: true,
     language: 'en',
+    radius_zip: '',
+    radius_miles: 0,
+    fresh_days: 0,
+    website_filter: 'any',
+    skip_existing_in_org: true,
   })
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
+  const [expanding, setExpanding] = useState(false)
+  const [variants, setVariants] = useState([])
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const expandWithAI = async () => {
+    const seed = form.search_term.trim()
+    if (!seed) {
+      alert('Escribe primero un término base, luego pulsa expandir.')
+      return
+    }
+    setExpanding(true)
+    try {
+      const res = await expandKeywords({ seed: seed.split(',')[0].trim(), language: form.language })
+      setVariants(res.variants || [])
+    } catch (err) {
+      alert(`No se pudieron generar variantes: ${err.response?.data?.detail || err.message}`)
+    } finally {
+      setExpanding(false)
+    }
+  }
+
+  const toggleVariant = (v) => {
+    const current = form.search_term.split(',').map(s => s.trim()).filter(Boolean)
+    const exists = current.some(c => c.toLowerCase() === v.toLowerCase())
+    const next = exists ? current.filter(c => c.toLowerCase() !== v.toLowerCase()) : [...current, v]
+    set('search_term', next.join(', '))
+  }
+  const isSelected = (v) => form.search_term.split(',').map(s => s.trim().toLowerCase()).includes(v.toLowerCase())
 
   const submit = async (e) => {
     e.preventDefault()
@@ -189,11 +222,21 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
         max_results: Number(form.max_results),
         min_rating: Number(form.min_rating),
         min_reviews: Number(form.min_reviews),
+        max_reviews: Number(form.max_reviews),
+        radius_miles: Number(form.radius_miles),
+        fresh_days: Number(form.fresh_days),
       })
       setResult(res)
       onImported()
     } catch (err) {
-      alert('Error: ' + (err.response?.data?.detail || err.message))
+      const detail = err.response?.data?.detail || err.message || 'Error desconocido'
+      const isTokenError = detail.includes('user-or-token-not-found') ||
+        detail.toLowerCase().includes('authentication token') ||
+        detail.toLowerCase().includes('token de apify') ||
+        detail.toLowerCase().includes('token no configurado')
+      alert(isTokenError
+        ? 'Token de Apify inválido o no configurado.\n\nVe a Admin Panel → Organizaciones → edita tu organización → sección "Búsqueda con IA" → actualiza el token de Apify.'
+        : `Error: ${detail}`)
     } finally { setLoading(false) }
   }
 
@@ -212,15 +255,40 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
           {/* Search */}
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-300 mb-1">¿Qué tipo de negocio buscas? *</label>
-              <input required value={form.search_term} onChange={e => set('search_term', e.target.value)}
-                placeholder="ej: tiendas de abarrotes, talleres mecánicos, dentistas"
-                className="z-input" />
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                ¿Qué tipo de negocio buscas? *
+                <span className="text-slate-500 font-normal ml-1">(separa varios términos por coma)</span>
+              </label>
+              <div className="flex gap-2">
+                <input required value={form.search_term} onChange={e => set('search_term', e.target.value)}
+                  className="z-input flex-1" />
+                <button type="button" onClick={expandWithAI} disabled={expanding}
+                  className="px-3 py-2 rounded-lg bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-semibold hover:bg-purple-500/30 disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap">
+                  <SparklesIcon className={`w-4 h-4 ${expanding ? 'animate-spin' : ''}`} />
+                  {expanding ? 'Pensando…' : 'Expandir con IA'}
+                </button>
+              </div>
+              <p className="text-xs text-slate-600 mt-1">Captura todas las variantes que usa la gente para describir el mismo servicio</p>
+              {variants.length > 0 && (
+                <div className="mt-2 p-3 bg-purple-500/5 border border-purple-500/20 rounded-lg">
+                  <p className="text-xs text-purple-300 mb-2">Sugerencias de IA — pulsa para agregar/quitar:</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {variants.map(v => (
+                      <button key={v} type="button" onClick={() => toggleVariant(v)}
+                        className={`px-2 py-1 rounded-md text-xs border transition ${isSelected(v) ? 'bg-purple-500/30 border-purple-500 text-white' : 'bg-z-card border-z-border text-slate-300 hover:border-purple-500/40'}`}>
+                        {isSelected(v) ? '✓ ' : '+ '}{v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Ciudad o estado *</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Ciudad o estado *
+                <span className="text-slate-500 font-normal ml-1">(varios separados por coma)</span>
+              </label>
               <input required value={form.location} onChange={e => set('location', e.target.value)}
-                placeholder="ej: Chicago IL, Dallas TX"
                 className="z-input" />
             </div>
             <div>
@@ -233,9 +301,29 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
             <div className="col-span-2">
               <label className="block text-sm font-medium text-slate-300 mb-1">Zona específica <span className="text-slate-500 font-normal">(opcional)</span></label>
               <input value={form.zone} onChange={e => set('zone', e.target.value)}
-                placeholder="ej: Pilsen, Logan Square, ZIP 60608"
                 className="z-input" />
               <p className="text-xs text-slate-600 mt-1">Limita la búsqueda a un barrio o código postal específico</p>
+            </div>
+            <div className="col-span-2 border border-z-border rounded-xl p-3 bg-z-card/40">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Radio geográfico (opcional, anula ciudad/estado)</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">ZIP / código postal</label>
+                  <input value={form.radius_zip} onChange={e => set('radius_zip', e.target.value)} className="z-input" />
+                </div>
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">Radio</label>
+                  <select value={form.radius_miles} onChange={e => set('radius_miles', e.target.value)} className="z-input">
+                    <option value={0}>Sin radio</option>
+                    <option value={5}>5 millas</option>
+                    <option value={10}>10 millas</option>
+                    <option value={20}>20 millas</option>
+                    <option value={30}>30 millas</option>
+                    <option value={50}>50 millas</option>
+                  </select>
+                </div>
+              </div>
+              <p className="text-xs text-slate-600 mt-2">Útil si tu cliente cubre solo cierto territorio. Más preciso que ciudad/estado.</p>
             </div>
             <div className="col-span-2">
               <label className="flex items-center gap-2 cursor-pointer">
@@ -256,7 +344,6 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
                 <span className="text-slate-500 font-normal ml-1">(separadas por coma)</span>
               </label>
               <input value={form.exclude_keywords} onChange={e => set('exclude_keywords', e.target.value)}
-                placeholder="ej: corp, inc, llc, chain, franchise, group"
                 className="z-input" />
               <p className="text-xs text-slate-600 mt-1">Se filtrará cualquier negocio cuyo nombre contenga estas palabras</p>
             </div>
@@ -273,6 +360,16 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
                 </select>
               </div>
               <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Máximo de reseñas <span className="text-slate-500 font-normal">(filtra corporaciones)</span></label>
+                <select value={form.max_reviews} onChange={e => set('max_reviews', e.target.value)} className="z-input">
+                  <option value={0}>Sin máximo</option>
+                  <option value={200}>Hasta 200</option>
+                  <option value={500}>Hasta 500</option>
+                  <option value={1000}>Hasta 1,000</option>
+                  <option value={2000}>Hasta 2,000</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Rating mínimo en Google</label>
                 <select value={form.min_rating} onChange={e => set('min_rating', e.target.value)} className="z-input">
                   <option value={0}>Sin mínimo</option>
@@ -280,6 +377,24 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
                   <option value={3.5}>3.5+ ⭐</option>
                   <option value={4}>4.0+ ⭐</option>
                   <option value={4.5}>4.5+ ⭐</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Actividad reciente <span className="text-slate-500 font-normal">(última reseña)</span></label>
+                <select value={form.fresh_days} onChange={e => set('fresh_days', e.target.value)} className="z-input">
+                  <option value={0}>Cualquiera</option>
+                  <option value={30}>Últimos 30 días</option>
+                  <option value={90}>Últimos 90 días</option>
+                  <option value={180}>Últimos 6 meses</option>
+                  <option value={365}>Último año</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-slate-300 mb-1">Sitio web</label>
+                <select value={form.website_filter} onChange={e => set('website_filter', e.target.value)} className="z-input">
+                  <option value="any">Cualquiera</option>
+                  <option value="without">Solo sin sitio web (necesitan digitalización)</option>
+                  <option value="with">Solo con sitio web (más establecidos)</option>
                 </select>
               </div>
             </div>
@@ -294,9 +409,9 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
             <div className="space-y-2">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.exclude_chains} onChange={e => set('exclude_chains', e.target.checked)} className="w-4 h-4 accent-purple-500" />
-                <span className="text-sm text-slate-300">Excluir cadenas y franquicias conocidas</span>
-                <span className="text-xs text-slate-500">(Walmart, McDonald's, Starbucks…)</span>
+                <span className="text-sm text-slate-300">Excluir cadenas, franquicias y grandes paqueterías</span>
               </label>
+              <p className="text-xs text-slate-600 ml-6 -mt-1">UPS Store, FedEx, DHL, USPS, Walmart, McDonald's, etc.</p>
               <label className="flex items-center gap-2 cursor-pointer">
                 <input type="checkbox" checked={form.skip_closed} onChange={e => set('skip_closed', e.target.checked)} className="w-4 h-4 accent-purple-500" />
                 <span className="text-sm text-slate-300">Excluir negocios permanentemente cerrados</span>
@@ -305,6 +420,11 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
                 <input type="checkbox" checked={form.require_phone} onChange={e => set('require_phone', e.target.checked)} className="w-4 h-4 accent-purple-500" />
                 <span className="text-sm text-slate-300">Solo importar si tienen número de teléfono</span>
               </label>
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={form.skip_existing_in_org} onChange={e => set('skip_existing_in_org', e.target.checked)} className="w-4 h-4 accent-purple-500" />
+                <span className="text-sm text-slate-300">No importar prospectos que ya existen en mi organización</span>
+              </label>
+              <p className="text-xs text-slate-600 ml-6 -mt-1">Evita duplicados entre campañas — no llamarás 3 veces al mismo número</p>
             </div>
           </div>
 
@@ -329,7 +449,12 @@ function ApifySearchModal({ campaigns, onClose, onImported }) {
               <p>Encontrados: {result.total_found} · Importados: <span className="font-bold">{result.imported}</span></p>
               {result.skipped_no_phone > 0 && <p className="text-slate-500">Sin teléfono: {result.skipped_no_phone}</p>}
               {result.skipped_no_reviews > 0 && <p className="text-slate-500">Sin suficientes reseñas: {result.skipped_no_reviews}</p>}
+              {result.skipped_too_many_reviews > 0 && <p className="text-slate-500">Demasiadas reseñas (corporación): {result.skipped_too_many_reviews}</p>}
+              {result.skipped_low_rating > 0 && <p className="text-slate-500">Rating bajo: {result.skipped_low_rating}</p>}
               {result.skipped_duplicates > 0 && <p className="text-slate-500">Sucursales duplicadas eliminadas: {result.skipped_duplicates}</p>}
+              {result.skipped_existing > 0 && <p className="text-slate-500">Ya existían en tu organización: {result.skipped_existing}</p>}
+              {result.skipped_stale > 0 && <p className="text-slate-500">Sin actividad reciente: {result.skipped_stale}</p>}
+              {result.skipped_website > 0 && <p className="text-slate-500">No coinciden con filtro de sitio web: {result.skipped_website}</p>}
               {result.skipped_excluded > 0 && <p className="text-slate-500">Filtrados por exclusión: {result.skipped_excluded}</p>}
             </div>
           )}
@@ -497,7 +622,7 @@ export default function Prospects() {
         <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-black/20">
             <tr>
-              {['Nombre', 'Empresa', 'Teléfono', 'Campaña', 'Estado', 'Intentos', 'Última llamada', 'Acciones'].map(h => (
+              {['Nombre', 'Empresa', 'Teléfono', 'Score', 'Campaña', 'Estado', 'Intentos', 'Última llamada', 'Email', 'Acciones'].map(h => (
                 <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
               ))}
             </tr>
@@ -508,11 +633,34 @@ export default function Prospects() {
                 <td className="px-6 py-3 font-medium text-slate-200">{p.name}</td>
                 <td className="px-6 py-3 text-slate-400">{p.company || '—'}</td>
                 <td className="px-6 py-3 text-slate-300 font-mono text-xs">{p.phone}</td>
+                <td className="px-6 py-3">
+                  {p.quality_score != null ? (
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold ${p.quality_score >= 75 ? 'bg-green-500/20 text-green-300' : p.quality_score >= 50 ? 'bg-yellow-500/20 text-yellow-300' : 'bg-slate-500/20 text-slate-400'}`}>
+                      {p.quality_score}
+                    </span>
+                  ) : <span className="text-slate-600 text-xs">—</span>}
+                </td>
                 <td className="px-6 py-3 text-slate-400 text-xs">{campaignName(p.campaign_id)}</td>
                 <td className="px-6 py-3"><StatusBadge status={p.status} /></td>
                 <td className="px-6 py-3 text-slate-400">{p.call_attempts}</td>
                 <td className="px-6 py-3 text-slate-500 text-xs">
                   {fmtDate(p.last_called_at)}
+                </td>
+                <td className="px-6 py-3">
+                  {p.email_unsubscribed ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-slate-600" title="Desuscrito">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-600 inline-block" /> Des.
+                    </span>
+                  ) : p.last_email_sent_at ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-blue-400" title={`${p.email_send_count || 1} email(s) enviado(s)\nÚltimo: ${fmtDate(p.last_email_sent_at)}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+                      {fmtDate(p.last_email_sent_at)}
+                    </span>
+                  ) : p.email ? (
+                    <span className="text-xs text-slate-600">—</span>
+                  ) : (
+                    <span className="text-xs text-slate-700 italic">Sin email</span>
+                  )}
                 </td>
                 <td className="px-6 py-3">
                   <div className="flex items-center gap-2">
@@ -531,7 +679,7 @@ export default function Prospects() {
               </tr>
             ))}
             {prospects.length === 0 && (
-              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-500">No hay prospectos</td></tr>
+              <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-500">No hay prospectos</td></tr>
             )}
           </tbody>
         </table>

@@ -49,6 +49,7 @@ export const createUser = (data) => api.post('/admin/users', data).then(r => r.d
 export const updateUser = (id, data) => api.put(`/admin/users/${id}`, data).then(r => r.data)
 export const deleteUser = (id) => api.delete(`/admin/users/${id}`).then(r => r.data)
 export const upgradeOrg = (id) => api.post(`/admin/organizations/${id}/upgrade`).then(r => r.data)
+export const testApifyToken = (id) => api.post(`/admin/organizations/${id}/apify/test`).then(r => r.data)
 
 // Agents
 export const getAgents = () => api.get('/agents').then(r => r.data)
@@ -87,6 +88,7 @@ export const deleteAllProspects = (params) => api.delete('/prospects', { params 
 export const retryProspects = (params) => api.post('/prospects/retry', null, { params }).then(r => r.data)
 export const callProspect = (id) => api.post(`/prospects/${id}/call`).then(r => r.data)
 export const searchApifyProspects = (data) => api.post('/prospects/search-apify', data).then(r => r.data)
+export const expandKeywords = (data) => api.post('/prospects/expand-keywords', data).then(r => r.data)
 
 // Leads
 export const getLeads = (params) => api.get('/leads', { params }).then(r => r.data)
@@ -109,6 +111,25 @@ export const getCampaignStats = (id) => api.get(`/stats/${id}`).then(r => r.data
 // Settings
 export const getSettings = () => api.get('/settings').then(r => r.data)
 export const saveSettings = (data) => api.post('/settings', data).then(r => r.data)
+
+// Email marketing settings
+export const getEmailSettings = () => api.get('/settings/email').then(r => r.data)
+export const saveEmailSettings = (data) => api.post('/settings/email', data).then(r => r.data)
+export const uploadEmailAttachment = (file) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/settings/email/attachment', form).then(r => r.data)
+}
+export const sendTestEmail = (data) => api.post('/settings/email/test', data).then(r => r.data)
+export const bulkSendEmail = (data) => api.post('/settings/email/bulk-send', data).then(r => r.data)
+export const getEmailHistory = () => api.get('/settings/email/history').then(r => r.data)
+export const validateEmailRecipients = (params) => api.get('/settings/email/validate-recipients', { params }).then(r => r.data)
+export const uploadTemplateAttachment = (templateKey, file) => {
+  const form = new FormData()
+  form.append('template_key', templateKey)
+  form.append('file', file)
+  return api.post('/settings/email/template-attachment', form).then(r => r.data)
+}
 
 // Admin — CRM
 export const testCRMWebhook = (orgId) =>

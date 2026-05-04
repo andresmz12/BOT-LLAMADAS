@@ -3,7 +3,7 @@ import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, EyeIcon } from '@heroicons/
 import {
   getOrganizations, createOrganization, updateOrganization, deleteOrganization,
   getUsers, createUser, updateUser, deleteUser,
-  testCRMWebhook, upgradeOrg, getOrgSecrets,
+  testCRMWebhook, upgradeOrg, getOrgSecrets, testApifyToken,
 } from '../api/client'
 import SecretInput from '../components/SecretInput'
 
@@ -309,6 +309,10 @@ function OrgModal({ org, onClose, onSaved }) {
     whatsapp_verify_token: org.whatsapp_verify_token || '',
     apify_enabled: org.apify_enabled || false,
     apify_api_token: org.apify_api_token || '',
+    email_enabled: org.email_enabled || false,
+    sendgrid_api_key: org.sendgrid_api_key || '',
+    email_from: org.email_from || '',
+    email_from_name: org.email_from_name || '',
   } : {
     name: '', plan: 'pro', retell_api_key: '', retell_phone_number: '',
     anthropic_api_key: '', is_active: true,
@@ -319,12 +323,18 @@ function OrgModal({ org, onClose, onSaved }) {
     whatsapp_access_token: '', whatsapp_verify_token: '',
     apify_enabled: false,
     apify_api_token: '',
+    email_enabled: false,
+    sendgrid_api_key: '',
+    email_from: '',
+    email_from_name: '',
   })
   const [loading, setLoading] = useState(false)
   const [crmAccordionOpen, setCrmAccordionOpen] = useState(false)
   const [testResult, setTestResult] = useState(null)
   const [testLoading, setTestLoading] = useState(false)
   const [revealLoading, setRevealLoading] = useState(false)
+  const [apifyTestResult, setApifyTestResult] = useState(null)
+  const [apifyTestLoading, setApifyTestLoading] = useState(false)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
   const setCrmExtra = (key, value) => set('crm_extra_config', { ...(form.crm_extra_config || {}), [key]: value })
@@ -470,14 +480,89 @@ function OrgModal({ org, onClose, onSaved }) {
                 <SecretInput
                   label="Apify API Token"
                   value={form.apify_api_token || ''}
-                  onChange={e => set('apify_api_token', e.target.value)}
+                  onChange={e => { set('apify_api_token', e.target.value); setApifyTestResult(null) }}
                   placeholder="apify_api_xxxxxxxxxxxxxxxxxxxx"
                 />
                 <p className="text-xs text-slate-500">
                   Token de la cuenta Apify de esta organización. Si se deja vacío se usará el token global de Railway.
                 </p>
+                {org?.id && (
+                  <div className="space-y-1.5">
+                    <button
+                      type="button"
+                      disabled={apifyTestLoading}
+                      onClick={async () => {
+                        setApifyTestLoading(true)
+                        setApifyTestResult(null)
+                        try {
+                          const res = await testApifyToken(org.id)
+                          setApifyTestResult(res)
+                        } catch {
+                          setApifyTestResult({ ok: false, detail: 'Error de conexión' })
+                        } finally { setApifyTestLoading(false) }
+                      }}
+                      className="z-btn-ghost border border-z-border text-sm disabled:opacity-50"
+                    >
+                      {apifyTestLoading ? 'Probando...' : 'Probar token Apify'}
+                    </button>
+                    {apifyTestResult && (
+                      <div className={`text-xs rounded-lg px-3 py-2 ${
+                        apifyTestResult.ok
+                          ? 'bg-green-500/10 text-green-400 border border-green-500/20'
+                          : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                      }`}>
+                        {apifyTestResult.ok
+                          ? `✓ Token válido — conectado como @${apifyTestResult.username}`
+                          : `✗ Token inválido: ${apifyTestResult.detail}`
+                        }
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
+          </div>
+
+          {/* ── Email Marketing ─────────────────────────────────────────────── */}
+          <div className="border-t border-z-border pt-4 space-y-3">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Email Marketing</h3>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!form.email_enabled}
+                onChange={e => set('email_enabled', e.target.checked)}
+                className="w-4 h-4 accent-blue-500"
+              />
+              <span className="text-sm text-slate-300">Activar envío de emails post-llamada</span>
+            </label>
+            <SecretInput
+              label="SendGrid API Key"
+              value={form.sendgrid_api_key || ''}
+              onChange={e => set('sendgrid_api_key', e.target.value)}
+              placeholder="SG.••••••••"
+            />
+            <p className="text-xs text-slate-500 -mt-1">
+              Clave privada de SendGrid — solo visible para superadmins, nunca expuesta al cliente.
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Email remitente</label>
+              <input
+                value={form.email_from || ''}
+                onChange={e => set('email_from', e.target.value)}
+                placeholder="info@empresa.com"
+                type="email"
+                className="z-input"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Nombre remitente</label>
+              <input
+                value={form.email_from_name || ''}
+                onChange={e => set('email_from_name', e.target.value)}
+                placeholder="Isabella - Mi Empresa"
+                className="z-input"
+              />
+            </div>
           </div>
 
           {/* ── CRM Integration ─────────────────────────────────────────────── */}

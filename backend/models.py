@@ -1,6 +1,7 @@
 from typing import Optional, List
 from datetime import datetime
 from sqlmodel import SQLModel, Field, Relationship
+from sqlalchemy import Column, LargeBinary
 
 
 class Organization(SQLModel, table=True):
@@ -27,6 +28,19 @@ class Organization(SQLModel, table=True):
     whatsapp_enabled: bool = Field(default=False)
     apify_enabled: bool = Field(default=False)
     apify_api_token: Optional[str] = None
+    # Email marketing
+    email_enabled: bool = Field(default=False)
+    sendgrid_api_key: Optional[str] = None
+    email_from: Optional[str] = None
+    email_from_name: Optional[str] = None
+    email_send_on_interested: bool = Field(default=True)
+    email_send_on_callback: bool = Field(default=False)
+    email_send_on_voicemail: bool = Field(default=False)
+    email_send_on_not_interested: bool = Field(default=False)
+    email_templates: Optional[str] = None
+    email_attachment: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary))
+    email_attachment_name: Optional[str] = None
+    email_send_delay_ms: int = Field(default=0)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")
@@ -114,6 +128,14 @@ class Prospect(SQLModel, table=True):
     last_called_at: Optional[datetime] = None
     notes: Optional[str] = None
     organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+    # Apify-sourced enrichment fields
+    website: Optional[str] = None
+    place_id: Optional[str] = Field(default=None, index=True)
+    last_review_at: Optional[datetime] = None
+    quality_score: Optional[int] = None
+    email_unsubscribed: bool = Field(default=False)
+    last_email_sent_at: Optional[datetime] = None
+    email_send_count: int = Field(default=0)
 
     campaign: Optional[Campaign] = Relationship(back_populates="prospects")
     calls: List["Call"] = Relationship(back_populates="prospect")
@@ -168,6 +190,21 @@ class WhatsAppMessage(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     conversation: Optional[WhatsAppConversation] = Relationship(back_populates="messages")
+
+
+class EmailSendLog(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: int = Field(index=True)
+    sent_at: datetime = Field(default_factory=datetime.utcnow)
+    template_key: str = Field(default="")
+    template_subject: Optional[str] = None
+    campaign_id: Optional[int] = None
+    campaign_name: Optional[str] = None
+    total_sent: int = Field(default=0)
+    total_skipped: int = Field(default=0)
+    total_errors: int = Field(default=0)
+    error_details: Optional[str] = None
+    initiated_by: Optional[str] = None
 
 
 class Settings(SQLModel, table=True):
