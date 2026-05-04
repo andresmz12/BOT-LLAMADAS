@@ -2,10 +2,11 @@ import csv
 import io
 import json
 import os
+import uuid
 import asyncio
 import base64 as _b64
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
@@ -13,6 +14,9 @@ from sqlmodel import Session, select
 from sqlalchemy import desc, func
 from database import get_session
 from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList
+
+# In-memory job tracking for bulk sends
+_bulk_jobs: dict[str, dict] = {}
 from routes.auth import get_current_user, require_write_access, require_superadmin
 
 APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")
@@ -393,6 +397,7 @@ class BulkEmailRequest(BaseModel):
 @router.post("/email/bulk-send")
 async def bulk_send_email(
     data: BulkEmailRequest,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
@@ -406,6 +411,7 @@ async def bulk_send_email(
         raise HTTPException(status_code=400, detail="SendGrid no configurado. Pide al administrador que configure la API key.")
 
     # Load prospects — skip unsubscribed
+    from sqlalchemy import nulls_first
     query = select(Prospect).where(
         Prospect.organization_id == current_user.organization_id,
         Prospect.email.is_not(None),
@@ -418,11 +424,10 @@ async def bulk_send_email(
         query = query.where(Prospect.campaign_id == None)  # noqa: E711
     elif data.campaign_id:
         query = query.where(Prospect.campaign_id == data.campaign_id)
-    # Prioritize contacts that have never received an email
-    from sqlalchemy import nulls_first
     query = query.order_by(nulls_first(Prospect.last_email_sent_at.asc()))
     all_prospects = session.exec(query).all()
-    # Deduplicate by email address so the same address is only sent to once
+
+    # Deduplicate by email
     seen_bulk: set[str] = set()
     deduped: list = []
     for p in all_prospects:
@@ -431,17 +436,11 @@ async def bulk_send_email(
             seen_bulk.add(key)
             deduped.append(p)
     all_prospects = deduped
-    total_available = len(all_prospects)
     if not all_prospects:
         raise HTTPException(status_code=400, detail="No hay prospectos con email válido en esta selección")
-    # Apply batch limit
-    prospects = all_prospects[:data.batch_size] if data.batch_size and data.batch_size > 0 else all_prospects
+    prospects_slice = all_prospects[:data.batch_size] if data.batch_size and data.batch_size > 0 else all_prospects
 
-    from services.sendgrid_service import _fill, _build_html, DEFAULT_SUBJECT
-    from sendgrid import SendGridAPIClient
-    from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition, CustomArg
-
-    templates = {}
+    templates: dict = {}
     if org.email_templates:
         try:
             templates = json.loads(org.email_templates)
@@ -449,7 +448,6 @@ async def bulk_send_email(
             pass
     tmpl = templates.get(data.template_key, {})
 
-    # Per-template attachment or global fallback
     att_b64 = tmpl.get("attachment_b64") or ""
     att_name = tmpl.get("attachment_name") or ""
     if not att_b64 and org.email_attachment and org.email_attachment_name:
@@ -458,34 +456,72 @@ async def bulk_send_email(
 
     from_email = (org.email_from or "").strip() or os.getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
     from_name  = (org.email_from_name or "").strip() or "ZyraVoice"
-    delay_s = (org.email_send_delay_ms or 0) / 1000.0
+    delay_s    = (org.email_send_delay_ms or 0) / 1000.0
+
+    # Snapshot prospects as plain dicts so the background task doesn't need the session
+    prospects_data = [
+        {"id": p.id, "email": p.email or "", "name": p.name or "",
+         "company": p.company or "", "phone": p.phone or ""}
+        for p in prospects_slice
+    ]
+
+    job_id = str(uuid.uuid4())[:8]
+    _bulk_jobs[job_id] = {
+        "status": "running",
+        "sent": 0, "skipped": 0,
+        "total": len(prospects_data),
+        "sent_list": [],   # [{name, email}]
+        "failed_list": [], # [{email, error}]
+    }
+
+    background_tasks.add_task(
+        _run_bulk_send_job,
+        job_id=job_id,
+        org_id=current_user.organization_id,
+        user_email=current_user.email,
+        api_key=api_key,
+        from_email=from_email,
+        from_name=from_name,
+        delay_s=delay_s,
+        template_key=data.template_key,
+        tmpl=tmpl,
+        att_b64=att_b64,
+        att_name=att_name,
+        prospects_data=prospects_data,
+        campaign_id=data.campaign_id,
+        email_only=data.email_only or False,
+        email_list_id=data.email_list_id,
+    )
+
+    return {"job_id": job_id, "status": "running", "total": len(prospects_data)}
+
+
+async def _run_bulk_send_job(
+    job_id: str, org_id: int, user_email: str,
+    api_key: str, from_email: str, from_name: str, delay_s: float,
+    template_key: str, tmpl: dict, att_b64: str, att_name: str,
+    prospects_data: list, campaign_id, email_only: bool, email_list_id,
+):
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition, CustomArg
+    from services.sendgrid_service import _fill, _build_html, DEFAULT_SUBJECT
+    from database import engine as _engine
+
+    job = _bulk_jobs[job_id]
     sg = SendGridAPIClient(api_key)
 
-    sent = 0
-    skipped = 0
-    errors = []
-
-    # Resolve campaign name for the log
-    if data.email_only:
-        camp_name = "Contactos de email"
-    elif data.campaign_id:
-        camp = session.get(Campaign, data.campaign_id)
-        camp_name = camp.name if camp else None
-    else:
-        camp_name = None
-
-    for prospect in prospects:
+    for pdata in prospects_data:
         try:
-            unsub = _unsub_url(prospect.id, org.id)
+            unsub = _unsub_url(pdata["id"], org_id)
             tmpl_vars = {
-                "nombre":   prospect.name or "",
-                "empresa":  prospect.company or "",
+                "nombre":   pdata["name"],
+                "empresa":  pdata["company"],
                 "agente":   from_name,
                 "resumen":  "",
-                "telefono": prospect.phone or "",
+                "telefono": pdata["phone"],
                 "fecha":    datetime.utcnow().strftime("%d/%m/%Y"),
             }
-            subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(data.template_key, "Mensaje de ZyraVoice"), tmpl_vars)
+            subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(template_key, "Mensaje"), tmpl_vars)
             color     = tmpl.get("color") or "#4F46E5"
             greeting  = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
             body_text = _fill(tmpl.get("body") or "", tmpl_vars)
@@ -496,13 +532,13 @@ async def bulk_send_email(
 
             message = Mail(
                 from_email=(from_email, from_name),
-                to_emails=prospect.email,
+                to_emails=pdata["email"],
                 subject=subject,
                 html_content=html_body,
             )
             message.custom_arg = [
-                CustomArg(key="org_id", value=str(org.id)),
-                CustomArg(key="template_key", value=data.template_key),
+                CustomArg(key="org_id", value=str(org_id)),
+                CustomArg(key="template_key", value=template_key),
             ]
             if att_b64 and att_name:
                 ext = att_name.rsplit(".", 1)[-1].lower()
@@ -510,39 +546,64 @@ async def bulk_send_email(
                 message.attachment = Attachment(
                     FileContent(att_b64), FileName(att_name), FileType(mime), Disposition("attachment"),
                 )
-            sg.send(message)
 
-            # Update prospect email stats
-            prospect.last_email_sent_at = datetime.utcnow()
-            prospect.email_send_count = (prospect.email_send_count or 0) + 1
-            session.add(prospect)
+            # Run sync SDK call in thread pool so event loop stays unblocked
+            await asyncio.to_thread(sg.send, message)
 
-            sent += 1
+            # Update prospect stats in own session
+            with Session(_engine) as s:
+                p = s.get(Prospect, pdata["id"])
+                if p:
+                    p.last_email_sent_at = datetime.utcnow()
+                    p.email_send_count = (p.email_send_count or 0) + 1
+                    s.add(p)
+                    s.commit()
+
+            job["sent"] += 1
+            job["sent_list"].append({"name": pdata["name"], "email": pdata["email"]})
             if delay_s > 0:
                 await asyncio.sleep(delay_s)
+
         except Exception as e:
-            errors.append({"email": prospect.email, "error": str(e)[:80]})
-            skipped += 1
+            job["failed_list"].append({"email": pdata["email"], "error": str(e)[:80]})
+            job["skipped"] += 1
 
-    session.commit()
+    # Resolve campaign name for log
+    if email_only:
+        camp_name = "Contactos de email"
+    elif campaign_id:
+        from database import engine as _eng2
+        with Session(_eng2) as s:
+            c = s.get(Campaign, campaign_id)
+            camp_name = c.name if c else None
+    else:
+        camp_name = None
 
-    # Save send log
-    log_entry = EmailSendLog(
-        organization_id=current_user.organization_id,
-        template_key=data.template_key,
-        template_subject=tmpl.get("subject") or "",
-        campaign_id=data.campaign_id,
-        campaign_name=camp_name,
-        total_sent=sent,
-        total_skipped=skipped,
-        total_errors=len(errors),
-        error_details=json.dumps(errors) if errors else None,
-        initiated_by=current_user.email,
-    )
-    session.add(log_entry)
-    session.commit()
+    with Session(_engine) as s:
+        log_entry = EmailSendLog(
+            organization_id=org_id,
+            template_key=template_key,
+            template_subject=tmpl.get("subject") or "",
+            campaign_id=campaign_id,
+            campaign_name=camp_name,
+            total_sent=job["sent"],
+            total_skipped=job["skipped"],
+            total_errors=len(job["failed_list"]),
+            error_details=json.dumps(job["failed_list"]) if job["failed_list"] else None,
+            initiated_by=user_email,
+        )
+        s.add(log_entry)
+        s.commit()
 
-    return {"sent": sent, "skipped": skipped, "errors": errors[:5], "total_available": total_available, "batch_size": data.batch_size}
+    job["status"] = "done"
+
+
+@router.get("/email/bulk-send/status/{job_id}")
+def bulk_send_status(job_id: str, current_user: User = Depends(get_current_user)):
+    job = _bulk_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job no encontrado o expirado")
+    return job
 
 
 @router.get("/email/history")

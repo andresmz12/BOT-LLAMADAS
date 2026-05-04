@@ -6,7 +6,7 @@ import {
 } from '@heroicons/react/24/outline'
 import {
   getEmailSettings, saveEmailSettings, uploadEmailAttachment,
-  sendTestEmail, bulkSendEmail, getCampaigns,
+  sendTestEmail, bulkSendEmail, getBulkSendStatus, getCampaigns,
   getEmailHistory, validateEmailRecipients, uploadTemplateAttachment,
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
   getEmailLists, createEmailList, deleteEmailList,
@@ -169,6 +169,9 @@ export default function EmailMarketing() {
   const [recipientDetailLoading, setRecipientDetailLoading] = useState(false)
   const [recipientDetailOpen, setRecipientDetailOpen] = useState(false)
   const [recipientDetailTab, setRecipientDetailTab] = useState('will_receive')
+  const [bulkJobId, setBulkJobId] = useState(null)
+  const [bulkJobProgress, setBulkJobProgress] = useState(null) // live job status
+  const bulkPollRef = useRef(null)
 
   // Test send
   const [testAddr, setTestAddr] = useState('')
@@ -368,12 +371,34 @@ export default function EmailMarketing() {
   }
 
   const sendBulk = async () => {
-    setBulkLoading(true); setBulkResult(null); setConfirmStep(false); setErrorsOpen(false)
+    setBulkLoading(true); setBulkResult(null); setConfirmStep(false)
+    setErrorsOpen(false); setBulkJobProgress(null); setBulkJobId(null)
+    if (bulkPollRef.current) { clearInterval(bulkPollRef.current); bulkPollRef.current = null }
     try {
       const r = await bulkSendEmail({ ...parseBulkTarget(), template_key: bulkTmpl })
-      setBulkResult(r); loadHistory()
-    } catch (e) { setBulkResult({ error: e.response?.data?.detail || 'Error' }) }
-    finally { setBulkLoading(false) }
+      if (r.job_id) {
+        setBulkJobId(r.job_id)
+        setBulkJobProgress({ status: 'running', sent: 0, skipped: 0, total: r.total, sent_list: [], failed_list: [] })
+        bulkPollRef.current = setInterval(async () => {
+          try {
+            const status = await getBulkSendStatus(r.job_id)
+            setBulkJobProgress(status)
+            if (status.status === 'done' || status.status === 'error') {
+              clearInterval(bulkPollRef.current); bulkPollRef.current = null
+              setBulkLoading(false); loadHistory()
+            }
+          } catch (_) {
+            clearInterval(bulkPollRef.current); bulkPollRef.current = null
+            setBulkLoading(false)
+          }
+        }, 2000)
+      } else {
+        setBulkResult(r); setBulkLoading(false); loadHistory()
+      }
+    } catch (e) {
+      setBulkResult({ error: e.response?.data?.detail || 'Error al iniciar el envío' })
+      setBulkLoading(false)
+    }
   }
 
   const prepareSend = async () => {
@@ -768,17 +793,89 @@ export default function EmailMarketing() {
             </div>
           )}
 
-          {bulkLoading && (
-            <div className="flex items-center justify-center gap-3 py-6 text-slate-400">
-              <svg className="animate-spin w-5 h-5 text-blue-400" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
-              </svg>
-              <span className="text-sm">Enviando emails...</span>
+          {/* ── Live progress panel ── */}
+          {(bulkLoading || bulkJobProgress) && (
+            <div className="rounded-xl border border-z-border bg-white/5 overflow-hidden">
+              <div className="px-4 py-3 border-b border-z-border flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  {bulkLoading && (
+                    <svg className="animate-spin w-4 h-4 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
+                    </svg>
+                  )}
+                  {!bulkLoading && bulkJobProgress?.status === 'done' && (
+                    <CheckCircleIcon className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  )}
+                  <span className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
+                    {bulkLoading ? 'Enviando emails en progreso...' : 'Envío completado'}
+                  </span>
+                </div>
+                {bulkJobProgress && (
+                  <span className="text-sm font-bold text-green-400">
+                    {bulkJobProgress.sent} / {bulkJobProgress.total}
+                  </span>
+                )}
+              </div>
+
+              {bulkJobProgress && (
+                <>
+                  {/* Progress bar */}
+                  <div className="px-4 pt-3 pb-1">
+                    <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div className="h-full bg-green-500 rounded-full transition-all duration-500"
+                        style={{ width: `${bulkJobProgress.total ? (bulkJobProgress.sent / bulkJobProgress.total) * 100 : 0}%` }} />
+                    </div>
+                    <div className="flex justify-between text-xs text-slate-500 mt-1">
+                      <span>{bulkJobProgress.sent} enviados</span>
+                      {bulkJobProgress.skipped > 0 && <span className="text-red-400">{bulkJobProgress.skipped} fallidos</span>}
+                      <span>{bulkJobProgress.total - bulkJobProgress.sent - bulkJobProgress.skipped} pendientes</span>
+                    </div>
+                  </div>
+
+                  {/* Sent emails list */}
+                  {bulkJobProgress.sent_list?.length > 0 && (
+                    <div className="px-4 pb-2">
+                      <p className="text-xs text-slate-500 mb-1 mt-2">Enviados</p>
+                      <div className="max-h-48 overflow-y-auto space-y-0.5 rounded-lg bg-white/[0.03] border border-z-border p-2">
+                        {bulkJobProgress.sent_list.slice().reverse().map((item, i) => (
+                          <div key={i} className="flex items-center gap-2 text-xs py-0.5">
+                            <CheckCircleIcon className="w-3 h-3 text-green-400 flex-shrink-0" />
+                            <span className="text-slate-300 truncate">{item.name || item.email}</span>
+                            <span className="text-slate-500 truncate">{item.name ? item.email : ''}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Failed emails */}
+                  {bulkJobProgress.failed_list?.length > 0 && (
+                    <div className="px-4 pb-3 border-t border-z-border mt-1">
+                      <p className="text-xs text-red-400 mb-1 mt-2">Fallidos</p>
+                      <div className="max-h-32 overflow-y-auto space-y-0.5">
+                        {bulkJobProgress.failed_list.map((item, i) => (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span className="text-slate-400 font-mono truncate">{item.email}</span>
+                            <span className="text-red-400 truncate max-w-[180px] ml-2">{item.error}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {!bulkLoading && bulkJobProgress?.status === 'done' && (
+                <div className="px-4 py-3 border-t border-z-border">
+                  <button onClick={() => { setBulkJobProgress(null); setBulkJobId(null) }}
+                    className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Nuevo envío</button>
+                </div>
+              )}
             </div>
           )}
 
-          {bulkResult && !bulkLoading && (
+          {bulkResult && !bulkLoading && !bulkJobProgress && (
             <div className={`rounded-xl border overflow-hidden ${bulkResult.error ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/30 bg-green-500/5'}`}>
               <div className="px-5 py-4 flex items-center gap-4">
                 <div className={`text-4xl font-black ${bulkResult.error ? 'text-red-400' : 'text-green-400'}`}>
@@ -793,37 +890,6 @@ export default function EmailMarketing() {
                   </p>
                 </div>
               </div>
-              {!bulkResult.error && bulkResult.sent + (bulkResult.skipped || 0) > 0 && (
-                <div className="px-5 pb-3">
-                  <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-green-400 rounded-full"
-                      style={{ width: `${(bulkResult.sent / (bulkResult.sent + (bulkResult.skipped || 0))) * 100}%` }} />
-                  </div>
-                  <div className="flex justify-between text-xs text-slate-500 mt-1">
-                    <span>{bulkResult.sent} enviados</span>
-                    {bulkResult.skipped > 0 && <span>{bulkResult.skipped} fallidos</span>}
-                  </div>
-                </div>
-              )}
-              {bulkResult.errors?.length > 0 && (
-                <div className="border-t border-red-500/20">
-                  <button onClick={() => setErrorsOpen(p => !p)}
-                    className="flex items-center gap-1.5 w-full px-5 py-2 text-xs text-red-400 hover:bg-red-500/5 transition-colors">
-                    <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${errorsOpen ? 'rotate-180' : ''}`} />
-                    Ver detalle de errores ({bulkResult.errors.length})
-                  </button>
-                  {errorsOpen && (
-                    <div className="px-5 pb-3 space-y-1">
-                      {bulkResult.errors.map((e, i) => (
-                        <div key={i} className="flex justify-between text-xs">
-                          <span className="text-slate-400 font-mono">{e.email}</span>
-                          <span className="text-red-400 truncate max-w-[200px]">{e.error}</span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
               <div className="px-5 py-3 border-t border-white/5">
                 <button onClick={() => { setBulkResult(null); setErrorsOpen(false) }}
                   className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Nuevo envío</button>

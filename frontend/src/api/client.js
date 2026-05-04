@@ -122,6 +122,7 @@ export const uploadEmailAttachment = (file) => {
 }
 export const sendTestEmail = (data) => api.post('/settings/email/test', data).then(r => r.data)
 export const bulkSendEmail = (data) => api.post('/settings/email/bulk-send', data).then(r => r.data)
+export const getBulkSendStatus = (jobId) => api.get(`/settings/email/bulk-send/status/${jobId}`).then(r => r.data)
 export const getEmailHistory = () => api.get('/settings/email/history').then(r => r.data)
 export const getEmailContactsCount = () => api.get('/settings/email/email-contacts-count').then(r => r.data)
 export const importEmailContacts = (file) => {
