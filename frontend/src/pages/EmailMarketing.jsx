@@ -994,9 +994,7 @@ export default function EmailMarketing() {
         </div>
       )}
 
-    </div>
-
-    {/* Modal: vista previa de destinatarios */}
+      {/* Modal: vista previa de destinatarios */}
     {recipientDetailOpen && recipientDetail && (
       <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
         <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
@@ -1090,5 +1088,6 @@ export default function EmailMarketing() {
         </div>
       </div>
     )}
+    </div>
   )
 }
