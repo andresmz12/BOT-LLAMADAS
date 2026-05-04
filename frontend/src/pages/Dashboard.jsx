@@ -81,24 +81,10 @@ function EmailDashboard({ selectedOrg }) {
       </div>
 
       {noData ? (
-        <div className="bg-z-card rounded-xl border border-z-border p-8 text-center space-y-3">
-          <EnvelopeIcon className="w-10 h-10 text-slate-600 mx-auto" />
+        <div className="bg-z-card rounded-xl border border-z-border p-8 text-center">
+          <EnvelopeIcon className="w-10 h-10 text-slate-600 mx-auto mb-3" />
           <p className="text-slate-400 font-medium">No hay datos de email todavía</p>
-          <p className="text-slate-600 text-sm max-w-md mx-auto">
-            Cuando envíes emails desde Email Marketing, aquí verás métricas de entrega, aperturas y clicks.
-          </p>
-          <div className="mt-4 p-4 bg-blue-500/5 border border-blue-500/20 rounded-lg text-left max-w-md mx-auto">
-            <p className="text-xs text-blue-300 font-semibold mb-1">Para activar tracking de aperturas y clicks:</p>
-            <p className="text-xs text-slate-400">
-              Configura el webhook de SendGrid apuntando a:
-            </p>
-            <code className="text-xs text-green-300 block mt-1 break-all">
-              {window.location.origin}/api/settings/email/events
-            </code>
-            <p className="text-xs text-slate-500 mt-1">
-              En SendGrid → Settings → Mail Settings → Event Webhook
-            </p>
-          </div>
+          <p className="text-slate-600 text-sm mt-1">Cuando envíes emails desde Email Marketing, aquí verás las métricas.</p>
         </div>
       ) : (
         <>
