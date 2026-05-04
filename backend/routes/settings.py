@@ -660,7 +660,7 @@ h1{{color:#111827;font-size:22px;margin-bottom:8px}}p{{color:#6b7280;font-size:1
 
 @router.post("/email/template-attachment")
 async def upload_template_attachment(
-    template_key: str,
+    template_key: str = Form(...),
     file: UploadFile = File(...),
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
