@@ -122,6 +122,35 @@ def _fill(text: str, variables: dict) -> str:
     return text
 
 
+def _format_body(text: str) -> str:
+    """Convert plain text (newlines + '- ' bullets) to email-safe HTML."""
+    import re
+    if not text:
+        return ""
+    parts = []
+    for para in re.split(r'\n{2,}', text.strip()):
+        lines = [l for l in para.split('\n') if l.strip()]
+        if not lines:
+            continue
+        if all(l.strip().startswith('- ') for l in lines):
+            items = ''.join(
+                f'<li style="margin:3px 0;color:#374151;font-size:14px">{l.strip()[2:]}</li>'
+                for l in lines
+            )
+            parts.append(f'<ul style="margin:4px 0 14px;padding-left:20px">{items}</ul>')
+        else:
+            inner = '<br>'.join(l for l in lines)
+            parts.append(f'<p style="margin:0 0 14px;line-height:1.75;color:#374151;font-size:14px">{inner}</p>')
+    return ''.join(parts)
+
+
+def _format_signature(text: str) -> str:
+    """Convert signature plain text to HTML."""
+    if not text:
+        return ""
+    return '<br>'.join(line for line in text.split('\n'))
+
+
 def _build_html(color: str, greeting: str, body: str, cta_text: str, cta_url: str, signature: str, unsubscribe_url: str = "") -> str:
     cta_block = ""
     if cta_text and cta_url:
@@ -136,14 +165,16 @@ def _build_html(color: str, greeting: str, body: str, cta_text: str, cta_url: st
             f'<p style="margin:10px 0 0;font-size:11px;color:#9ca3af">'
             f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">Cancelar suscripción</a></p>'
         )
+    body_html = _format_body(body)
+    sig_html = _format_signature(signature)
     return f"""<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;color:#111827">
   <div style="padding:28px 32px;border-bottom:1px solid #e5e7eb">
     <p style="margin:0 0 16px;color:#111827;font-size:14px">{greeting}</p>
-    <div style="white-space:pre-wrap;line-height:1.75;color:#374151;font-size:14px">{body}</div>
+    <div style="line-height:1.75;color:#374151;font-size:14px">{body_html}</div>
     {cta_block}
   </div>
   <div style="padding:16px 32px;background:#f9fafb">
-    <p style="color:#6b7280;font-size:12px;margin:0;white-space:pre-wrap">{signature}</p>
+    <p style="color:#6b7280;font-size:12px;margin:0">{sig_html}</p>
     {unsub_block}
   </div>
 </div>"""

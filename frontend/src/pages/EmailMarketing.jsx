@@ -64,6 +64,27 @@ const PRO_TEMPLATES = {
   },
 }
 
+function formatBody(text) {
+  if (!text) return '<span style="color:#9ca3af;font-style:italic">Cuerpo del mensaje...</span>'
+  const parts = []
+  for (const para of text.trim().split(/\n{2,}/)) {
+    const lines = para.split('\n').filter(l => l.trim())
+    if (!lines.length) continue
+    if (lines.every(l => l.trim().startsWith('- '))) {
+      const items = lines.map(l => `<li style="margin:3px 0;color:#374151;font-size:14px">${l.trim().slice(2)}</li>`).join('')
+      parts.push(`<ul style="margin:4px 0 14px;padding-left:20px">${items}</ul>`)
+    } else {
+      parts.push(`<p style="margin:0 0 14px;line-height:1.75;color:#374151;font-size:14px">${lines.join('<br>')}</p>`)
+    }
+  }
+  return parts.join('')
+}
+
+function formatSignature(text) {
+  if (!text) return '<span style="font-style:italic;color:#9ca3af">Firma...</span>'
+  return text.split('\n').join('<br>')
+}
+
 function buildHtml(t) {
   const cta = t.cta_text && t.cta_url
     ? `<p style="text-align:center;margin:20px 0"><a href="${t.cta_url}" style="background:#1e40af;color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;font-weight:600;display:inline-block;font-size:13px">${t.cta_text}</a></p>`
@@ -71,11 +92,11 @@ function buildHtml(t) {
   return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;color:#111827">
   <div style="padding:28px 32px;border-bottom:1px solid #e5e7eb">
     <p style="margin:0 0 16px;color:#111827;font-size:14px">${t.greeting || '<span style="color:#9ca3af;font-style:italic">Saludo...</span>'}</p>
-    <div style="white-space:pre-wrap;line-height:1.75;color:#374151;font-size:14px">${t.body || '<span style="color:#9ca3af;font-style:italic">Cuerpo del mensaje...</span>'}</div>
+    <div style="line-height:1.75">${formatBody(t.body)}</div>
     ${cta}
   </div>
   <div style="padding:16px 32px;background:#f9fafb">
-    <p style="color:#6b7280;font-size:12px;margin:0;white-space:pre-wrap">${t.signature || '<span style="font-style:italic;color:#9ca3af">Firma...</span>'}</p>
+    <p style="color:#6b7280;font-size:12px;margin:0">${formatSignature(t.signature)}</p>
   </div>
 </div>`
 }

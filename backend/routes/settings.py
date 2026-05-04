@@ -244,7 +244,21 @@ def save_email_settings(
     org.email_send_on_not_interested = data.email_send_on_not_interested
     org.email_send_delay_ms = max(0, data.email_send_delay_ms)
     if data.email_templates is not None:
-        org.email_templates = json.dumps(data.email_templates)
+        # Preserve attachment_b64 stored in DB — it's never sent to the frontend
+        existing_tmpls = {}
+        if org.email_templates:
+            try:
+                existing_tmpls = json.loads(org.email_templates)
+            except Exception:
+                pass
+        merged = {}
+        for key, tmpl in data.email_templates.items():
+            merged[key] = dict(tmpl)
+            if key in existing_tmpls:
+                for field in ("attachment_b64", "attachment_name"):
+                    if field not in merged[key] and field in existing_tmpls[key]:
+                        merged[key][field] = existing_tmpls[key][field]
+        org.email_templates = json.dumps(merged)
     session.add(org)
     session.commit()
     return {"ok": True}
