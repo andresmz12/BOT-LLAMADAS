@@ -179,6 +179,9 @@ export default function EmailMarketing() {
   const [testLoading, setTestLoading] = useState(false)
   const [testMsg, setTestMsg] = useState(null)
 
+  // History error detail modal
+  const [errorDetailLog, setErrorDetailLog] = useState(null) // {template_subject, error_details:[]}
+
   // Template editor
   const [editingTmpl, setEditingTmpl] = useState(null)
   const [previewOpen, setPreviewOpen] = useState(false)
@@ -1237,9 +1240,17 @@ export default function EmailMarketing() {
                     <td className="px-4 py-2.5 text-xs text-slate-400">{h.campaign_name || 'Todos'}</td>
                     <td className="px-4 py-2.5"><span className="text-green-400 font-bold text-sm">{h.total_sent}</span></td>
                     <td className="px-4 py-2.5">
-                      <span className={h.total_errors > 0 ? 'text-red-400 font-medium text-sm' : 'text-slate-600 text-xs'}>
-                        {h.total_errors > 0 ? h.total_errors : '—'}
-                      </span>
+                      {h.total_errors > 0 ? (
+                        <button
+                          onClick={() => setErrorDetailLog(h)}
+                          className="text-red-400 font-medium text-sm hover:text-red-300 hover:underline transition-colors"
+                          title="Ver detalle de errores"
+                        >
+                          {h.total_errors} ▸
+                        </button>
+                      ) : (
+                        <span className="text-slate-600 text-xs">—</span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-slate-500 truncate max-w-[120px]">{h.initiated_by || '—'}</td>
                   </tr>
@@ -1326,6 +1337,61 @@ export default function EmailMarketing() {
             </div>
             <div className="p-4 border-t border-z-border flex-shrink-0 flex justify-end">
               <button onClick={() => setRecipientDetailOpen(false)} className="z-btn-ghost text-sm">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: detalle de errores del historial */}
+      {errorDetailLog && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-z-border flex-shrink-0">
+              <div>
+                <h2 className="text-base font-bold text-slate-100">Detalle de fallos</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {errorDetailLog.total_errors} email{errorDetailLog.total_errors !== 1 ? 's' : ''} no pudieron enviarse
+                  {errorDetailLog.template_subject && ` · "${errorDetailLog.template_subject}"`}
+                </p>
+              </div>
+              <button onClick={() => setErrorDetailLog(null)} className="text-slate-500 hover:text-slate-300">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1">
+              {errorDetailLog.error_details?.length > 0 ? (
+                <table className="w-full text-sm">
+                  <thead className="bg-black/20 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Email</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Error</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-z-border">
+                    {errorDetailLog.error_details.map((e, i) => (
+                      <tr key={i} className="hover:bg-white/[0.02]">
+                        <td className="px-4 py-2.5 text-xs font-mono text-slate-300 whitespace-nowrap">{e.email}</td>
+                        <td className="px-4 py-2.5 text-xs text-red-400 break-all">{e.error}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="p-8 text-center">
+                  <p className="text-slate-400 text-sm">No hay detalle disponible para este envío.</p>
+                  <p className="text-xs mt-1 text-slate-600">Los envíos anteriores a esta versión no guardan el detalle de errores.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-z-border flex-shrink-0 flex justify-between items-center">
+              <span className="text-xs text-slate-600">
+                {errorDetailLog.error_details?.length > 0 ? 'Causas comunes: email inválido, dominio inexistente, buzón lleno, o bloqueado por spam.' : ''}
+              </span>
+              <button onClick={() => setErrorDetailLog(null)} className="z-btn-ghost text-sm">Cerrar</button>
             </div>
           </div>
         </div>

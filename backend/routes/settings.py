@@ -630,6 +630,7 @@ def get_email_history(
             "total_skipped": l.total_skipped,
             "total_errors": l.total_errors,
             "initiated_by": l.initiated_by,
+            "error_details": json.loads(l.error_details) if l.error_details else [],
         }
         for l in logs
     ]
