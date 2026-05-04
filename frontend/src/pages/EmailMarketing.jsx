@@ -8,7 +8,7 @@ import {
   getEmailSettings, saveEmailSettings, uploadEmailAttachment,
   sendTestEmail, bulkSendEmail, getCampaigns,
   getEmailHistory, validateEmailRecipients, uploadTemplateAttachment,
-  getEmailContactsCount, importEmailContacts,
+  getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
 } from '../api/client'
 
 const FIXED_TEMPLATES = [
@@ -106,6 +106,10 @@ export default function EmailMarketing() {
   const [errorsOpen, setErrorsOpen] = useState(false)
   const [recipientStats, setRecipientStats] = useState(null)
   const [recipientLoading, setRecipientLoading] = useState(false)
+  const [recipientDetail, setRecipientDetail] = useState(null)
+  const [recipientDetailLoading, setRecipientDetailLoading] = useState(false)
+  const [recipientDetailOpen, setRecipientDetailOpen] = useState(false)
+  const [recipientDetailTab, setRecipientDetailTab] = useState('will_receive')
 
   const [testAddr, setTestAddr] = useState('')
   const [testTmpl, setTestTmpl] = useState('general')
@@ -249,6 +253,7 @@ export default function EmailMarketing() {
 
   const prepareSend = async () => {
     setConfirmStep(true); setBulkResult(null); setRecipientStats(null)
+    setRecipientDetail(null); setRecipientDetailOpen(false)
     setRecipientLoading(true)
     try {
       const params = bulkCampaign === 'email_only'
@@ -269,6 +274,19 @@ export default function EmailMarketing() {
       loadEmailContactsCount()
     } catch (err) { setImportResult({ error: err.response?.data?.detail || 'Error al importar' }) }
     finally { setImportLoading(false); e.target.value = '' }
+  }
+
+  const loadRecipientDetail = async () => {
+    if (recipientDetail) { setRecipientDetailOpen(true); return }
+    setRecipientDetailLoading(true)
+    try {
+      const params = bulkCampaign ? { campaign_id: Number(bulkCampaign) } : {}
+      const detail = await getEmailRecipientsDetail(params)
+      setRecipientDetail(detail)
+      setRecipientDetailOpen(true)
+      setRecipientDetailTab('will_receive')
+    } catch (e) { /* non-critical */ }
+    finally { setRecipientDetailLoading(false) }
   }
 
   const uploadTmplAttach = async (e) => {
@@ -726,6 +744,13 @@ export default function EmailMarketing() {
                     {recipientStats.will_receive === 0 && (
                       <p className="text-xs text-amber-400">⚠ No hay destinatarios válidos para este envío.</p>
                     )}
+                    <button
+                      onClick={loadRecipientDetail}
+                      disabled={recipientDetailLoading}
+                      className="mt-2 w-full text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-400/50 rounded-lg py-1.5 transition-colors disabled:opacity-50"
+                    >
+                      {recipientDetailLoading ? 'Cargando...' : 'Ver lista completa de contactos'}
+                    </button>
                   </div>
                 )}
               </div>
@@ -970,5 +995,100 @@ export default function EmailMarketing() {
       )}
 
     </div>
+
+    {/* Modal: vista previa de destinatarios */}
+    {recipientDetailOpen && recipientDetail && (
+      <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+        <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between p-5 border-b border-z-border flex-shrink-0">
+            <div>
+              <h2 className="text-base font-bold text-slate-100">Lista de contactos</h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {recipientDetail.will_receive.length} recibirán · {recipientDetail.skipped.length} omitidos
+              </p>
+            </div>
+            <button onClick={() => setRecipientDetailOpen(false)} className="text-slate-500 hover:text-slate-300">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+            </button>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-z-border flex-shrink-0">
+            <button
+              onClick={() => setRecipientDetailTab('will_receive')}
+              className={`px-5 py-3 text-sm font-medium transition-colors ${recipientDetailTab === 'will_receive' ? 'text-green-400 border-b-2 border-green-400' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Recibirán el email ({recipientDetail.will_receive.length})
+            </button>
+            <button
+              onClick={() => setRecipientDetailTab('skipped')}
+              className={`px-5 py-3 text-sm font-medium transition-colors ${recipientDetailTab === 'skipped' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-slate-500 hover:text-slate-300'}`}
+            >
+              Omitidos ({recipientDetail.skipped.length})
+            </button>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-auto flex-1">
+            {recipientDetailTab === 'will_receive' && (
+              recipientDetail.will_receive.length === 0
+                ? <p className="text-center text-slate-500 text-sm py-10">No hay contactos que recibirán el email</p>
+                : <table className="w-full text-sm">
+                    <thead className="bg-black/20 sticky top-0">
+                      <tr>
+                        {['Nombre', 'Email', 'Teléfono', 'Campaña'].map(h => (
+                          <th key={h} className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-z-border">
+                      {recipientDetail.will_receive.map(c => (
+                        <tr key={c.id} className="hover:bg-white/[0.02]">
+                          <td className="px-4 py-2.5 text-slate-200 font-medium">{c.name || '—'}</td>
+                          <td className="px-4 py-2.5 text-slate-300 font-mono text-xs">{c.email}</td>
+                          <td className="px-4 py-2.5 text-slate-400 text-xs">{c.phone || '—'}</td>
+                          <td className="px-4 py-2.5 text-slate-500 text-xs">{c.campaign || '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+            )}
+            {recipientDetailTab === 'skipped' && (
+              recipientDetail.skipped.length === 0
+                ? <p className="text-center text-slate-500 text-sm py-10">No hay contactos omitidos</p>
+                : <table className="w-full text-sm">
+                    <thead className="bg-black/20 sticky top-0">
+                      <tr>
+                        {['Nombre', 'Email', 'Teléfono', 'Campaña', 'Razón'].map(h => (
+                          <th key={h} className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-z-border">
+                      {recipientDetail.skipped.map(c => (
+                        <tr key={c.id} className="hover:bg-white/[0.02]">
+                          <td className="px-4 py-2.5 text-slate-200 font-medium">{c.name || '—'}</td>
+                          <td className="px-4 py-2.5 text-slate-400 font-mono text-xs">{c.email || <span className="text-slate-600 italic">sin email</span>}</td>
+                          <td className="px-4 py-2.5 text-slate-400 text-xs">{c.phone || '—'}</td>
+                          <td className="px-4 py-2.5 text-slate-500 text-xs">{c.campaign || '—'}</td>
+                          <td className="px-4 py-2.5">
+                            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                              c.reason === 'Desuscrito' ? 'bg-red-500/15 text-red-400' : 'bg-amber-500/15 text-amber-400'
+                            }`}>{c.reason}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+            )}
+          </div>
+
+          <div className="p-4 border-t border-z-border flex-shrink-0 flex justify-end">
+            <button onClick={() => setRecipientDetailOpen(false)} className="z-btn-ghost text-sm">Cerrar</button>
+          </div>
+        </div>
+      </div>
+    )}
   )
 }

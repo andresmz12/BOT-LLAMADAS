@@ -130,6 +130,7 @@ export const importEmailContacts = (file) => {
   return api.post('/settings/email/import-contacts', form).then(r => r.data)
 }
 export const validateEmailRecipients = (params) => api.get('/settings/email/validate-recipients', { params }).then(r => r.data)
+export const getEmailRecipientsDetail = (params) => api.get('/settings/email/recipients-detail', { params }).then(r => r.data)
 export const uploadTemplateAttachment = (templateKey, file) => {
   const form = new FormData()
   form.append('template_key', templateKey)

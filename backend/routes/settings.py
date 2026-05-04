@@ -573,6 +573,50 @@ def validate_email_recipients(
     }
 
 
+@router.get("/email/recipients-detail")
+def email_recipients_detail(
+    campaign_id: Optional[int] = None,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        return {"will_receive": [], "skipped": []}
+
+    base = select(Prospect).where(Prospect.organization_id == current_user.organization_id)
+    if campaign_id:
+        base = base.where(Prospect.campaign_id == campaign_id)
+    prospects = session.exec(base).all()
+
+    # Build a map of campaign_id → campaign name for display
+    from models import Campaign
+    campaign_ids = {p.campaign_id for p in prospects if p.campaign_id}
+    campaigns_map: dict[int, str] = {}
+    for cid in campaign_ids:
+        c = session.get(Campaign, cid)
+        if c:
+            campaigns_map[cid] = c.name
+
+    will_receive = []
+    skipped = []
+    for p in prospects:
+        campaign_name = campaigns_map.get(p.campaign_id, "") if p.campaign_id else ""
+        entry = {
+            "id": p.id,
+            "name": p.name or "",
+            "email": p.email or "",
+            "phone": p.phone or "",
+            "campaign": campaign_name,
+        }
+        if not (p.email or "").strip():
+            skipped.append({**entry, "reason": "Sin email"})
+        elif p.email_unsubscribed:
+            skipped.append({**entry, "reason": "Desuscrito"})
+        else:
+            will_receive.append(entry)
+
+    return {"will_receive": will_receive, "skipped": skipped}
+
+
 @router.get("/email/unsubscribe", response_class=HTMLResponse)
 def email_unsubscribe(
     token: str = "",
