@@ -5,14 +5,14 @@ import os
 import asyncio
 import base64 as _b64
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Request
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Request
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
 from sqlmodel import Session, select
 from sqlalchemy import desc, func
 from database import get_session
-from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent
+from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList
 from routes.auth import get_current_user, require_write_access, require_superadmin
 
 APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")
@@ -372,6 +372,7 @@ class BulkEmailRequest(BaseModel):
     campaign_id: Optional[int] = None   # None = all org prospects with email
     template_key: str = "general"       # which template to use
     email_only: bool = False            # True = only campaign_id IS NULL contacts
+    email_list_id: Optional[int] = None # True = only contacts from a specific email list
 
 
 @router.post("/email/bulk-send")
@@ -396,7 +397,9 @@ async def bulk_send_email(
         Prospect.email != "",
         Prospect.email_unsubscribed == False,  # noqa: E712
     )
-    if data.email_only:
+    if data.email_list_id:
+        query = query.where(Prospect.email_list_id == data.email_list_id)
+    elif data.email_only:
         query = query.where(Prospect.campaign_id == None)  # noqa: E711
     elif data.campaign_id:
         query = query.where(Prospect.campaign_id == data.campaign_id)
@@ -545,6 +548,7 @@ def get_email_history(
 def validate_email_recipients(
     campaign_id: Optional[int] = None,
     email_only: bool = False,
+    email_list_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -552,7 +556,9 @@ def validate_email_recipients(
         return {"total": 0, "with_email": 0, "without_email": 0, "unsubscribed": 0, "will_receive": 0}
 
     base = select(Prospect).where(Prospect.organization_id == current_user.organization_id)
-    if email_only:
+    if email_list_id:
+        base = base.where(Prospect.email_list_id == email_list_id)
+    elif email_only:
         base = base.where(Prospect.campaign_id == None)  # noqa: E711
     elif campaign_id:
         base = base.where(Prospect.campaign_id == campaign_id)
@@ -576,6 +582,8 @@ def validate_email_recipients(
 @router.get("/email/recipients-detail")
 def email_recipients_detail(
     campaign_id: Optional[int] = None,
+    email_list_id: Optional[int] = None,
+    email_only: bool = False,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -583,7 +591,11 @@ def email_recipients_detail(
         return {"will_receive": [], "skipped": []}
 
     base = select(Prospect).where(Prospect.organization_id == current_user.organization_id)
-    if campaign_id:
+    if email_list_id:
+        base = base.where(Prospect.email_list_id == email_list_id)
+    elif email_only:
+        base = base.where(Prospect.campaign_id == None)  # noqa: E711
+    elif campaign_id:
         base = base.where(Prospect.campaign_id == campaign_id)
     prospects = session.exec(base).all()
 
@@ -699,6 +711,7 @@ def get_email_contacts_count(
 @router.post("/email/import-contacts")
 async def import_email_contacts(
     file: UploadFile = File(...),
+    email_list_id: Optional[int] = Form(None),
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
@@ -707,6 +720,11 @@ async def import_email_contacts(
     org = session.get(Organization, current_user.organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
+
+    if email_list_id:
+        el = session.get(EmailList, email_list_id)
+        if not el or el.organization_id != current_user.organization_id:
+            raise HTTPException(status_code=404, detail="Lista de email no encontrada")
 
     contents = await file.read()
     if len(contents) > 10 * 1024 * 1024:
@@ -780,6 +798,7 @@ async def import_email_contacts(
             prospect_name = name or email.split("@")[0]
             prospect = Prospect(
                 campaign_id=None,
+                email_list_id=email_list_id,
                 organization_id=current_user.organization_id,
                 name=prospect_name,
                 phone=None,
@@ -795,6 +814,115 @@ async def import_email_contacts(
 
     session.commit()
     return {"imported": imported, "skipped": skipped, "errors": errors[:10]}
+
+
+# ── Email Lists ────────────────────────────────────────────────────────────────
+
+class EmailListCreate(BaseModel):
+    name: str
+
+
+@router.get("/email/lists")
+def get_email_lists(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        return []
+    lists = session.exec(
+        select(EmailList)
+        .where(EmailList.organization_id == current_user.organization_id)
+        .order_by(EmailList.created_at)
+    ).all()
+    result = []
+    for el in lists:
+        total = session.exec(
+            select(func.count(Prospect.id)).where(Prospect.email_list_id == el.id)
+        ).one()
+        with_email = session.exec(
+            select(func.count(Prospect.id)).where(
+                Prospect.email_list_id == el.id,
+                Prospect.email.is_not(None),
+                Prospect.email != "",
+                Prospect.email_unsubscribed == False,  # noqa: E712
+            )
+        ).one()
+        result.append({
+            "id": el.id, "name": el.name,
+            "total": total, "with_email": with_email,
+            "created_at": el.created_at.isoformat() if el.created_at else None,
+        })
+    return result
+
+
+@router.post("/email/lists")
+def create_email_list(
+    data: EmailListCreate,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    el = EmailList(name=data.name.strip(), organization_id=current_user.organization_id)
+    session.add(el)
+    session.commit()
+    session.refresh(el)
+    return {"id": el.id, "name": el.name, "total": 0, "with_email": 0, "created_at": el.created_at.isoformat() if el.created_at else None}
+
+
+@router.delete("/email/lists/{list_id}")
+def delete_email_list(
+    list_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    el = session.get(EmailList, list_id)
+    if not el or el.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404)
+    prospects = session.exec(select(Prospect).where(Prospect.email_list_id == list_id)).all()
+    for p in prospects:
+        session.delete(p)
+    session.delete(el)
+    session.commit()
+    return {"ok": True}
+
+
+@router.get("/email/lists/{list_id}/contacts")
+def get_email_list_contacts(
+    list_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    el = session.get(EmailList, list_id)
+    if not el or el.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404)
+    prospects = session.exec(
+        select(Prospect)
+        .where(Prospect.email_list_id == list_id)
+        .order_by(Prospect.id.desc())
+    ).all()
+    return [
+        {
+            "id": p.id, "name": p.name, "email": p.email,
+            "company": p.company, "unsubscribed": p.email_unsubscribed,
+        }
+        for p in prospects
+    ]
+
+
+@router.delete("/email/lists/{list_id}/contacts/{contact_id}")
+def delete_email_list_contact(
+    list_id: int,
+    contact_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    p = session.get(Prospect, contact_id)
+    if not p or p.organization_id != current_user.organization_id or p.email_list_id != list_id:
+        raise HTTPException(status_code=404)
+    session.delete(p)
+    session.commit()
+    return {"ok": True}
 
 
 @router.post("/email/events")

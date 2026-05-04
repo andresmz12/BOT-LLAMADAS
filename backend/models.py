@@ -116,9 +116,17 @@ class Campaign(SQLModel, table=True):
     calls: List["Call"] = Relationship(back_populates="campaign")
 
 
+class EmailList(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class Prospect(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     campaign_id: Optional[int] = Field(default=None, foreign_key="campaign.id")
+    email_list_id: Optional[int] = Field(default=None, foreign_key="emaillist.id")
     name: str
     phone: Optional[str] = None
     email: Optional[str] = None

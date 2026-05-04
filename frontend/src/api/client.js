@@ -131,6 +131,17 @@ export const importEmailContacts = (file) => {
 }
 export const validateEmailRecipients = (params) => api.get('/settings/email/validate-recipients', { params }).then(r => r.data)
 export const getEmailRecipientsDetail = (params) => api.get('/settings/email/recipients-detail', { params }).then(r => r.data)
+export const getEmailLists = () => api.get('/settings/email/lists').then(r => r.data)
+export const createEmailList = (data) => api.post('/settings/email/lists', data).then(r => r.data)
+export const deleteEmailList = (id) => api.delete(`/settings/email/lists/${id}`).then(r => r.data)
+export const getEmailListContacts = (id) => api.get(`/settings/email/lists/${id}/contacts`).then(r => r.data)
+export const deleteEmailListContact = (listId, contactId) => api.delete(`/settings/email/lists/${listId}/contacts/${contactId}`).then(r => r.data)
+export const importEmailContactsToList = (listId, file) => {
+  const form = new FormData()
+  form.append('file', file)
+  if (listId) form.append('email_list_id', String(listId))
+  return api.post('/settings/email/import-contacts', form).then(r => r.data)
+}
 export const uploadTemplateAttachment = (templateKey, file) => {
   const form = new FormData()
   form.append('template_key', templateKey)
