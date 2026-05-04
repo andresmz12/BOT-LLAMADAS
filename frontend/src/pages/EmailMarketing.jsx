@@ -593,7 +593,7 @@ export default function EmailMarketing() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <input ref={emailImportRef} type="file" accept=".csv" className="hidden" onChange={handleImportContacts} />
+            <input ref={emailImportRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={handleImportContacts} />
             <button
               onClick={() => emailImportRef.current?.click()}
               disabled={importLoading}

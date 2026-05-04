@@ -668,20 +668,34 @@ async def import_email_contacts(
     if len(contents) > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="Archivo demasiado grande (máx. 10 MB)")
 
-    # Decode CSV (handle BOM from Excel)
-    try:
-        text = contents.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        text = contents.decode("latin-1")
+    filename = (file.filename or "").lower()
 
-    reader = csv.DictReader(io.StringIO(text))
-    # Normalize header names
     def _find(row, *keys):
         for k in keys:
             for rk in row:
                 if rk.strip().lower() == k:
                     return (row[rk] or "").strip()
         return ""
+
+    # Parse rows from CSV or Excel
+    rows = []
+    if filename.endswith(".xlsx") or filename.endswith(".xls"):
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
+        ws = wb.active
+        headers = None
+        for excel_row in ws.iter_rows(values_only=True):
+            if headers is None:
+                headers = [str(c).strip().lower() if c is not None else "" for c in excel_row]
+            else:
+                rows.append({headers[j]: (str(v).strip() if v is not None else "") for j, v in enumerate(excel_row) if j < len(headers)})
+    else:
+        try:
+            text = contents.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            text = contents.decode("latin-1")
+        reader_obj = csv.DictReader(io.StringIO(text))
+        rows = [{k.strip().lower(): v for k, v in r.items()} for r in reader_obj]
 
     # Fetch existing emails in org to deduplicate
     existing = {
@@ -696,31 +710,44 @@ async def import_email_contacts(
     skipped = 0
     errors = []
 
-    for i, row in enumerate(reader, start=2):
-        email = _find(row, "email", "correo", "e-mail", "mail")
-        if not email or "@" not in email:
-            errors.append(f"Fila {i}: email inválido o vacío")
-            skipped += 1
-            continue
-        if email.lower() in existing:
+    for i, row in enumerate(rows, start=2):
+        raw_email_field = _find(row, "email", "correo", "e-mail", "mail")
+        # Split by semicolons to handle multiple emails per cell
+        email_candidates = [e.strip() for e in raw_email_field.replace(",", ";").split(";") if e.strip()]
+
+        if not email_candidates:
+            errors.append(f"Fila {i}: email vacío")
             skipped += 1
             continue
 
-        name = _find(row, "nombre", "name", "contacto") or email.split("@")[0]
+        name = _find(row, "nombre", "name", "contacto")
         company = _find(row, "empresa", "company", "compañia", "compania", "negocio")
 
-        prospect = Prospect(
-            campaign_id=None,
-            organization_id=current_user.organization_id,
-            name=name,
-            phone=None,
-            email=email,
-            company=company or None,
-            status="email_only",
-        )
-        session.add(prospect)
-        existing.add(email.lower())
-        imported += 1
+        row_imported = 0
+        for email in email_candidates:
+            if "@" not in email:
+                errors.append(f"Fila {i}: email inválido '{email}'")
+                skipped += 1
+                continue
+            if email.lower() in existing:
+                skipped += 1
+                continue
+
+            prospect_name = name or email.split("@")[0]
+            prospect = Prospect(
+                campaign_id=None,
+                organization_id=current_user.organization_id,
+                name=prospect_name,
+                phone=None,
+                email=email,
+                company=company or None,
+                status="email_only",
+            )
+            session.add(prospect)
+            existing.add(email.lower())
+            row_imported += 1
+
+        imported += row_imported
 
     session.commit()
     return {"imported": imported, "skipped": skipped, "errors": errors[:10]}
