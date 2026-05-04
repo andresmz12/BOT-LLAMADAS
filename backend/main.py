@@ -1,5 +1,6 @@
 import os
 import json
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -54,13 +55,20 @@ webhook_module.ws_manager = ws_manager
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("=== ZYRAVOICE BACKEND v6 STARTING ===")
-    try:
-        create_db_and_tables()
-        run_migrations()
-        seed_initial_data()
-        logger.info("Database initialized")
-    except Exception as e:
-        logger.error(f"Database initialization error: {e}")
+
+    def _init_db():
+        try:
+            create_db_and_tables()
+            run_migrations()
+            seed_initial_data()
+            logger.info("Database initialized")
+        except Exception as e:
+            logger.error(f"Database initialization error: {e}")
+
+    # Run blocking DB work in a thread — keeps event loop responsive
+    # for Railway health checks while migrations run against PostgreSQL
+    await asyncio.to_thread(_init_db)
+
     if not os.getenv("RETELL_WEBHOOK_SECRET"):
         logger.warning("⚠️  RETELL_WEBHOOK_SECRET not set — webhook signature verification is DISABLED")
     if not os.getenv("JWT_SECRET"):
