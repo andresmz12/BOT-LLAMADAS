@@ -48,6 +48,8 @@ def run_migrations():
                         conn.execute(text(f"ALTER TABLE agentconfig ADD COLUMN {col} {col_type}"))
                         log.info(f"Migration: added agentconfig.{col}")
 
+        is_pg = not DATABASE_URL.startswith("sqlite")
+
         if "prospect" in tables:
             prospect_cols = {c["name"] for c in insp.get_columns("prospect")}
             prospect_new = {
@@ -65,6 +67,19 @@ def run_migrations():
                     if col not in prospect_cols:
                         conn.execute(text(f"ALTER TABLE prospect ADD COLUMN {col} {col_type}"))
                         log.info(f"Migration: added prospect.{col}")
+            # Make campaign_id and phone nullable (PostgreSQL only)
+            if is_pg:
+                with engine.begin() as conn:
+                    try:
+                        conn.execute(text("ALTER TABLE prospect ALTER COLUMN campaign_id DROP NOT NULL"))
+                        log.info("Migration: prospect.campaign_id is now nullable")
+                    except Exception:
+                        pass
+                    try:
+                        conn.execute(text("ALTER TABLE prospect ALTER COLUMN phone DROP NOT NULL"))
+                        log.info("Migration: prospect.phone is now nullable")
+                    except Exception:
+                        pass
 
         if "call" in tables:
             call_cols = {c["name"] for c in insp.get_columns("call")}
@@ -91,7 +106,6 @@ def run_migrations():
 
         if "organization" in tables:
             org_cols = {c["name"] for c in insp.get_columns("organization")}
-            is_pg = not DATABASE_URL.startswith("sqlite")
             org_new = {
                 "crm_webhook_url": "VARCHAR(500)",
                 "crm_webhook_enabled": "BOOLEAN DEFAULT FALSE",

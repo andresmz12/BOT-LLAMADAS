@@ -554,7 +554,10 @@ export default function Prospects() {
     ])
   }
 
-  const campaignName = (id) => campaigns.find(c => c.id === id)?.name || `#${id}`
+  const campaignName = (id) => {
+    if (id == null) return null
+    return campaigns.find(c => c.id === id)?.name || `#${id}`
+  }
   const noCampaigns = campaigns.length === 0
 
   return (
@@ -640,7 +643,11 @@ export default function Prospects() {
                     </span>
                   ) : <span className="text-slate-600 text-xs">—</span>}
                 </td>
-                <td className="px-6 py-3 text-slate-400 text-xs">{campaignName(p.campaign_id)}</td>
+                <td className="px-6 py-3 text-slate-400 text-xs">
+                  {p.campaign_id == null
+                    ? <span className="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-xs font-medium">Email</span>
+                    : campaignName(p.campaign_id)}
+                </td>
                 <td className="px-6 py-3"><StatusBadge status={p.status} /></td>
                 <td className="px-6 py-3 text-slate-400">{p.call_attempts}</td>
                 <td className="px-6 py-3 text-slate-500 text-xs">

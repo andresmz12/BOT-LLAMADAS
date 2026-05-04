@@ -118,9 +118,9 @@ class Campaign(SQLModel, table=True):
 
 class Prospect(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
-    campaign_id: int = Field(foreign_key="campaign.id")
+    campaign_id: Optional[int] = Field(default=None, foreign_key="campaign.id")
     name: str
-    phone: str
+    phone: Optional[str] = None
     email: Optional[str] = None
     company: Optional[str] = None
     status: str = Field(default="pending")

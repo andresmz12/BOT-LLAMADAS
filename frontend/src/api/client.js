@@ -123,6 +123,12 @@ export const uploadEmailAttachment = (file) => {
 export const sendTestEmail = (data) => api.post('/settings/email/test', data).then(r => r.data)
 export const bulkSendEmail = (data) => api.post('/settings/email/bulk-send', data).then(r => r.data)
 export const getEmailHistory = () => api.get('/settings/email/history').then(r => r.data)
+export const getEmailContactsCount = () => api.get('/settings/email/email-contacts-count').then(r => r.data)
+export const importEmailContacts = (file) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/settings/email/import-contacts', form).then(r => r.data)
+}
 export const validateEmailRecipients = (params) => api.get('/settings/email/validate-recipients', { params }).then(r => r.data)
 export const uploadTemplateAttachment = (templateKey, file) => {
   const form = new FormData()

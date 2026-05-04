@@ -8,6 +8,7 @@ import {
   getEmailSettings, saveEmailSettings, uploadEmailAttachment,
   sendTestEmail, bulkSendEmail, getCampaigns,
   getEmailHistory, validateEmailRecipients, uploadTemplateAttachment,
+  getEmailContactsCount, importEmailContacts,
 } from '../api/client'
 
 const FIXED_TEMPLATES = [
@@ -122,11 +123,16 @@ export default function EmailMarketing() {
   const [tmplAttachMsg, setTmplAttachMsg] = useState(null)
   const [previewProKey, setPreviewProKey] = useState(null)
   const [emailHistory, setEmailHistory] = useState([])
+  const [emailContactsCount, setEmailContactsCount] = useState(null)
+  const [importLoading, setImportLoading] = useState(false)
+  const [importResult, setImportResult] = useState(null)
   const fileRef = useRef(null)
   const tmplAttachRef = useRef(null)
+  const emailImportRef = useRef(null)
   const editorRef = useRef(null)
 
   const loadHistory = () => getEmailHistory().then(setEmailHistory).catch(() => {})
+  const loadEmailContactsCount = () => getEmailContactsCount().then(setEmailContactsCount).catch(() => {})
 
   useEffect(() => {
     getEmailSettings().then(d => setCfg({
@@ -142,6 +148,7 @@ export default function EmailMarketing() {
     })).catch(() => {})
     getCampaigns().then(setCampaigns).catch(() => {})
     loadHistory()
+    loadEmailContactsCount()
   }, [])
 
   // All templates: fixed + custom
@@ -230,7 +237,10 @@ export default function EmailMarketing() {
   const sendBulk = async () => {
     setBulkLoading(true); setBulkResult(null); setConfirmStep(false); setErrorsOpen(false)
     try {
-      const r = await bulkSendEmail({ campaign_id: bulkCampaign ? Number(bulkCampaign) : null, template_key: bulkTmpl })
+      const payload = bulkCampaign === 'email_only'
+        ? { email_only: true, template_key: bulkTmpl }
+        : { campaign_id: bulkCampaign ? Number(bulkCampaign) : null, template_key: bulkTmpl }
+      const r = await bulkSendEmail(payload)
       setBulkResult(r)
       loadHistory()
     } catch (e) { setBulkResult({ error: e.response?.data?.detail || 'Error' }) }
@@ -241,11 +251,24 @@ export default function EmailMarketing() {
     setConfirmStep(true); setBulkResult(null); setRecipientStats(null)
     setRecipientLoading(true)
     try {
-      const params = bulkCampaign ? { campaign_id: Number(bulkCampaign) } : {}
+      const params = bulkCampaign === 'email_only'
+        ? { email_only: true }
+        : bulkCampaign ? { campaign_id: Number(bulkCampaign) } : {}
       const stats = await validateEmailRecipients(params)
       setRecipientStats(stats)
     } catch (e) { /* non-critical */ }
     finally { setRecipientLoading(false) }
+  }
+
+  const handleImportContacts = async (e) => {
+    const f = e.target.files?.[0]; if (!f) return
+    setImportLoading(true); setImportResult(null)
+    try {
+      const r = await importEmailContacts(f)
+      setImportResult(r)
+      loadEmailContactsCount()
+    } catch (err) { setImportResult({ error: err.response?.data?.detail || 'Error al importar' }) }
+    finally { setImportLoading(false); e.target.value = '' }
   }
 
   const uploadTmplAttach = async (e) => {
@@ -549,6 +572,51 @@ export default function EmailMarketing() {
         </div>
       )}
 
+      {/* ── 2b. CONTACTOS DE EMAIL ── */}
+      <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
+        <div className="px-5 py-4 border-b border-z-border flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <EnvelopeIcon className="w-4 h-4 text-blue-400" />
+            <div>
+              <h2 className="text-sm font-semibold text-slate-200">
+                Contactos de email
+                {emailContactsCount && (
+                  <span className="ml-2 px-2 py-0.5 text-xs bg-blue-500/15 text-blue-400 rounded-full font-normal">
+                    {emailContactsCount.with_email} con email
+                  </span>
+                )}
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Lista de contactos solo para emails, independiente de campañas de llamadas.
+                Columnas CSV: <span className="font-mono text-blue-400">nombre, email, empresa</span>
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <input ref={emailImportRef} type="file" accept=".csv" className="hidden" onChange={handleImportContacts} />
+            <button
+              onClick={() => emailImportRef.current?.click()}
+              disabled={importLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-400 border border-blue-400/30 rounded-lg hover:bg-blue-400/10 transition-colors disabled:opacity-50">
+              <PlusIcon className="w-3.5 h-3.5" />
+              {importLoading ? 'Importando...' : 'Importar CSV'}
+            </button>
+          </div>
+        </div>
+        {importResult && (
+          <div className={`px-5 py-3 text-xs border-b border-z-border ${importResult.error ? 'text-red-400' : 'text-green-400'}`}>
+            {importResult.error
+              ? `✗ ${importResult.error}`
+              : `✓ ${importResult.imported} importados${importResult.skipped ? `, ${importResult.skipped} omitidos (duplicados o sin email)` : ''}`}
+            {importResult.errors?.length > 0 && (
+              <div className="mt-1 space-y-0.5 text-slate-500">
+                {importResult.errors.map((e, i) => <p key={i}>{e}</p>)}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* ── 3. ENVÍO A PROSPECTOS ── */}
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
         <div className="px-5 py-4 border-b border-z-border">
@@ -565,6 +633,9 @@ export default function EmailMarketing() {
                 className="z-input-light text-sm">
                 <option value="">Todos mis prospectos</option>
                 {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <option value="email_only">
+                  Contactos de email {emailContactsCount ? `(${emailContactsCount.with_email})` : ''}
+                </option>
               </select>
             </div>
             <div>
@@ -609,7 +680,11 @@ export default function EmailMarketing() {
                 <div className="flex justify-between text-sm">
                   <span className="text-slate-400">Destinatarios</span>
                   <span className="text-slate-200 font-medium">
-                    {bulkCampaign ? campaigns.find(c => String(c.id) === bulkCampaign)?.name || 'Campaña' : 'Todos los prospectos con email'}
+                    {bulkCampaign === 'email_only'
+                      ? `Contactos de email (${emailContactsCount?.with_email ?? '…'})`
+                      : bulkCampaign
+                        ? campaigns.find(c => String(c.id) === bulkCampaign)?.name || 'Campaña'
+                        : 'Todos los prospectos con email'}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">

@@ -218,6 +218,10 @@ async def call_prospect(
     prospect = session.get(Prospect, prospect_id)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+    if not prospect.phone:
+        raise HTTPException(status_code=400, detail="Este prospecto no tiene teléfono y no puede ser llamado")
+    if not prospect.campaign_id:
+        raise HTTPException(status_code=400, detail="Este prospecto es solo de email y no pertenece a una campaña de llamadas")
 
     campaign = session.get(Campaign, prospect.campaign_id)
     if not campaign:

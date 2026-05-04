@@ -1,3 +1,5 @@
+import csv
+import io
 import json
 import os
 import asyncio
@@ -8,7 +10,7 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 from typing import Optional
 from sqlmodel import Session, select
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 from database import get_session
 from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog
 from routes.auth import get_current_user, require_write_access, require_superadmin
@@ -369,6 +371,7 @@ async def test_email(
 class BulkEmailRequest(BaseModel):
     campaign_id: Optional[int] = None   # None = all org prospects with email
     template_key: str = "general"       # which template to use
+    email_only: bool = False            # True = only campaign_id IS NULL contacts
 
 
 @router.post("/email/bulk-send")
@@ -393,7 +396,9 @@ async def bulk_send_email(
         Prospect.email != "",
         Prospect.email_unsubscribed == False,  # noqa: E712
     )
-    if data.campaign_id:
+    if data.email_only:
+        query = query.where(Prospect.campaign_id == None)  # noqa: E711
+    elif data.campaign_id:
         query = query.where(Prospect.campaign_id == data.campaign_id)
     prospects = session.exec(query).all()
     if not prospects:
@@ -428,10 +433,13 @@ async def bulk_send_email(
     errors = []
 
     # Resolve campaign name for the log
-    camp_name = None
-    if data.campaign_id:
+    if data.email_only:
+        camp_name = "Contactos de email"
+    elif data.campaign_id:
         camp = session.get(Campaign, data.campaign_id)
         camp_name = camp.name if camp else None
+    else:
+        camp_name = None
 
     for prospect in prospects:
         try:
@@ -532,6 +540,7 @@ def get_email_history(
 @router.get("/email/validate-recipients")
 def validate_email_recipients(
     campaign_id: Optional[int] = None,
+    email_only: bool = False,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -539,7 +548,9 @@ def validate_email_recipients(
         return {"total": 0, "with_email": 0, "without_email": 0, "unsubscribed": 0, "will_receive": 0}
 
     base = select(Prospect).where(Prospect.organization_id == current_user.organization_id)
-    if campaign_id:
+    if email_only:
+        base = base.where(Prospect.campaign_id == None)  # noqa: E711
+    elif campaign_id:
         base = base.where(Prospect.campaign_id == campaign_id)
     all_prospects = session.exec(base).all()
 
@@ -617,6 +628,98 @@ async def upload_template_attachment(
     session.add(org)
     session.commit()
     return {"ok": True, "filename": file.filename, "template_key": template_key}
+
+
+@router.get("/email/email-contacts-count")
+def get_email_contacts_count(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        return {"total": 0, "with_email": 0}
+    all_q = session.exec(
+        select(Prospect).where(
+            Prospect.organization_id == current_user.organization_id,
+            Prospect.campaign_id == None,  # noqa: E711
+        )
+    ).all()
+    total = len(all_q)
+    with_email = sum(1 for p in all_q if (p.email or "").strip() and not p.email_unsubscribed)
+    return {"total": total, "with_email": with_email}
+
+
+@router.post("/email/import-contacts")
+async def import_email_contacts(
+    file: UploadFile = File(...),
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    org = session.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+
+    contents = await file.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="Archivo demasiado grande (máx. 10 MB)")
+
+    # Decode CSV (handle BOM from Excel)
+    try:
+        text = contents.decode("utf-8-sig")
+    except UnicodeDecodeError:
+        text = contents.decode("latin-1")
+
+    reader = csv.DictReader(io.StringIO(text))
+    # Normalize header names
+    def _find(row, *keys):
+        for k in keys:
+            for rk in row:
+                if rk.strip().lower() == k:
+                    return (row[rk] or "").strip()
+        return ""
+
+    # Fetch existing emails in org to deduplicate
+    existing = {
+        (p.email or "").lower()
+        for p in session.exec(
+            select(Prospect).where(Prospect.organization_id == current_user.organization_id)
+        ).all()
+        if p.email
+    }
+
+    imported = 0
+    skipped = 0
+    errors = []
+
+    for i, row in enumerate(reader, start=2):
+        email = _find(row, "email", "correo", "e-mail", "mail")
+        if not email or "@" not in email:
+            errors.append(f"Fila {i}: email inválido o vacío")
+            skipped += 1
+            continue
+        if email.lower() in existing:
+            skipped += 1
+            continue
+
+        name = _find(row, "nombre", "name", "contacto") or email.split("@")[0]
+        company = _find(row, "empresa", "company", "compañia", "compania", "negocio")
+
+        prospect = Prospect(
+            campaign_id=None,
+            organization_id=current_user.organization_id,
+            name=name,
+            phone=None,
+            email=email,
+            company=company or None,
+            status="email_only",
+        )
+        session.add(prospect)
+        existing.add(email.lower())
+        imported += 1
+
+    session.commit()
+    return {"imported": imported, "skipped": skipped, "errors": errors[:10]}
 
 
 @router.get("/crm/logs")
