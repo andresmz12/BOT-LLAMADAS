@@ -153,11 +153,12 @@ def _format_signature(text: str) -> str:
 
 def _build_html(color: str, greeting: str, body: str, cta_text: str, cta_url: str, signature: str, unsubscribe_url: str = "") -> str:
     cta_block = ""
-    if cta_text and cta_url:
+    cta_label = cta_text or ("Ver más →" if cta_url else "")
+    if cta_label and cta_url:
         cta_block = (
             f'<p style="text-align:center;margin:24px 0">'
             f'<a href="{cta_url}" style="background:#1e40af;color:#fff;padding:12px 28px;'
-            f'border-radius:4px;text-decoration:none;font-weight:600">{cta_text}</a></p>'
+            f'border-radius:4px;text-decoration:none;font-weight:600">{cta_label}</a></p>'
         )
     unsub_block = ""
     if unsubscribe_url:

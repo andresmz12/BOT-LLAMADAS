@@ -386,7 +386,8 @@ class BulkEmailRequest(BaseModel):
     campaign_id: Optional[int] = None   # None = all org prospects with email
     template_key: str = "general"       # which template to use
     email_only: bool = False            # True = only campaign_id IS NULL contacts
-    email_list_id: Optional[int] = None # True = only contacts from a specific email list
+    email_list_id: Optional[int] = None # only contacts from a specific email list
+    batch_size: Optional[int] = None    # max emails to send in this run (None = unlimited)
 
 
 @router.post("/email/bulk-send")
@@ -417,9 +418,15 @@ async def bulk_send_email(
         query = query.where(Prospect.campaign_id == None)  # noqa: E711
     elif data.campaign_id:
         query = query.where(Prospect.campaign_id == data.campaign_id)
-    prospects = session.exec(query).all()
-    if not prospects:
+    # Prioritize contacts that have never received an email
+    from sqlalchemy import nulls_first
+    query = query.order_by(nulls_first(Prospect.last_email_sent_at.asc()))
+    all_prospects = session.exec(query).all()
+    total_available = len(all_prospects)
+    if not all_prospects:
         raise HTTPException(status_code=400, detail="No hay prospectos con email válido en esta selección")
+    # Apply batch limit
+    prospects = all_prospects[:data.batch_size] if data.batch_size and data.batch_size > 0 else all_prospects
 
     from services.sendgrid_service import _fill, _build_html, DEFAULT_SUBJECT
     from sendgrid import SendGridAPIClient
@@ -526,7 +533,7 @@ async def bulk_send_email(
     session.add(log_entry)
     session.commit()
 
-    return {"sent": sent, "skipped": skipped, "errors": errors[:5]}
+    return {"sent": sent, "skipped": skipped, "errors": errors[:5], "total_available": total_available, "batch_size": data.batch_size}
 
 
 @router.get("/email/history")
@@ -563,6 +570,7 @@ def validate_email_recipients(
     campaign_id: Optional[int] = None,
     email_only: bool = False,
     email_list_id: Optional[int] = None,
+    batch_size: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -584,12 +592,17 @@ def validate_email_recipients(
     will_receive = with_email - unsubscribed
     without_email = total - with_email
 
+    # Batch info: how many would be sent in this run vs total available
+    will_receive_this_batch = min(will_receive, batch_size) if batch_size and batch_size > 0 else will_receive
+
     return {
         "total": total,
         "with_email": with_email,
         "without_email": without_email,
         "unsubscribed": unsubscribed,
         "will_receive": will_receive,
+        "will_receive_this_batch": will_receive_this_batch,
+        "batch_size": batch_size,
     }
 
 

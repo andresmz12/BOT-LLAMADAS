@@ -86,8 +86,9 @@ function formatSignature(text) {
 }
 
 function buildHtml(t) {
-  const cta = t.cta_text && t.cta_url
-    ? `<p style="text-align:center;margin:20px 0"><a href="${t.cta_url}" style="background:#1e40af;color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;font-weight:600;display:inline-block;font-size:13px">${t.cta_text}</a></p>`
+  const ctaLabel = t.cta_text || (t.cta_url ? 'Ver más →' : '')
+  const cta = ctaLabel && t.cta_url
+    ? `<p style="text-align:center;margin:20px 0"><a href="${t.cta_url}" style="background:#1e40af;color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;font-weight:600;display:inline-block;font-size:13px">${ctaLabel}</a></p>`
     : ''
   return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;color:#111827">
   <div style="padding:28px 32px;border-bottom:1px solid #e5e7eb">
@@ -156,6 +157,7 @@ export default function EmailMarketing() {
   // Bulk send
   const [bulkCampaign, setBulkCampaign] = useState('')  // '' | campaign_id | 'email_only' | 'list:id'
   const [bulkTmpl, setBulkTmpl] = useState('general')
+  const [bulkBatchSize, setBulkBatchSize] = useState('')  // '' = unlimited
   const [bulkLoading, setBulkLoading] = useState(false)
   const [bulkResult, setBulkResult] = useState(null)
   const [confirmStep, setConfirmStep] = useState(false)
@@ -339,10 +341,12 @@ export default function EmailMarketing() {
 
   // Bulk send helpers
   const parseBulkTarget = () => {
-    if (bulkCampaign.startsWith('list:')) return { email_list_id: Number(bulkCampaign.slice(5)) }
-    if (bulkCampaign === 'email_only') return { email_only: true }
-    if (bulkCampaign) return { campaign_id: Number(bulkCampaign) }
-    return {}
+    const base = bulkCampaign.startsWith('list:') ? { email_list_id: Number(bulkCampaign.slice(5)) }
+      : bulkCampaign === 'email_only' ? { email_only: true }
+      : bulkCampaign ? { campaign_id: Number(bulkCampaign) }
+      : {}
+    if (bulkBatchSize) base.batch_size = Number(bulkBatchSize)
+    return base
   }
 
   const sendBulk = async () => {
@@ -601,6 +605,23 @@ export default function EmailMarketing() {
             </div>
           </div>
 
+          {/* Batch size */}
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-z-border">
+            <div className="flex-1">
+              <p className="text-xs font-medium text-slate-300">Envío por tandas</p>
+              <p className="text-xs text-slate-500 mt-0.5">Limita cuántos emails se envían por ejecución para evitar filtros de spam. Los no contactados van siempre primero.</p>
+            </div>
+            <select value={bulkBatchSize} onChange={e => { setBulkBatchSize(e.target.value); setConfirmStep(false); setBulkResult(null) }}
+              className="z-input-light text-sm w-36 flex-shrink-0">
+              <option value="">Sin límite</option>
+              <option value="50">50 por tanda</option>
+              <option value="100">100 por tanda</option>
+              <option value="200">200 por tanda</option>
+              <option value="500">500 por tanda</option>
+              <option value="1000">1000 por tanda</option>
+            </select>
+          </div>
+
           {(() => {
             const subj = cfg.email_templates[bulkTmpl]?.subject
             return subj
@@ -650,16 +671,26 @@ export default function EmailMarketing() {
                 {!recipientLoading && recipientStats && (
                   <div className="pt-1 border-t border-z-border mt-2 space-y-1">
                     <div className="flex justify-between text-sm">
-                      <span className="text-slate-400">Recibirán el email</span>
-                      <span className="text-green-400 font-bold">{recipientStats.will_receive}</span>
+                      <span className="text-slate-400">
+                        {bulkBatchSize ? `Esta tanda (de ${recipientStats.will_receive} totales)` : 'Recibirán el email'}
+                      </span>
+                      <span className="text-green-400 font-bold">
+                        {bulkBatchSize ? recipientStats.will_receive_this_batch : recipientStats.will_receive}
+                      </span>
                     </div>
+                    {bulkBatchSize && recipientStats.will_receive > recipientStats.will_receive_this_batch && (
+                      <div className="flex justify-between text-xs text-slate-500">
+                        <span>Pendientes para próximas tandas</span>
+                        <span>{recipientStats.will_receive - recipientStats.will_receive_this_batch}</span>
+                      </div>
+                    )}
                     {recipientStats.without_email > 0 && (
                       <div className="flex justify-between text-xs text-slate-500"><span>Sin email</span><span>{recipientStats.without_email}</span></div>
                     )}
                     {recipientStats.unsubscribed > 0 && (
                       <div className="flex justify-between text-xs text-slate-500"><span>Desuscritos</span><span>{recipientStats.unsubscribed}</span></div>
                     )}
-                    {recipientStats.will_receive === 0 && <p className="text-xs text-amber-400">⚠ No hay destinatarios válidos.</p>}
+                    {(bulkBatchSize ? recipientStats.will_receive_this_batch : recipientStats.will_receive) === 0 && <p className="text-xs text-amber-400">⚠ No hay destinatarios válidos.</p>}
                     <button onClick={loadRecipientDetail} disabled={recipientDetailLoading}
                       className="mt-2 w-full text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-400/50 rounded-lg py-1.5 transition-colors disabled:opacity-50">
                       {recipientDetailLoading ? 'Cargando...' : 'Ver lista completa de contactos'}
@@ -668,9 +699,9 @@ export default function EmailMarketing() {
                 )}
               </div>
               <div className="px-4 py-3 border-t border-z-border flex gap-2">
-                <button onClick={sendBulk} disabled={recipientStats?.will_receive === 0}
+                <button onClick={sendBulk} disabled={(bulkBatchSize ? recipientStats?.will_receive_this_batch : recipientStats?.will_receive) === 0}
                   className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
-                  Confirmar envío {recipientStats ? `(${recipientStats.will_receive})` : ''}
+                  Confirmar envío {recipientStats ? `(${bulkBatchSize ? recipientStats.will_receive_this_batch : recipientStats.will_receive})` : ''}
                 </button>
                 <button onClick={() => setConfirmStep(false)}
                   className="px-4 py-2 text-slate-400 hover:text-slate-200 text-sm border border-z-border rounded-lg hover:bg-white/5 transition-colors">
