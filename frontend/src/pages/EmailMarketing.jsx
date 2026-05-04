@@ -637,7 +637,7 @@ export default function EmailMarketing() {
               <label className="text-xs text-slate-400 mb-1 block">Destinatarios</label>
               <select value={bulkCampaign} onChange={e => { setBulkCampaign(e.target.value); setConfirmStep(false); setBulkResult(null) }}
                 className="z-input-light text-sm">
-                <option value="">Todos mis prospectos</option>
+                <option value="">Todos (campañas + listas)</option>
                 {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 <option value="email_only">
                   Contactos de email {emailContactsCount ? `(${emailContactsCount.with_email})` : ''}
@@ -713,7 +713,7 @@ export default function EmailMarketing() {
                         ? `Contactos de email (${emailContactsCount?.with_email ?? '…'})`
                         : bulkCampaign
                           ? campaigns.find(c => String(c.id) === bulkCampaign)?.name || 'Campaña'
-                          : 'Todos los prospectos con email'}
+                          : 'Todos (campañas + listas, sin duplicados)'}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">

@@ -422,6 +422,15 @@ async def bulk_send_email(
     from sqlalchemy import nulls_first
     query = query.order_by(nulls_first(Prospect.last_email_sent_at.asc()))
     all_prospects = session.exec(query).all()
+    # Deduplicate by email address so the same address is only sent to once
+    seen_bulk: set[str] = set()
+    deduped: list = []
+    for p in all_prospects:
+        key = (p.email or "").strip().lower()
+        if key and key not in seen_bulk:
+            seen_bulk.add(key)
+            deduped.append(p)
+    all_prospects = deduped
     total_available = len(all_prospects)
     if not all_prospects:
         raise HTTPException(status_code=400, detail="No hay prospectos con email válido en esta selección")
@@ -586,11 +595,24 @@ def validate_email_recipients(
         base = base.where(Prospect.campaign_id == campaign_id)
     all_prospects = session.exec(base).all()
 
-    total = len(all_prospects)
-    with_email = sum(1 for p in all_prospects if (p.email or "").strip())
-    unsubscribed = sum(1 for p in all_prospects if (p.email or "").strip() and p.email_unsubscribed)
+    # Deduplicate by email — same address counts as one recipient
+    seen_emails: set[str] = set()
+    unique_prospects = []
+    no_email_count = 0
+    for p in all_prospects:
+        email = (p.email or "").strip().lower()
+        if not email:
+            no_email_count += 1
+            continue
+        if email not in seen_emails:
+            seen_emails.add(email)
+            unique_prospects.append(p)
+
+    total = len(unique_prospects) + no_email_count
+    with_email = len(unique_prospects)
+    without_email = no_email_count
+    unsubscribed = sum(1 for p in unique_prospects if p.email_unsubscribed)
     will_receive = with_email - unsubscribed
-    without_email = total - with_email
 
     # Batch info: how many would be sent in this run vs total available
     will_receive_this_batch = min(will_receive, batch_size) if batch_size and batch_size > 0 else will_receive
