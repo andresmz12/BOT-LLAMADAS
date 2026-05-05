@@ -171,7 +171,6 @@ def global_stats(
         "outcome_distribution": [{"name": k, "value": v} for k, v in outcomes.items()],
         "calls_by_hour": calls_by_hour,
         "recent_interested": recent_interested,
-        "calls_by_hour": calls_by_hour,
     }
 
 

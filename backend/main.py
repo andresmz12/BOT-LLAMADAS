@@ -182,7 +182,7 @@ async def _campaign_scheduler():
                 due = s.exec(
                     _sel(_Campaign).where(
                         _Campaign.status == "scheduled",
-                        _Campaign.scheduled_start_at <= _dt.now(_tz.utc),
+                        _Campaign.scheduled_start_at <= _dt.utcnow(),
                     )
                 ).all()
                 for campaign in due:

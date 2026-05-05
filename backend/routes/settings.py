@@ -30,6 +30,8 @@ def _unsub_url(prospect_id: int, org_id: int) -> str:
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
+_bulk_jobs: dict = {}
+
 SECRET_FIELDS = {"retell_api_key", "anthropic_api_key"}
 CREDENTIAL_FIELDS = {"retell_api_key", "retell_phone_number", "anthropic_api_key"}
 

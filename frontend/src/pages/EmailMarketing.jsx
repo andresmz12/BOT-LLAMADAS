@@ -396,7 +396,7 @@ export default function EmailMarketing() {
         loadScheduled()
         setBulkLoading(false)
       } else if (r.job_id) {
-        setBulkJobId?.(r.job_id)
+        setBulkJobId(r.job_id)
         loadHistory()
         setBulkLoading(false)
       } else {
