@@ -206,12 +206,25 @@ def status(session: Session = Depends(get_session)):
     return {"initialized": exists}
 
 
+class SetupRequest(BaseModel):
+    setup_secret: str = ""
+
+
 @router.post("/setup")
-def setup(session: Session = Depends(get_session)):
-    """Public bootstrap — only works if NO users exist yet."""
+def setup(data: SetupRequest, session: Session = Depends(get_session)):
+    """Public bootstrap — only works if NO users exist yet AND setup_secret matches."""
+    setup_secret = os.getenv("SETUP_SECRET", "")
+    if setup_secret and data.setup_secret != setup_secret:
+        raise HTTPException(status_code=403, detail="Setup secret inválido")
+
     existing = session.exec(select(User)).first()
     if existing:
         raise HTTPException(status_code=400, detail="Sistema ya inicializado")
+
+    admin_email = os.getenv("SUPERADMIN_EMAIL", "")
+    admin_password = os.getenv("SUPERADMIN_PASSWORD", "")
+    if not admin_email or not admin_password:
+        raise HTTPException(status_code=500, detail="SUPERADMIN_EMAIL y SUPERADMIN_PASSWORD deben estar configurados")
 
     from services.auth import hash_password
 
@@ -228,8 +241,6 @@ def setup(session: Session = Depends(get_session)):
         session.commit()
         session.refresh(org)
 
-    admin_email = os.getenv("SUPERADMIN_EMAIL", "admin@ismconsulting.com")
-    admin_password = os.getenv("SUPERADMIN_PASSWORD", "ISMadmin2024!")
     admin = User(
         email=admin_email,
         password_hash=hash_password(admin_password),
@@ -239,5 +250,5 @@ def setup(session: Session = Depends(get_session)):
     )
     session.add(admin)
     session.commit()
-    logger.info("Bootstrap: superadmin created via /auth/setup")
-    return {"ok": True, "email": "admin@ismconsulting.com"}
+    logger.info(f"Bootstrap: superadmin created via /auth/setup for {admin_email}")
+    return {"ok": True}

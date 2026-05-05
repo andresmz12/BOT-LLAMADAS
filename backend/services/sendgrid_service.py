@@ -18,6 +18,7 @@ DEFAULT_SUBJECT = {
     "callback_requested": "Le llamaremos pronto",
     "voicemail":          "Le dejamos un mensaje de voz",
     "not_interested":     "Fue un gusto hablar con usted",
+    "general":            "Mensaje de seguimiento",
 }
 
 
@@ -39,6 +40,8 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
             return
         to_email = (getattr(prospect, "email", "") or "").strip()
         if not to_email:
+            return
+        if getattr(prospect, "email_unsubscribed", False):
             return
 
         tmpl_vars = {
@@ -66,14 +69,19 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
         cta_url   = tmpl.get("cta_url") or ""
         signature = _fill(tmpl.get("signature") or f"El equipo de {tmpl_vars['agente']}", tmpl_vars)
 
-        html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature)
+        try:
+            from routes.settings import _unsub_url
+            unsub = _unsub_url(prospect.id, org.id)
+        except Exception:
+            unsub = ""
+        html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature, unsubscribe_url=unsub)
 
         from_email = (org.email_from or "").strip() or os.getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
         from_name  = (org.email_from_name or "").strip() or agent_name or "Bot Llamadas"
 
         from sendgrid import SendGridAPIClient
         from sendgrid.helpers.mail import (
-            Mail, Attachment, FileContent, FileName, FileType, Disposition
+            Mail, Attachment, FileContent, FileName, FileType, Disposition, CustomArg
         )
 
         message = Mail(
@@ -82,17 +90,23 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
             subject=subject,
             html_content=html_body,
         )
+        message.custom_arg = [
+            CustomArg(key="org_id", value=str(org.id)),
+            CustomArg(key="template_key", value=outcome),
+        ]
 
-        if org.email_attachment and org.email_attachment_name:
-            ext = org.email_attachment_name.rsplit(".", 1)[-1].lower()
+        # Per-template attachment takes priority over global attachment
+        att_b64 = tmpl.get("attachment_b64") or ""
+        att_name = tmpl.get("attachment_name") or ""
+        if not att_b64 and org.email_attachment and org.email_attachment_name:
+            att_b64 = base64.b64encode(org.email_attachment).decode()
+            att_name = org.email_attachment_name
+        if att_b64 and att_name:
+            ext = att_name.rsplit(".", 1)[-1].lower()
             mime = "application/pdf" if ext == "pdf" else f"image/{ext}"
-            att = Attachment(
-                FileContent(base64.b64encode(org.email_attachment).decode()),
-                FileName(org.email_attachment_name),
-                FileType(mime),
-                Disposition("attachment"),
+            message.attachment = Attachment(
+                FileContent(att_b64), FileName(att_name), FileType(mime), Disposition("attachment"),
             )
-            message.attachment = att
 
         sg = SendGridAPIClient(api_key)
         resp = sg.send(message)
@@ -108,23 +122,60 @@ def _fill(text: str, variables: dict) -> str:
     return text
 
 
-def _build_html(color: str, greeting: str, body: str, cta_text: str, cta_url: str, signature: str) -> str:
+def _format_body(text: str) -> str:
+    """Convert plain text (newlines + '- ' bullets) to email-safe HTML."""
+    import re
+    if not text:
+        return ""
+    parts = []
+    for para in re.split(r'\n{2,}', text.strip()):
+        lines = [l for l in para.split('\n') if l.strip()]
+        if not lines:
+            continue
+        if all(l.strip().startswith('- ') for l in lines):
+            items = ''.join(
+                f'<li style="margin:3px 0;color:#374151;font-size:14px">{l.strip()[2:]}</li>'
+                for l in lines
+            )
+            parts.append(f'<ul style="margin:4px 0 14px;padding-left:20px">{items}</ul>')
+        else:
+            inner = '<br>'.join(l for l in lines)
+            parts.append(f'<p style="margin:0 0 14px;line-height:1.75;color:#374151;font-size:14px">{inner}</p>')
+    return ''.join(parts)
+
+
+def _format_signature(text: str) -> str:
+    """Convert signature plain text to HTML."""
+    if not text:
+        return ""
+    return '<br>'.join(line for line in text.split('\n'))
+
+
+def _build_html(color: str, greeting: str, body: str, cta_text: str, cta_url: str, signature: str, unsubscribe_url: str = "") -> str:
     cta_block = ""
-    if cta_text and cta_url:
+    cta_label = cta_text or ("Ver más →" if cta_url else "")
+    if cta_label and cta_url:
         cta_block = (
             f'<p style="text-align:center;margin:24px 0">'
-            f'<a href="{cta_url}" style="background:{color};color:#fff;padding:12px 28px;'
-            f'border-radius:6px;text-decoration:none;font-weight:600">{cta_text}</a></p>'
+            f'<a href="{cta_url}" style="background:#1e40af;color:#fff;padding:12px 28px;'
+            f'border-radius:4px;text-decoration:none;font-weight:600">{cta_label}</a></p>'
         )
-    return f"""<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden">
-  <div style="background:{color};padding:20px 28px">
-    <h1 style="color:#fff;margin:0;font-size:18px">Mensaje de seguimiento</h1>
-  </div>
-  <div style="padding:28px">
-    <p style="margin-bottom:16px">{greeting}</p>
-    <div style="white-space:pre-wrap;line-height:1.6">{body}</div>
+    unsub_block = ""
+    if unsubscribe_url:
+        unsub_block = (
+            f'<p style="margin:10px 0 0;font-size:11px;color:#9ca3af">'
+            f'<a href="{unsubscribe_url}" style="color:#9ca3af;text-decoration:underline">Cancelar suscripción</a></p>'
+        )
+    body_html = _format_body(body)
+    sig_html = _format_signature(signature)
+    return f"""<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;color:#111827">
+  <div style="padding:28px 32px;border-bottom:1px solid #e5e7eb">
+    <p style="margin:0 0 16px;color:#111827;font-size:14px">{greeting}</p>
+    <div style="line-height:1.75;color:#374151;font-size:14px">{body_html}</div>
     {cta_block}
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0">
-    <p style="color:#6b7280;font-size:13px;margin:0">{signature}</p>
+  </div>
+  <div style="padding:16px 32px;background:#f9fafb">
+    <p style="color:#6b7280;font-size:12px;margin:0">{sig_html}</p>
+    {unsub_block}
   </div>
 </div>"""

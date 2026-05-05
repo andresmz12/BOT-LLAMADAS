@@ -5,7 +5,7 @@ import {
   UsersIcon, PhoneIcon, Cog6ToothIcon,
   KeyIcon, ArrowRightOnRectangleIcon,
   ChevronLeftIcon, ChevronRightIcon,
-  ChatBubbleLeftRightIcon, FireIcon,
+  ChatBubbleLeftRightIcon, FireIcon, EnvelopeIcon,
 } from '@heroicons/react/24/outline'
 import { logout } from '../api/client'
 
@@ -23,6 +23,7 @@ const NAV_BY_ROLE = {
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
+    { to: '/email-marketing', label: 'Email Marketing', Icon: EnvelopeIcon },
     { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
     { to: '/team', label: 'Asesores', Icon: UsersIcon },
     { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
@@ -33,6 +34,7 @@ const NAV_BY_ROLE = {
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
+    { to: '/email-marketing', label: 'Email Marketing', Icon: EnvelopeIcon },
     { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
   ],
   viewer: [

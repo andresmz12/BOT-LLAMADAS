@@ -169,8 +169,11 @@ async def _bg_analyze_and_sync(
 async def _verify_retell_signature(request: Request, raw_body: bytes):
     secret = os.getenv("RETELL_WEBHOOK_SECRET", "")
     if not secret:
+        logger.warning("RETELL_WEBHOOK_SECRET not set — webhook signature verification skipped!")
         return
     sig = request.headers.get("x-retell-signature", "")
+    if not sig:
+        raise HTTPException(status_code=401, detail="Missing webhook signature")
     expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(sig, expected):
         raise HTTPException(status_code=401, detail="Invalid webhook signature")

@@ -499,7 +499,8 @@ export default function Prospects() {
 
   const load = () => {
     const params = {}
-    if (filterCampaign) params.campaign_id = filterCampaign
+    if (filterCampaign === 'email_only') params.email_only = true
+    else if (filterCampaign) params.campaign_id = filterCampaign
     if (filterStatus) params.status = filterStatus
     getProspects(params).then(setProspects).catch(() => {})
   }
@@ -523,7 +524,8 @@ export default function Prospects() {
     if (!confirm(`¿Reintentar llamadas para ${label}?\n\nSe resetearán a "pending" para la próxima ejecución de campaña.`)) return
     try {
       const params = {}
-      if (filterCampaign) params.campaign_id = filterCampaign
+      if (filterCampaign === 'email_only') params.email_only = true
+      else if (filterCampaign) params.campaign_id = filterCampaign
       if (filterStatus) params.status = filterStatus
       const res = await retryProspects(params)
       alert(`${res.reset} prospectos marcados para reintento.`)
@@ -532,12 +534,16 @@ export default function Prospects() {
   }
 
   const handleDeleteAll = async () => {
-    const scope = filterCampaign
-      ? `los ${prospects.length} prospectos de esta campaña`
-      : `TODOS los ${prospects.length} prospectos`
+    const scope = filterCampaign === 'email_only'
+      ? `los ${prospects.length} contactos de email`
+      : filterCampaign
+        ? `los ${prospects.length} prospectos de esta campaña`
+        : `TODOS los ${prospects.length} prospectos`
     if (!confirm(`¿Eliminar ${scope}? Esta acción no se puede deshacer.`)) return
     try {
-      const params = filterCampaign ? { campaign_id: filterCampaign } : {}
+      const params = filterCampaign === 'email_only'
+        ? { email_only: true }
+        : filterCampaign ? { campaign_id: filterCampaign } : {}
       const res = await deleteAllProspects(params)
       alert(`${res.deleted} prospectos eliminados.`)
       load()
@@ -554,7 +560,10 @@ export default function Prospects() {
     ])
   }
 
-  const campaignName = (id) => campaigns.find(c => c.id === id)?.name || `#${id}`
+  const campaignName = (id) => {
+    if (id == null) return null
+    return campaigns.find(c => c.id === id)?.name || `#${id}`
+  }
   const noCampaigns = campaigns.length === 0
 
   return (
@@ -595,6 +604,7 @@ export default function Prospects() {
       <div className="flex gap-3 flex-wrap items-center">
         <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-full sm:w-auto">
           <option value="">Todas las campañas</option>
+          <option value="email_only">Contactos de email</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="z-input w-full sm:w-auto">
@@ -622,7 +632,7 @@ export default function Prospects() {
         <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-black/20">
             <tr>
-              {['Nombre', 'Empresa', 'Teléfono', 'Score', 'Campaña', 'Estado', 'Intentos', 'Última llamada', 'Acciones'].map(h => (
+              {['Nombre', 'Empresa', 'Teléfono', 'Score', 'Campaña', 'Estado', 'Intentos', 'Última llamada', 'Email', 'Acciones'].map(h => (
                 <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
               ))}
             </tr>
@@ -640,11 +650,31 @@ export default function Prospects() {
                     </span>
                   ) : <span className="text-slate-600 text-xs">—</span>}
                 </td>
-                <td className="px-6 py-3 text-slate-400 text-xs">{campaignName(p.campaign_id)}</td>
+                <td className="px-6 py-3 text-slate-400 text-xs">
+                  {p.campaign_id == null
+                    ? <span className="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-xs font-medium">Email</span>
+                    : campaignName(p.campaign_id)}
+                </td>
                 <td className="px-6 py-3"><StatusBadge status={p.status} /></td>
                 <td className="px-6 py-3 text-slate-400">{p.call_attempts}</td>
                 <td className="px-6 py-3 text-slate-500 text-xs">
                   {fmtDate(p.last_called_at)}
+                </td>
+                <td className="px-6 py-3">
+                  {p.email_unsubscribed ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-slate-600" title="Desuscrito">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-600 inline-block" /> Des.
+                    </span>
+                  ) : p.last_email_sent_at ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-blue-400" title={`${p.email_send_count || 1} email(s) enviado(s)\nÚltimo: ${fmtDate(p.last_email_sent_at)}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+                      {fmtDate(p.last_email_sent_at)}
+                    </span>
+                  ) : p.email ? (
+                    <span className="text-xs text-slate-600">—</span>
+                  ) : (
+                    <span className="text-xs text-slate-700 italic">Sin email</span>
+                  )}
                 </td>
                 <td className="px-6 py-3">
                   <div className="flex items-center gap-2">
@@ -663,7 +693,7 @@ export default function Prospects() {
               </tr>
             ))}
             {prospects.length === 0 && (
-              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-500">No hay prospectos</td></tr>
+              <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-500">No hay prospectos</td></tr>
             )}
           </tbody>
         </table>

@@ -6,7 +6,13 @@ import jwt
 from datetime import datetime, timedelta
 from typing import Optional
 
-SECRET_KEY = os.getenv("JWT_SECRET", "dev-secret-change-in-production-ism-2024")
+SECRET_KEY = os.getenv("JWT_SECRET", "")
+if not SECRET_KEY:
+    import logging as _logging
+    _logging.getLogger(__name__).critical(
+        "JWT_SECRET env var is not set — using insecure fallback. Set this in production!"
+    )
+    SECRET_KEY = "dev-secret-change-in-production-ism-2024"
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 24
 _ITERATIONS = 200_000

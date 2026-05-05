@@ -85,6 +85,10 @@ def create_prospect(
     current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
+    if data.campaign_id:
+        camp = session.get(Campaign, data.campaign_id)
+        if not camp or (current_user.role != "superadmin" and camp.organization_id != current_user.organization_id):
+            raise HTTPException(status_code=403, detail="Campaña no encontrada o sin acceso")
     prospect = Prospect(
         campaign_id=data.campaign_id,
         name=data.name,
@@ -130,7 +134,18 @@ async def import_file(
         reader = csv.DictReader(io.StringIO(text))
         rows = [{k.strip().lower(): v for k, v in r.items()} for r in reader]
 
+    # Pre-load existing phones in the org to skip duplicates across all campaigns
+    existing_phones: set[str] = set()
+    if current_user.organization_id:
+        existing_phones = {
+            p for p in session.exec(
+                select(Prospect.phone).where(Prospect.organization_id == current_user.organization_id)
+            ).all()
+            if p
+        }
+
     imported = 0
+    skipped_existing = 0
     for row in rows:
         # Phone: "phone" or "phone number"
         phone = (row.get("phone") or row.get("phone number") or "").strip()
@@ -142,6 +157,10 @@ async def import_file(
         if not phone or not re.match(r"^\+?[\d\s\-().]{7,20}$", phone):
             continue
         phone = normalize_phone(phone, phone_country_code)
+        if phone in existing_phones:
+            skipped_existing += 1
+            continue
+        existing_phones.add(phone)  # prevent duplicates within the same file too
         session.add(Prospect(
             campaign_id=campaign_id,
             name=name,
@@ -152,12 +171,13 @@ async def import_file(
         ))
         imported += 1
     session.commit()
-    return {"imported": imported}
+    return {"imported": imported, "skipped_existing": skipped_existing}
 
 
 @router.get("")
 def list_prospects(
     campaign_id: int | None = None,
+    email_only: bool = False,
     status: str | None = None,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
@@ -165,7 +185,9 @@ def list_prospects(
     query = select(Prospect)
     if current_user.role != "superadmin":
         query = query.where(Prospect.organization_id == current_user.organization_id)
-    if campaign_id:
+    if email_only:
+        query = query.where(Prospect.campaign_id == None)  # noqa: E711
+    elif campaign_id:
         query = query.where(Prospect.campaign_id == campaign_id)
     if status:
         query = query.where(Prospect.status == status)
@@ -203,6 +225,10 @@ async def call_prospect(
     prospect = session.get(Prospect, prospect_id)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+    if not prospect.phone:
+        raise HTTPException(status_code=400, detail="Este prospecto no tiene teléfono y no puede ser llamado")
+    if not prospect.campaign_id:
+        raise HTTPException(status_code=400, detail="Este prospecto es solo de email y no pertenece a una campaña de llamadas")
 
     campaign = session.get(Campaign, prospect.campaign_id)
     if not campaign:
@@ -253,6 +279,7 @@ async def call_prospect(
 @router.post("/retry")
 def retry_prospects(
     campaign_id: int | None = None,
+    email_only: bool = False,
     status: str | None = None,
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
@@ -261,7 +288,9 @@ def retry_prospects(
     query = select(Prospect)
     if current_user.role != "superadmin":
         query = query.where(Prospect.organization_id == current_user.organization_id)
-    if campaign_id:
+    if email_only:
+        query = query.where(Prospect.campaign_id == None)  # noqa: E711
+    elif campaign_id:
         query = query.where(Prospect.campaign_id == campaign_id)
     if status:
         query = query.where(Prospect.status == status)
@@ -280,13 +309,16 @@ def retry_prospects(
 @router.delete("")
 def delete_all_prospects(
     campaign_id: int | None = None,
+    email_only: bool = False,
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
     query = select(Prospect)
     if current_user.role != "superadmin":
         query = query.where(Prospect.organization_id == current_user.organization_id)
-    if campaign_id:
+    if email_only:
+        query = query.where(Prospect.campaign_id == None)  # noqa: E711
+    elif campaign_id:
         query = query.where(Prospect.campaign_id == campaign_id)
     prospects = session.exec(query).all()
     for p in prospects:
@@ -340,8 +372,13 @@ class ApifySearchRequest(BaseModel):
 
 
 def _brand_key(name: str) -> str:
+    """Normalize a business name to its 'brand key' for deduplication.
+    All-caps acronyms (CFSC, ACE, CVS...) are used as-is so all branches collapse to one key."""
+    words_raw = name.strip().split()
+    if words_raw and re.match(r'^[A-Z&]{2,6}$', words_raw[0]):
+        return words_raw[0].lower()
     n = name.lower()
-    n = re.sub(r'\b(inc|llc|corp|ltd|co|no|num|sucursal|branch|location|store)\b', '', n)
+    n = re.sub(r'\b(inc|llc|corp|ltd|co|no|num|sucursal|branch|location|store|express)\b', '', n)
     n = re.sub(r'#\s*\d+', '', n)
     n = re.sub(r'\b\d+\b', '', n)
     n = re.sub(r'[^\w\s]', '', n)
@@ -350,18 +387,92 @@ def _brand_key(name: str) -> str:
 
 
 _CHAIN_KEYWORDS = [
-    "walmart", "mcdonald", "starbucks", "burger king", "wendy's", "taco bell",
-    "domino", "pizza hut", "subway", "dunkin", "7-eleven", "cvs", "walgreens",
-    "dollar general", "dollar tree", "family dollar", "target", "costco",
-    "home depot", "lowe's", "autozone", "advance auto", "o'reilly",
+    # Check cashing / currency exchange chains
+    "cfsc", "ace cash", "money mart", "check into cash", "cash america", "first cash",
+    "checksmart", "speedy cash", "advance america", "titlemax", "titlebucks",
+    "western union", "moneygram", "check n go", "check city", "world acceptance",
+
+    # Banks / credit unions (large national)
     "chase bank", "wells fargo", "bank of america", "citibank", "td bank",
+    "us bank", "pnc bank", "regions bank", "fifth third", "santander bank",
+    "keybank", "suntrust", "bb&t", "truist", "huntington bank", "citizens bank",
+    "capital one", "ally bank", "discover bank", "navy federal", "usaa",
+
+    # Tax preparation chains
     "h&r block", "jackson hewitt", "liberty tax",
-    "shell", "exxon", "chevron", "bp ", "circle k", "speedway",
-    # Major shipping/parcel carriers — never independents, exclude by default
+
+    # Big-box retail
+    "walmart", "target", "costco", "sam's club", "bj's wholesale",
+    "home depot", "lowe's", "menards", "ace hardware", "true value",
+    "best buy", "staples", "office depot", "officemax",
+
+    # Grocery chains
+    "kroger", "safeway", "albertsons", "publix", "h-e-b", "aldi",
+    "whole foods", "trader joe's", "meijer", "food lion", "giant eagle",
+    "stop & shop", "wegmans", "sprouts", "smart & final",
+
+    # Dollar / discount stores
+    "dollar general", "dollar tree", "family dollar", "five below",
+
+    # Pharmacy chains
+    "cvs pharmacy", "walgreens", "rite aid", "duane reade",
+
+    # Fast food / QSR
+    "mcdonald", "burger king", "wendy's", "taco bell", "subway",
+    "domino", "pizza hut", "papa john", "little caesars", "papa murphy",
+    "kfc", "popeyes", "chick-fil-a", "raising cane",
+    "chipotle", "qdoba", "moe's southwest",
+    "dunkin", "starbucks", "tim hortons", "peet's coffee",
+    "sonic drive", "dairy queen", "baskin robbins", "cold stone",
+    "five guys", "shake shack", "whataburger", "culver's",
+    "arby's", "hardee's", "carl's jr",
+    "ihop", "denny's", "cracker barrel", "applebee's", "chili's",
+    "olive garden", "red lobster", "outback steakhouse", "longhorn steakhouse",
+    "panda express", "wingstop", "buffalo wild wings",
+    "panera bread", "jersey mike", "jimmy john", "firehouse subs",
+    "moe's", "el pollo loco", "del taco", "jack in the box",
+
+    # Auto parts / service chains
+    "autozone", "advance auto", "o'reilly", "napa auto",
+    "jiffy lube", "valvoline", "pep boys", "midas", "meineke",
+    "firestone", "goodyear", "discount tire", "mavis discount",
+    "oil can henry", "express oil",
+
+    # Gas stations / convenience
+    "shell", "exxon", "chevron", "bp station", "circle k", "speedway",
+    "marathon oil", "marathon gas", "mobil", "sunoco", "gulf station",
+    "pilot travel", "flying j", "wawa", "sheetz", "kwik trip",
+    "casey's general", "love's travel", "road ranger",
+
+    # Telecom retail
+    "t-mobile", "at&t store", "verizon wireless", "sprint store",
+    "metro by t-mobile", "cricket wireless", "boost mobile",
+
+    # Hotels / lodging chains
+    "marriott", "hilton", "hyatt", "holiday inn", "hampton inn",
+    "comfort inn", "best western", "motel 6", "super 8", "days inn",
+    "extended stay", "residence inn", "courtyard by marriott",
+    "fairfield inn", "la quinta", "quality inn",
+
+    # Shipping / parcel carriers
     "ups store", "the ups store", "fedex", "fed ex", "fed-ex", "dhl",
     "usps", "united states postal", "post office", "u.s. post",
     "amazon hub", "amazon locker", "ontrac", "lasershop", "lasership",
     "purolator", "aramex", "tnt express",
+
+    # Fitness chains
+    "planet fitness", "anytime fitness", "la fitness", "24 hour fitness",
+    "gold's gym", "ymca", "crunch fitness", "equinox",
+
+    # Urgent care / healthcare chains
+    "minuteclinic", "concentra", "nextcare", "american family care",
+    "patient first", "gohealth urgent", "medexpress",
+
+    # Insurance chains
+    "state farm", "allstate", "farmers insurance", "liberty mutual",
+
+    # Real estate chains
+    "re/max", "keller williams", "century 21", "coldwell banker",
 ]
 
 
