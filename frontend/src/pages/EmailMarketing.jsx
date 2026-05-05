@@ -172,6 +172,7 @@ export default function EmailMarketing() {
   const [recipientDetailTab, setRecipientDetailTab] = useState('will_receive')
   const [bulkJobId, setBulkJobId] = useState(null)
   const [bulkJobProgress, setBulkJobProgress] = useState(null) // live job status
+  const [batchNumber, setBatchNumber] = useState(1)
   const bulkPollRef = useRef(null)
 
   // Test send
@@ -397,8 +398,26 @@ export default function EmailMarketing() {
         setBulkLoading(false)
       } else if (r.job_id) {
         setBulkJobId(r.job_id)
-        loadHistory()
-        setBulkLoading(false)
+        setBulkJobProgress({ status: 'running', sent: 0, skipped: 0, total: r.total, sent_list: [], failed_list: [] })
+        bulkPollRef.current = setInterval(async () => {
+          try {
+            const status = await getBulkSendStatus(r.job_id)
+            setBulkJobProgress(status)
+            if (status.status === 'done' || status.status === 'error') {
+              clearInterval(bulkPollRef.current); bulkPollRef.current = null
+              setBulkLoading(false); loadHistory()
+              if (status.status === 'done') {
+                try {
+                  const freshStats = await validateEmailRecipients(parseBulkTarget())
+                  setRecipientStats(freshStats)
+                } catch (_) {}
+              }
+            }
+          } catch (_) {
+            clearInterval(bulkPollRef.current); bulkPollRef.current = null
+            setBulkLoading(false)
+          }
+        }, 2000)
       } else {
         setBulkResult(r)
         setScheduleMode(false); setScheduleAt('')
@@ -419,6 +438,13 @@ export default function EmailMarketing() {
       setRecipientStats(stats)
     } catch (e) { /* non-critical */ }
     finally { setRecipientLoading(false) }
+  }
+
+  const sendNextBatch = () => {
+    setBatchNumber(n => n + 1)
+    setBulkJobId(null)
+    setBulkJobProgress(null)
+    sendBulk()
   }
 
   const loadRecipientDetail = async () => {
@@ -837,7 +863,9 @@ export default function EmailMarketing() {
                     <CheckCircleIcon className="w-4 h-4 text-green-400 flex-shrink-0" />
                   )}
                   <span className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
-                    {bulkLoading ? 'Enviando emails en progreso...' : 'Envío completado'}
+                    {bulkLoading
+                      ? (batchNumber > 1 ? `Enviando lote ${batchNumber}...` : 'Enviando emails en progreso...')
+                      : `Lote ${batchNumber} completado`}
                   </span>
                 </div>
                 {bulkJobProgress && (
@@ -896,8 +924,14 @@ export default function EmailMarketing() {
               )}
 
               {!bulkLoading && bulkJobProgress?.status === 'done' && (
-                <div className="px-4 py-3 border-t border-z-border">
-                  <button onClick={() => { setBulkJobProgress(null); setBulkJobId(null) }}
+                <div className="px-4 py-3 border-t border-z-border flex items-center gap-4 flex-wrap">
+                  {bulkBatchSize && recipientStats?.will_receive_this_batch > 0 && (
+                    <button onClick={sendNextBatch}
+                      className="px-4 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
+                      Siguiente lote ({recipientStats.will_receive_this_batch} restantes) →
+                    </button>
+                  )}
+                  <button onClick={() => { setBulkJobProgress(null); setBulkJobId(null); setBatchNumber(1) }}
                     className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Nuevo envío</button>
                 </div>
               )}
