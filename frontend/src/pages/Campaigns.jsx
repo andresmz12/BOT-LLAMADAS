@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PlayIcon, PauseIcon, TrashIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PlayIcon, PauseIcon, TrashIcon, XMarkIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import UpgradeBanner from '../components/UpgradeBanner'
-import { getCampaigns, createCampaign, startCampaign, pauseCampaign, deleteCampaign, getAgents, getDemoStatus } from '../api/client'
+import { getCampaigns, createCampaign, updateCampaign, startCampaign, pauseCampaign, deleteCampaign, getAgents, getDemoStatus } from '../api/client'
 
 export default function Campaigns() {
   const [campaigns, setCampaigns] = useState([])
   const [agents, setAgents] = useState([])
   const [showModal, setShowModal] = useState(false)
+  const [editing, setEditing] = useState(null)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const isFree = user.plan === 'free'
   const [demoStatus, setDemoStatus] = useState(null)
@@ -105,6 +106,12 @@ export default function Campaigns() {
                           <PauseIcon className="w-3.5 h-3.5" /> Pausar
                         </button>
                       )}
+                      {c.status !== 'running' && (
+                        <button onClick={() => setEditing(c)}
+                          className="flex items-center gap-1 px-2.5 py-1 bg-blue-500/15 hover:bg-blue-500/25 text-blue-400 text-xs font-medium rounded-lg">
+                          <PencilSquareIcon className="w-3.5 h-3.5" /> Editar
+                        </button>
+                      )}
                       <button onClick={() => handleDelete(c)}
                         className="flex items-center gap-1 px-2.5 py-1 bg-red-500/15 hover:bg-red-500/25 text-red-400 text-xs font-medium rounded-lg">
                         <TrashIcon className="w-3.5 h-3.5" /> Eliminar
@@ -123,19 +130,40 @@ export default function Campaigns() {
       </div>
 
       {showModal && (
-        <NewCampaignModal agents={agents} onClose={() => setShowModal(false)}
+        <CampaignModal agents={agents} onClose={() => setShowModal(false)}
           onSaved={() => { setShowModal(false); load() }} />
+      )}
+      {editing && (
+        <CampaignModal agents={agents} campaign={editing} onClose={() => setEditing(null)}
+          onSaved={() => { setEditing(null); load() }} />
       )}
     </div>
   )
 }
 
-function NewCampaignModal({ agents, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: '', description: '', agent_config_id: agents[0]?.id || '', calls_per_minute: 10, sequential_calls: false, schedule_enabled: false, scheduled_start_at: '' })
+function toLocalDatetimeInput(iso) {
+  if (!iso) return ''
+  const s = iso.endsWith('Z') ? iso : iso + 'Z'
+  const d = new Date(s)
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+}
+
+function CampaignModal({ agents, campaign, onClose, onSaved }) {
+  const isEdit = !!campaign
+  const [form, setForm] = useState(() => isEdit ? {
+    name: campaign.name || '',
+    description: campaign.description || '',
+    agent_config_id: campaign.agent_config_id || agents[0]?.id || '',
+    calls_per_minute: campaign.calls_per_minute ?? 10,
+    sequential_calls: !!campaign.sequential_calls,
+    schedule_enabled: !!campaign.scheduled_start_at,
+    scheduled_start_at: toLocalDatetimeInput(campaign.scheduled_start_at),
+  } : { name: '', description: '', agent_config_id: agents[0]?.id || '', calls_per_minute: 10, sequential_calls: false, schedule_enabled: false, scheduled_start_at: '' })
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (agents.length > 0 && !form.agent_config_id) {
+    if (!isEdit && agents.length > 0 && !form.agent_config_id) {
       setForm(f => ({ ...f, agent_config_id: agents[0].id }))
     }
   }, [agents])
@@ -145,20 +173,37 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
     if (!form.agent_config_id) return alert('Selecciona un agente')
     setLoading(true)
     try {
-      const payload = {
-        ...form,
-        agent_config_id: Number(form.agent_config_id),
-        calls_per_minute: Number(form.calls_per_minute),
-        sequential_calls: form.sequential_calls,
-        scheduled_start_at: form.schedule_enabled && form.scheduled_start_at
-          ? new Date(form.scheduled_start_at).toISOString()
-          : null,
+      if (isEdit) {
+        const payload = {
+          name: form.name,
+          description: form.description,
+          agent_config_id: Number(form.agent_config_id),
+          calls_per_minute: Number(form.calls_per_minute),
+          sequential_calls: form.sequential_calls,
+        }
+        if (form.schedule_enabled && form.scheduled_start_at) {
+          payload.scheduled_start_at = new Date(form.scheduled_start_at).toISOString()
+          payload.clear_schedule = false
+        } else {
+          payload.clear_schedule = true
+        }
+        await updateCampaign(campaign.id, payload)
+      } else {
+        const payload = {
+          ...form,
+          agent_config_id: Number(form.agent_config_id),
+          calls_per_minute: Number(form.calls_per_minute),
+          sequential_calls: form.sequential_calls,
+          scheduled_start_at: form.schedule_enabled && form.scheduled_start_at
+            ? new Date(form.scheduled_start_at).toISOString()
+            : null,
+        }
+        delete payload.schedule_enabled
+        await createCampaign(payload)
       }
-      delete payload.schedule_enabled
-      await createCampaign(payload)
       onSaved()
     } catch (err) {
-      alert(err.response?.data?.detail || 'Error al crear campaña')
+      alert(err.response?.data?.detail || (isEdit ? 'Error al actualizar campaña' : 'Error al crear campaña'))
     } finally { setLoading(false) }
   }
 
@@ -169,7 +214,7 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-z-border">
-          <h2 className="text-lg font-bold text-slate-100">Nueva Campaña</h2>
+          <h2 className="text-lg font-bold text-slate-100">{isEdit ? 'Editar Campaña' : 'Nueva Campaña'}</h2>
           <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
@@ -236,7 +281,7 @@ function NewCampaignModal({ agents, onClose, onSaved }) {
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="z-btn-ghost">Cancelar</button>
             <button type="submit" disabled={loading} className="z-btn-primary">
-              {loading ? 'Creando...' : form.schedule_enabled ? 'Programar campaña' : 'Crear campaña'}
+              {loading ? 'Guardando...' : isEdit ? 'Guardar cambios' : (form.schedule_enabled ? 'Programar campaña' : 'Crear campaña')}
             </button>
           </div>
         </form>
