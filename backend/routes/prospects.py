@@ -191,7 +191,8 @@ def list_prospects(
         query = query.where(Prospect.campaign_id == campaign_id)
     if status:
         query = query.where(Prospect.status == status)
-    return session.exec(query).all()
+    prospects = session.exec(query).all()
+    return [p.model_dump(exclude={"campaign", "calls"}) for p in prospects]
 
 
 @router.put("/{prospect_id}")
