@@ -82,7 +82,7 @@ def create_org(
     session.add(org)
     session.commit()
     session.refresh(org)
-    return org
+    return _safe_org(org)
 
 
 @router.get("/organizations")
@@ -111,7 +111,7 @@ def update_org(
     session.add(org)
     session.commit()
     session.refresh(org)
-    return org
+    return _safe_org(org)
 
 
 @router.post("/organizations/{org_id}/apify/test")
