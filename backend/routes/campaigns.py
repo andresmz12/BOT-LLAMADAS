@@ -21,6 +21,16 @@ class CampaignCreate(BaseModel):
     scheduled_start_at: Optional[datetime] = None
 
 
+class CampaignUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    agent_config_id: Optional[int] = None
+    calls_per_minute: Optional[int] = Field(default=None, ge=1, le=100)
+    sequential_calls: Optional[bool] = None
+    scheduled_start_at: Optional[datetime] = None
+    clear_schedule: bool = False
+
+
 @router.post("")
 def create_campaign(
     data: CampaignCreate,
@@ -80,6 +90,50 @@ def get_campaign(
         raise HTTPException(status_code=404, detail="Campaign not found")
     if current_user.role != "superadmin" and campaign.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
+    return campaign
+
+
+@router.put("/{campaign_id}")
+def update_campaign(
+    campaign_id: int,
+    data: CampaignUpdate,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    campaign = session.get(Campaign, campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if current_user.role != "superadmin" and campaign.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+    if campaign.status == "running":
+        raise HTTPException(status_code=400, detail="No se puede editar una campaña en ejecución. Pausa la campaña primero.")
+
+    payload = data.dict(exclude_unset=True)
+    clear_schedule = payload.pop("clear_schedule", False)
+
+    for k, v in payload.items():
+        if k == "scheduled_start_at":
+            continue
+        setattr(campaign, k, v)
+
+    now_utc = datetime.now(timezone.utc)
+    if clear_schedule:
+        campaign.scheduled_start_at = None
+        if campaign.status == "scheduled":
+            campaign.status = "draft"
+    elif "scheduled_start_at" in payload:
+        sched = payload["scheduled_start_at"]
+        if sched and sched.tzinfo is None:
+            sched = sched.replace(tzinfo=timezone.utc)
+        campaign.scheduled_start_at = sched
+        if sched and sched > now_utc and campaign.status in ("draft", "scheduled"):
+            campaign.status = "scheduled"
+        elif (not sched) and campaign.status == "scheduled":
+            campaign.status = "draft"
+
+    session.add(campaign)
+    session.commit()
+    session.refresh(campaign)
     return campaign
 
 

@@ -68,6 +68,7 @@ export const uploadKnowledgeBase = (id, file) => {
 // Campaigns
 export const getCampaigns = () => api.get('/campaigns').then(r => r.data)
 export const createCampaign = (data) => api.post('/campaigns', data).then(r => r.data)
+export const updateCampaign = (id, data) => api.put(`/campaigns/${id}`, data).then(r => r.data)
 export const startCampaign = (id) => api.post(`/campaigns/${id}/start`).then(r => r.data)
 export const pauseCampaign = (id) => api.post(`/campaigns/${id}/pause`).then(r => r.data)
 export const deleteCampaign = (id) => api.delete(`/campaigns/${id}`).then(r => r.data)
