@@ -19,8 +19,28 @@ from routes.auth import get_current_user, require_write_access, require_superadm
 APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")
 
 
+_UNSUB_SECRET = os.getenv("UNSUB_SECRET", "unsub-fallback-sign-key-change-me")
+
+
 def _unsub_token(prospect_id: int, org_id: int) -> str:
-    return _b64.urlsafe_b64encode(f"{prospect_id}:{org_id}".encode()).decode()
+    import hmac as _hmac, hashlib as _hashlib
+    payload = f"{prospect_id}:{org_id}"
+    sig = _hmac.new(_UNSUB_SECRET.encode(), payload.encode(), _hashlib.sha256).hexdigest()[:20]
+    return _b64.urlsafe_b64encode(f"{payload}:{sig}".encode()).decode()
+
+
+def _verify_unsub_token(token: str):
+    import hmac as _hmac, hashlib as _hashlib
+    decoded = _b64.urlsafe_b64decode(token.encode()).decode()
+    parts = decoded.rsplit(":", 1)
+    if len(parts) != 2:
+        raise ValueError("Bad token format")
+    payload, sig = parts
+    expected = _hmac.new(_UNSUB_SECRET.encode(), payload.encode(), _hashlib.sha256).hexdigest()[:20]
+    if not _hmac.compare_digest(sig, expected):
+        raise ValueError("Invalid signature")
+    pid_str, oid_str = payload.split(":")
+    return int(pid_str), int(oid_str)
 
 
 def _unsub_url(prospect_id: int, org_id: int) -> str:
@@ -382,7 +402,9 @@ async def test_email(
         resp = sg.send(message)
         return {"ok": True, "status_code": resp.status_code}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error al enviar: {str(e)}")
+        import logging as _log
+        _log.getLogger(__name__).error(f"Test email failed: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Error al enviar el correo de prueba. Verifica la configuración de SendGrid.")
 
 
 class BulkEmailRequest(BaseModel):
@@ -491,6 +513,7 @@ async def bulk_send_email(
 
     job_id = str(uuid.uuid4())[:8]
     _bulk_jobs[job_id] = {
+        "org_id": current_user.organization_id,
         "status": "running",
         "sent": 0, "skipped": 0,
         "total": len(prospects_data),
@@ -627,6 +650,8 @@ def bulk_send_status(job_id: str, current_user: User = Depends(get_current_user)
     job = _bulk_jobs.get(job_id)
     if not job:
         raise HTTPException(status_code=404, detail="Job no encontrado o expirado")
+    if current_user.role != "superadmin" and job.get("org_id") != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
     return job
 
 
@@ -769,15 +794,15 @@ def email_unsubscribe(
     token: str = "",
     session: Session = Depends(get_session),
 ):
+    import html as _html
     try:
-        decoded = _b64.urlsafe_b64decode(token.encode()).decode()
-        prospect_id, org_id = decoded.split(":")
-        prospect = session.get(Prospect, int(prospect_id))
-        if prospect and prospect.organization_id == int(org_id):
+        prospect_id, org_id = _verify_unsub_token(token)
+        prospect = session.get(Prospect, prospect_id)
+        if prospect and prospect.organization_id == org_id:
             prospect.email_unsubscribed = True
             session.add(prospect)
             session.commit()
-            name = prospect.name or "Estimado/a"
+            name = _html.escape(prospect.name or "Estimado/a")
             return HTMLResponse(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <title>Suscripción cancelada</title>
 <style>body{{font-family:Arial,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f9fafb}}

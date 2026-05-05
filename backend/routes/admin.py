@@ -19,11 +19,13 @@ def _mask(key: str | None) -> str:
     return f"{'*' * max(0, len(key) - 4)}{key[-4:]}" if len(key) > 4 else "****"
 
 def _safe_org(org: Organization) -> dict:
-    d = org.dict()
+    d = org.dict(exclude={"email_attachment"})  # bytes not JSON-serializable
     for field in _SENSITIVE:
         if d.get(field):
             d[field] = _mask(d[field])
     d.setdefault("demo_calls_used", 0)
+    d["email_attachment_name"] = org.email_attachment_name
+    d["has_email_attachment"] = bool(org.email_attachment)
     return d
 
 

@@ -85,6 +85,10 @@ def create_prospect(
     current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
+    if data.campaign_id:
+        camp = session.get(Campaign, data.campaign_id)
+        if not camp or (current_user.role != "superadmin" and camp.organization_id != current_user.organization_id):
+            raise HTTPException(status_code=403, detail="Campaña no encontrada o sin acceso")
     prospect = Prospect(
         campaign_id=data.campaign_id,
         name=data.name,
