@@ -538,6 +538,7 @@ async def bulk_send_email(
         campaign_id=data.campaign_id,
         email_only=data.email_only or False,
         email_list_id=data.email_list_id,
+        batch_size=data.batch_size,
     )
 
     return {"job_id": job_id, "status": "running", "total": len(prospects_data)}
@@ -548,6 +549,7 @@ async def _run_bulk_send_job(
     api_key: str, from_email: str, from_name: str, delay_s: float,
     template_key: str, tmpl: dict, att_b64: str, att_name: str,
     prospects_data: list, campaign_id, email_only: bool, email_list_id,
+    batch_size=None,
 ):
     from sendgrid import SendGridAPIClient
     from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition, CustomArg
@@ -638,6 +640,9 @@ async def _run_bulk_send_job(
             total_errors=len(job["failed_list"]),
             error_details=json.dumps(job["failed_list"]) if job["failed_list"] else None,
             initiated_by=user_email,
+            source_email_only=email_only or False,
+            source_email_list_id=email_list_id,
+            source_batch_size=batch_size,
         )
         s.add(log_entry)
         s.commit()
@@ -675,10 +680,14 @@ def get_email_history(
             "template_key": l.template_key,
             "template_subject": l.template_subject,
             "campaign_name": l.campaign_name,
+            "campaign_id": l.campaign_id,
             "total_sent": l.total_sent,
             "total_skipped": l.total_skipped,
             "total_errors": l.total_errors,
             "initiated_by": l.initiated_by,
+            "source_email_only": l.source_email_only or False,
+            "source_email_list_id": l.source_email_list_id,
+            "source_batch_size": l.source_batch_size,
             "error_details": json.loads(l.error_details) if l.error_details else [],
         }
         for l in logs

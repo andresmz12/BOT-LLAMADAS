@@ -213,6 +213,9 @@ class EmailSendLog(SQLModel, table=True):
     total_errors: int = Field(default=0)
     error_details: Optional[str] = None
     initiated_by: Optional[str] = None
+    source_email_only: bool = Field(default=False)
+    source_email_list_id: Optional[int] = None
+    source_batch_size: Optional[int] = None
 
 
 class EmailEvent(SQLModel, table=True):

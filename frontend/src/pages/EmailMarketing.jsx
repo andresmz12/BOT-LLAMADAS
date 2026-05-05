@@ -447,6 +447,24 @@ export default function EmailMarketing() {
     sendBulk()
   }
 
+  const resumeFromHistory = (h) => {
+    if (h.source_email_list_id) {
+      setBulkCampaign(`list:${h.source_email_list_id}`)
+    } else if (h.source_email_only) {
+      setBulkCampaign('email_only')
+    } else if (h.campaign_id) {
+      setBulkCampaign(String(h.campaign_id))
+    } else {
+      setBulkCampaign('')
+    }
+    setBulkTmpl(h.template_key)
+    setBulkBatchSize(h.source_batch_size ? String(h.source_batch_size) : '')
+    setBulkJobProgress(null); setBulkJobId(null); setBulkResult(null)
+    setBatchNumber(1)
+    setOpenSections(prev => { const next = new Set(prev); next.add('envio'); return next })
+    setTimeout(() => prepareSend(), 50)
+  }
+
   const loadRecipientDetail = async () => {
     if (recipientDetail) { setRecipientDetailOpen(true); return }
     setRecipientDetailLoading(true)
@@ -1318,7 +1336,7 @@ export default function EmailMarketing() {
             <table className="w-full text-sm min-w-[520px]">
               <thead className="bg-black/20">
                 <tr>
-                  {['Fecha', 'Plantilla', 'Campaña', 'Enviados', 'Fallidos', 'Por'].map(h => (
+                  {['Fecha', 'Plantilla', 'Campaña', 'Enviados', 'Fallidos', 'Por', ''].map(h => (
                     <th key={h} className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                   ))}
                 </tr>
@@ -1349,6 +1367,15 @@ export default function EmailMarketing() {
                       )}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-slate-500 truncate max-w-[120px]">{h.initiated_by || '—'}</td>
+                    <td className="px-4 py-2.5 text-right">
+                      <button
+                        onClick={() => resumeFromHistory(h)}
+                        className="text-xs text-blue-400 hover:text-blue-300 border border-blue-400/20 hover:border-blue-400/40 rounded-lg px-2.5 py-1 transition-colors whitespace-nowrap"
+                        title="Pre-llenar el formulario con estos parámetros para enviar el siguiente lote"
+                      >
+                        Reanudar →
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

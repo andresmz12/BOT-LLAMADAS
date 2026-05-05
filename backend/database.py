@@ -146,6 +146,19 @@ def run_migrations():
         with engine.begin() as conn:
             conn.execute(text("UPDATE organization SET plan = 'pro' WHERE plan = 'basic'"))
 
+        if "emailsendlog" in tables:
+            log_cols = {c["name"] for c in insp.get_columns("emailsendlog")}
+            with engine.begin() as conn:
+                if "source_email_only" not in log_cols:
+                    conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN source_email_only BOOLEAN DEFAULT FALSE"))
+                    log.info("Migration: added emailsendlog.source_email_only")
+                if "source_email_list_id" not in log_cols:
+                    conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN source_email_list_id INTEGER"))
+                    log.info("Migration: added emailsendlog.source_email_list_id")
+                if "source_batch_size" not in log_cols:
+                    conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN source_batch_size INTEGER"))
+                    log.info("Migration: added emailsendlog.source_batch_size")
+
         # Indexes for performance on frequently filtered columns
         is_pg = not DATABASE_URL.startswith("sqlite")
         if is_pg:
