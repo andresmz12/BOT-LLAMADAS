@@ -175,6 +175,119 @@ def global_stats(
     }
 
 
+@router.get("/email")
+def email_stats(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    org_id = current_user.organization_id
+    if not org_id:
+        return _empty_email_stats()
+
+    # Aggregate from EmailSendLog (bulk sends)
+    logs = session.exec(
+        select(EmailSendLog).where(EmailSendLog.organization_id == org_id)
+    ).all()
+    total_sent = sum(l.total_sent for l in logs)
+    total_errors = sum(l.total_errors for l in logs)
+
+    # Aggregate from EmailEvent (tracking events from SendGrid)
+    try:
+        events = session.exec(
+            select(EmailEvent).where(EmailEvent.organization_id == org_id)
+        ).all()
+    except Exception:
+        events = []
+
+    delivered = sum(1 for e in events if e.event_type == "delivered")
+    opens = sum(1 for e in events if e.event_type == "open")
+    unique_opens = len({e.prospect_email for e in events if e.event_type == "open"})
+    clicks = sum(1 for e in events if e.event_type == "click")
+    unique_clicks = len({e.prospect_email for e in events if e.event_type == "click"})
+    bounces = sum(1 for e in events if e.event_type in ("bounce", "dropped"))
+    unsubscribes = sum(1 for e in events if e.event_type in ("unsubscribe", "spamreport"))
+
+    open_rate = round(unique_opens / delivered * 100, 1) if delivered else 0
+    click_rate = round(unique_clicks / delivered * 100, 1) if delivered else 0
+    bounce_rate = round(bounces / total_sent * 100, 1) if total_sent else 0
+    delivery_rate = round(delivered / total_sent * 100, 1) if total_sent else 0
+
+    today = datetime.utcnow().date()
+    months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    by_day = []
+    for i in range(6, -1, -1):
+        day = today - timedelta(days=i)
+        day_start = datetime(day.year, day.month, day.day)
+        day_end = day_start + timedelta(days=1)
+        day_logs = [l for l in logs if day_start <= l.sent_at < day_end]
+        day_events = [e for e in events if day_start <= e.timestamp < day_end]
+        by_day.append({
+            "date": f"{day.day} {months[day.month - 1]}",
+            "sent": sum(l.total_sent for l in day_logs),
+            "delivered": sum(1 for e in day_events if e.event_type == "delivered"),
+            "opens": sum(1 for e in day_events if e.event_type == "open"),
+            "clicks": sum(1 for e in day_events if e.event_type == "click"),
+        })
+
+    tmpl_keys = {l.template_key for l in logs if l.template_key}
+    by_template = []
+    for key in sorted(tmpl_keys):
+        key_logs = [l for l in logs if l.template_key == key]
+        key_events = [e for e in events if e.template_key == key]
+        s = sum(l.total_sent for l in key_logs)
+        d = sum(1 for e in key_events if e.event_type == "delivered")
+        o = len({e.prospect_email for e in key_events if e.event_type == "open"})
+        c = len({e.prospect_email for e in key_events if e.event_type == "click"})
+        by_template.append({
+            "key": key,
+            "sent": s,
+            "delivered": d,
+            "open_rate": round(o / d * 100, 1) if d else 0,
+            "click_rate": round(c / d * 100, 1) if d else 0,
+        })
+
+    recent_sends = sorted(logs, key=lambda l: l.sent_at, reverse=True)[:10]
+
+    return {
+        "total_sent": total_sent,
+        "total_errors": total_errors,
+        "delivered": delivered,
+        "delivery_rate": delivery_rate,
+        "opens": opens,
+        "unique_opens": unique_opens,
+        "open_rate": open_rate,
+        "clicks": clicks,
+        "unique_clicks": unique_clicks,
+        "click_rate": click_rate,
+        "bounces": bounces,
+        "bounce_rate": bounce_rate,
+        "unsubscribes": unsubscribes,
+        "by_day": by_day,
+        "by_template": by_template,
+        "recent_sends": [
+            {
+                "sent_at": l.sent_at.isoformat(),
+                "template_key": l.template_key,
+                "campaign_name": l.campaign_name,
+                "total_sent": l.total_sent,
+                "total_errors": l.total_errors,
+                "initiated_by": l.initiated_by,
+            }
+            for l in recent_sends
+        ],
+    }
+
+
+def _empty_email_stats():
+    return {
+        "total_sent": 0, "total_errors": 0, "delivered": 0, "delivery_rate": 0,
+        "opens": 0, "unique_opens": 0, "open_rate": 0,
+        "clicks": 0, "unique_clicks": 0, "click_rate": 0,
+        "bounces": 0, "bounce_rate": 0, "unsubscribes": 0,
+        "by_day": [], "by_template": [], "recent_sends": [],
+    }
+
+
 @router.get("/{campaign_id}")
 def campaign_stats(
     campaign_id: int,
@@ -219,114 +332,3 @@ def campaign_stats(
     }
 
 
-@router.get("/email")
-def email_stats(
-    current_user: User = Depends(get_current_user),
-    session: Session = Depends(get_session),
-):
-    org_id = current_user.organization_id
-    if not org_id:
-        return _empty_email_stats()
-
-    # Aggregate from EmailSendLog (bulk sends)
-    logs = session.exec(
-        select(EmailSendLog).where(EmailSendLog.organization_id == org_id)
-    ).all()
-    total_sent = sum(l.total_sent for l in logs)
-    total_errors = sum(l.total_errors for l in logs)
-
-    # Aggregate from EmailEvent (tracking events from SendGrid)
-    events = session.exec(
-        select(EmailEvent).where(EmailEvent.organization_id == org_id)
-    ).all()
-
-    delivered = sum(1 for e in events if e.event_type == "delivered")
-    opens = sum(1 for e in events if e.event_type == "open")
-    unique_opens = len({e.prospect_email for e in events if e.event_type == "open"})
-    clicks = sum(1 for e in events if e.event_type == "click")
-    unique_clicks = len({e.prospect_email for e in events if e.event_type == "click"})
-    bounces = sum(1 for e in events if e.event_type in ("bounce", "dropped"))
-    unsubscribes = sum(1 for e in events if e.event_type in ("unsubscribe", "spamreport"))
-
-    open_rate = round(unique_opens / delivered * 100, 1) if delivered else 0
-    click_rate = round(unique_clicks / delivered * 100, 1) if delivered else 0
-    bounce_rate = round(bounces / total_sent * 100, 1) if total_sent else 0
-    delivery_rate = round(delivered / total_sent * 100, 1) if total_sent else 0
-
-    # Last 7 days breakdown
-    today = datetime.utcnow().date()
-    months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
-    by_day = []
-    for i in range(6, -1, -1):
-        day = today - timedelta(days=i)
-        day_start = datetime(day.year, day.month, day.day)
-        day_end = day_start + timedelta(days=1)
-        day_logs = [l for l in logs if day_start <= l.sent_at < day_end]
-        day_events = [e for e in events if day_start <= e.timestamp < day_end]
-        by_day.append({
-            "date": f"{day.day} {months[day.month - 1]}",
-            "sent": sum(l.total_sent for l in day_logs),
-            "delivered": sum(1 for e in day_events if e.event_type == "delivered"),
-            "opens": sum(1 for e in day_events if e.event_type == "open"),
-            "clicks": sum(1 for e in day_events if e.event_type == "click"),
-        })
-
-    # By template key
-    tmpl_keys = {l.template_key for l in logs if l.template_key}
-    by_template = []
-    for key in sorted(tmpl_keys):
-        key_logs = [l for l in logs if l.template_key == key]
-        key_events = [e for e in events if e.template_key == key]
-        s = sum(l.total_sent for l in key_logs)
-        d = sum(1 for e in key_events if e.event_type == "delivered")
-        o = len({e.prospect_email for e in key_events if e.event_type == "open"})
-        c = len({e.prospect_email for e in key_events if e.event_type == "click"})
-        by_template.append({
-            "key": key,
-            "sent": s,
-            "delivered": d,
-            "open_rate": round(o / d * 100, 1) if d else 0,
-            "click_rate": round(c / d * 100, 1) if d else 0,
-        })
-
-    # Recent send history (last 10 bulk sends)
-    recent_sends = sorted(logs, key=lambda l: l.sent_at, reverse=True)[:10]
-
-    return {
-        "total_sent": total_sent,
-        "total_errors": total_errors,
-        "delivered": delivered,
-        "delivery_rate": delivery_rate,
-        "opens": opens,
-        "unique_opens": unique_opens,
-        "open_rate": open_rate,
-        "clicks": clicks,
-        "unique_clicks": unique_clicks,
-        "click_rate": click_rate,
-        "bounces": bounces,
-        "bounce_rate": bounce_rate,
-        "unsubscribes": unsubscribes,
-        "by_day": by_day,
-        "by_template": by_template,
-        "recent_sends": [
-            {
-                "sent_at": l.sent_at.isoformat(),
-                "template_key": l.template_key,
-                "campaign_name": l.campaign_name,
-                "total_sent": l.total_sent,
-                "total_errors": l.total_errors,
-                "initiated_by": l.initiated_by,
-            }
-            for l in recent_sends
-        ],
-    }
-
-
-def _empty_email_stats():
-    return {
-        "total_sent": 0, "total_errors": 0, "delivered": 0, "delivery_rate": 0,
-        "opens": 0, "unique_opens": 0, "open_rate": 0,
-        "clicks": 0, "unique_clicks": 0, "click_rate": 0,
-        "bounces": 0, "bounce_rate": 0, "unsubscribes": 0,
-        "by_day": [], "by_template": [], "recent_sends": [],
-    }

@@ -13,10 +13,7 @@ from typing import Optional
 from sqlmodel import Session, select
 from sqlalchemy import desc, func
 from database import get_session
-from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList
-
-# In-memory job tracking for bulk sends
-_bulk_jobs: dict[str, dict] = {}
+from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend
 from routes.auth import get_current_user, require_write_access, require_superadmin
 
 APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")
@@ -387,11 +384,12 @@ async def test_email(
 
 
 class BulkEmailRequest(BaseModel):
-    campaign_id: Optional[int] = None   # None = all org prospects with email
-    template_key: str = "general"       # which template to use
-    email_only: bool = False            # True = only campaign_id IS NULL contacts
-    email_list_id: Optional[int] = None # only contacts from a specific email list
-    batch_size: Optional[int] = None    # max emails to send in this run (None = unlimited)
+    campaign_id: Optional[int] = None
+    template_key: str = "general"
+    email_only: bool = False
+    email_list_id: Optional[int] = None
+    batch_size: Optional[int] = None
+    scheduled_at: Optional[str] = None  # ISO datetime string; if set and in the future, store job
 
 
 @router.post("/email/bulk-send")
@@ -409,6 +407,30 @@ async def bulk_send_email(
     api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "")
     if not api_key:
         raise HTTPException(status_code=400, detail="SendGrid no configurado. Pide al administrador que configure la API key.")
+
+    # If scheduled for the future, store the job and return early
+    if data.scheduled_at:
+        try:
+            scheduled_dt = datetime.fromisoformat(data.scheduled_at.replace("Z", "+00:00"))
+            # Convert to naive UTC for comparison with utcnow()
+            if scheduled_dt.tzinfo is not None:
+                from datetime import timezone
+                scheduled_dt = scheduled_dt.astimezone(timezone.utc).replace(tzinfo=None)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de fecha inválido")
+        if scheduled_dt > datetime.utcnow():
+            job = ScheduledEmailSend(
+                organization_id=current_user.organization_id,
+                campaign_id=data.campaign_id,
+                template_key=data.template_key,
+                email_only=data.email_only,
+                scheduled_at=scheduled_dt,
+                initiated_by=current_user.email,
+            )
+            session.add(job)
+            session.commit()
+            session.refresh(job)
+            return {"scheduled": True, "job_id": job.id, "scheduled_at": job.scheduled_at.isoformat()}
 
     # Load prospects — skip unsubscribed
     from sqlalchemy import nulls_first
@@ -1050,24 +1072,16 @@ def add_email_list_contact(
     email = (data.email or "").strip().lower()
     if not email or "@" not in email:
         raise HTTPException(status_code=400, detail="Email inválido")
-    # Check duplicate within this list
     existing = session.exec(
-        select(Prospect).where(
-            Prospect.email_list_id == list_id,
-            Prospect.email == email,
-        )
+        select(Prospect).where(Prospect.email_list_id == list_id, Prospect.email == email)
     ).first()
     if existing:
         raise HTTPException(status_code=400, detail="Este email ya está en la lista")
     p = Prospect(
-        campaign_id=None,
-        email_list_id=list_id,
+        campaign_id=None, email_list_id=list_id,
         organization_id=current_user.organization_id,
         name=data.name.strip() or email.split("@")[0],
-        phone=None,
-        email=email,
-        company=data.company or None,
-        status="email_only",
+        phone=None, email=email, company=data.company or None, status="email_only",
     )
     session.add(p)
     session.commit()
@@ -1086,6 +1100,54 @@ def delete_email_list_contact(
     if not p or p.organization_id != current_user.organization_id or p.email_list_id != list_id:
         raise HTTPException(status_code=404)
     session.delete(p)
+    session.commit()
+    return {"ok": True}
+
+
+# ── Scheduled email jobs ────────────────────────────────────────────────────────
+
+@router.get("/email/scheduled")
+def list_scheduled_emails(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        return []
+    jobs = session.exec(
+        select(ScheduledEmailSend)
+        .where(
+            ScheduledEmailSend.organization_id == current_user.organization_id,
+            ScheduledEmailSend.status == "pending",
+        )
+        .order_by(ScheduledEmailSend.scheduled_at)
+    ).all()
+    return [
+        {
+            "id": j.id,
+            "campaign_id": j.campaign_id,
+            "template_key": j.template_key,
+            "email_only": j.email_only,
+            "scheduled_at": j.scheduled_at.isoformat(),
+            "initiated_by": j.initiated_by,
+            "created_at": j.created_at.isoformat(),
+        }
+        for j in jobs
+    ]
+
+
+@router.delete("/email/scheduled/{job_id}")
+def cancel_scheduled_email(
+    job_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    job = session.get(ScheduledEmailSend, job_id)
+    if not job or job.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+    if job.status != "pending":
+        raise HTTPException(status_code=400, detail="Solo se pueden cancelar trabajos pendientes")
+    job.status = "cancelled"
+    session.add(job)
     session.commit()
     return {"ok": True}
 

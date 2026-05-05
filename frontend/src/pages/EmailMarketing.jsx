@@ -11,6 +11,7 @@ import {
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
   getEmailLists, createEmailList, deleteEmailList,
   getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList,
+  getScheduledEmails, cancelScheduledEmail,
 } from '../api/client'
 
 const FIXED_TEMPLATES = [
@@ -202,13 +203,16 @@ export default function EmailMarketing() {
   const [emailContactsCount, setEmailContactsCount] = useState(null)
   const [importLoading, setImportLoading] = useState(false)
   const [importResult, setImportResult] = useState(null)
-
+  const [scheduledJobs, setScheduledJobs] = useState([])
+  const [scheduleMode, setScheduleMode] = useState(false)
+  const [scheduleAt, setScheduleAt] = useState('')
   const fileRef = useRef(null)
   const tmplAttachRef = useRef(null)
   const emailImportRef = useRef(null)
   const editorRef = useRef(null)
 
   const loadHistory = () => getEmailHistory().then(setEmailHistory).catch(() => {})
+  const loadScheduled = () => getScheduledEmails().then(setScheduledJobs).catch(() => {})
   const loadEmailContactsCount = () => getEmailContactsCount().then(setEmailContactsCount).catch(() => {})
   const loadEmailLists = () => getEmailLists().then(setEmailLists).catch(() => {})
 
@@ -228,6 +232,7 @@ export default function EmailMarketing() {
     loadHistory()
     loadEmailContactsCount()
     loadEmailLists()
+    loadScheduled()
   }, [])
 
   // Template helpers
@@ -375,28 +380,30 @@ export default function EmailMarketing() {
 
   const sendBulk = async () => {
     setBulkLoading(true); setBulkResult(null); setConfirmStep(false)
-    setErrorsOpen(false); setBulkJobProgress(null); setBulkJobId(null)
-    if (bulkPollRef.current) { clearInterval(bulkPollRef.current); bulkPollRef.current = null }
+    setErrorsOpen(false)
+    if (bulkPollRef?.current) { clearInterval(bulkPollRef.current); bulkPollRef.current = null }
     try {
-      const r = await bulkSendEmail({ ...parseBulkTarget(), template_key: bulkTmpl })
-      if (r.job_id) {
-        setBulkJobId(r.job_id)
-        setBulkJobProgress({ status: 'running', sent: 0, skipped: 0, total: r.total, sent_list: [], failed_list: [] })
-        bulkPollRef.current = setInterval(async () => {
-          try {
-            const status = await getBulkSendStatus(r.job_id)
-            setBulkJobProgress(status)
-            if (status.status === 'done' || status.status === 'error') {
-              clearInterval(bulkPollRef.current); bulkPollRef.current = null
-              setBulkLoading(false); loadHistory()
-            }
-          } catch (_) {
-            clearInterval(bulkPollRef.current); bulkPollRef.current = null
-            setBulkLoading(false)
-          }
-        }, 2000)
+      const target = parseBulkTarget()
+      const payload = {
+        ...target,
+        template_key: bulkTmpl,
+        ...(scheduleMode && scheduleAt ? { scheduled_at: new Date(scheduleAt).toISOString() } : {}),
+      }
+      const r = await bulkSendEmail(payload)
+      if (r.scheduled) {
+        setBulkResult(r)
+        setScheduleMode(false); setScheduleAt('')
+        loadScheduled()
+        setBulkLoading(false)
+      } else if (r.job_id) {
+        setBulkJobId?.(r.job_id)
+        loadHistory()
+        setBulkLoading(false)
       } else {
-        setBulkResult(r); setBulkLoading(false); loadHistory()
+        setBulkResult(r)
+        setScheduleMode(false); setScheduleAt('')
+        loadHistory()
+        setBulkLoading(false)
       }
     } catch (e) {
       setBulkResult({ error: e.response?.data?.detail || 'Error al iniciar el envío' })
@@ -783,12 +790,31 @@ export default function EmailMarketing() {
                   </div>
                 )}
               </div>
+              {/* Schedule toggle */}
+              <div className="px-4 pb-3 border-t border-z-border pt-3 space-y-2">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input type="checkbox" checked={scheduleMode} onChange={e => { setScheduleMode(e.target.checked); if (!e.target.checked) setScheduleAt('') }}
+                    className="w-4 h-4 rounded accent-blue-500" />
+                  <span className="text-sm text-slate-300">Programar envío para más tarde</span>
+                </label>
+                {scheduleMode && (
+                  <input
+                    type="datetime-local"
+                    value={scheduleAt}
+                    min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                    onChange={e => setScheduleAt(e.target.value)}
+                    className="w-full bg-slate-800 border border-z-border rounded-lg px-3 py-2 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+                  />
+                )}
+              </div>
               <div className="px-4 py-3 border-t border-z-border flex gap-2">
-                <button onClick={sendBulk} disabled={(bulkBatchSize ? recipientStats?.will_receive_this_batch : recipientStats?.will_receive) === 0}
+                <button onClick={sendBulk} disabled={(bulkBatchSize ? recipientStats?.will_receive_this_batch : recipientStats?.will_receive) === 0 || (scheduleMode && !scheduleAt)}
                   className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
-                  Confirmar envío {recipientStats ? `(${bulkBatchSize ? recipientStats.will_receive_this_batch : recipientStats.will_receive})` : ''}
+                  {scheduleMode && scheduleAt
+                    ? `Programar para ${new Date(scheduleAt).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })}`
+                    : `Confirmar envío${recipientStats ? ` (${bulkBatchSize ? recipientStats.will_receive_this_batch : recipientStats.will_receive})` : ''}`}
                 </button>
-                <button onClick={() => setConfirmStep(false)}
+                <button onClick={() => { setConfirmStep(false); setScheduleMode(false); setScheduleAt('') }}
                   className="px-4 py-2 text-slate-400 hover:text-slate-200 text-sm border border-z-border rounded-lg hover:bg-white/5 transition-colors">
                   Cancelar
                 </button>
@@ -879,17 +905,19 @@ export default function EmailMarketing() {
           )}
 
           {bulkResult && !bulkLoading && !bulkJobProgress && (
-            <div className={`rounded-xl border overflow-hidden ${bulkResult.error ? 'border-red-500/30 bg-red-500/5' : 'border-green-500/30 bg-green-500/5'}`}>
+            <div className={`rounded-xl border overflow-hidden ${bulkResult.error ? 'border-red-500/30 bg-red-500/5' : bulkResult.scheduled ? 'border-blue-500/30 bg-blue-500/5' : 'border-green-500/30 bg-green-500/5'}`}>
               <div className="px-5 py-4 flex items-center gap-4">
-                <div className={`text-4xl font-black ${bulkResult.error ? 'text-red-400' : 'text-green-400'}`}>
-                  {bulkResult.error ? '✗' : bulkResult.sent}
+                <div className={`text-4xl font-black ${bulkResult.error ? 'text-red-400' : bulkResult.scheduled ? 'text-blue-400' : 'text-green-400'}`}>
+                  {bulkResult.error ? '✗' : bulkResult.scheduled ? '⏰' : bulkResult.sent}
                 </div>
                 <div>
-                  <p className={`text-sm font-semibold ${bulkResult.error ? 'text-red-300' : 'text-green-300'}`}>
-                    {bulkResult.error ? 'Error al enviar' : `email${bulkResult.sent !== 1 ? 's' : ''} enviado${bulkResult.sent !== 1 ? 's' : ''} correctamente`}
+                  <p className={`text-sm font-semibold ${bulkResult.error ? 'text-red-300' : bulkResult.scheduled ? 'text-blue-300' : 'text-green-300'}`}>
+                    {bulkResult.error ? 'Error al enviar' : bulkResult.scheduled ? 'Envío programado' : `email${bulkResult.sent !== 1 ? 's' : ''} enviado${bulkResult.sent !== 1 ? 's' : ''} correctamente`}
                   </p>
                   <p className="text-xs text-slate-400 mt-0.5">
-                    {bulkResult.error ? bulkResult.error : bulkResult.skipped ? `${bulkResult.skipped} no pudieron enviarse` : 'Todos los emails fueron entregados'}
+                    {bulkResult.error ? bulkResult.error
+                      : bulkResult.scheduled ? `Se enviará el ${new Date(bulkResult.scheduled_at).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })}`
+                      : bulkResult.skipped ? `${bulkResult.skipped} no pudieron enviarse` : 'Todos los emails fueron entregados'}
                   </p>
                 </div>
               </div>
@@ -1213,6 +1241,40 @@ export default function EmailMarketing() {
           </div>
         </div>
       </Section>
+
+      {/* ── Envíos programados ── */}
+      {scheduledJobs.length > 0 && (
+        <div className="bg-z-card rounded-xl border border-blue-500/20 overflow-hidden">
+          <div className="px-5 py-4 border-b border-z-border flex items-center gap-2">
+            <ClockIcon className="w-4 h-4 text-blue-400" />
+            <div>
+              <h2 className="text-sm font-semibold text-slate-200">Envíos programados</h2>
+              <p className="text-xs text-slate-500 mt-0.5">{scheduledJobs.length} pendiente{scheduledJobs.length !== 1 ? 's' : ''}</p>
+            </div>
+          </div>
+          <div className="divide-y divide-z-border">
+            {scheduledJobs.map(j => (
+              <div key={j.id} className="px-5 py-3 flex items-center justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-sm text-slate-200 font-medium">
+                    {j.email_only ? 'Contactos de email' : j.campaign_id ? `Campaña #${j.campaign_id}` : 'Todos los prospectos'}
+                    <span className="ml-2 text-xs text-slate-500 font-normal">· plantilla: {j.template_key}</span>
+                  </p>
+                  <p className="text-xs text-blue-300 mt-0.5">
+                    {new Date(j.scheduled_at).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })}
+                  </p>
+                </div>
+                <button
+                  onClick={async () => { await cancelScheduledEmail(j.id); loadScheduled() }}
+                  className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 px-3 py-1 rounded-lg transition-colors flex-shrink-0"
+                >
+                  Cancelar
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ── 7. HISTORIAL ── */}
       {emailHistory.length > 0 && (

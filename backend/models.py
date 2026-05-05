@@ -227,6 +227,19 @@ class EmailEvent(SQLModel, table=True):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
 
+class ScheduledEmailSend(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: int = Field(index=True)
+    campaign_id: Optional[int] = None
+    template_key: str = Field(default="general")
+    email_only: bool = Field(default=False)
+    scheduled_at: datetime = Field(index=True)
+    status: str = Field(default="pending")   # pending / running / done / cancelled / failed
+    initiated_by: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    error: Optional[str] = None
+
+
 class Settings(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     key: str = Field(unique=True)
