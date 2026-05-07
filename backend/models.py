@@ -216,6 +216,7 @@ class EmailSendLog(SQLModel, table=True):
     source_email_only: bool = Field(default=False)
     source_email_list_id: Optional[int] = None
     source_batch_size: Optional[int] = None
+    sent_details: Optional[str] = None  # JSON list of {name, email}
 
 
 class EmailEvent(SQLModel, table=True):

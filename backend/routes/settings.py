@@ -43,10 +43,11 @@ def _verify_unsub_token(token: str):
     return int(pid_str), int(oid_str)
 
 
-def _unsub_url(prospect_id: int, org_id: int) -> str:
-    if not APP_BASE_URL:
+def _unsub_url(prospect_id: int, org_id: int, base: str = "") -> str:
+    effective = (APP_BASE_URL or base).rstrip("/")
+    if not effective:
         return ""
-    return f"{APP_BASE_URL}/settings/email/unsubscribe?token={_unsub_token(prospect_id, org_id)}"
+    return f"{effective}/settings/email/unsubscribe?token={_unsub_token(prospect_id, org_id)}"
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
@@ -418,6 +419,7 @@ class BulkEmailRequest(BaseModel):
 
 @router.post("/email/bulk-send")
 async def bulk_send_email(
+    request: Request,
     data: BulkEmailRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(require_write_access),
@@ -539,6 +541,7 @@ async def bulk_send_email(
         email_only=data.email_only or False,
         email_list_id=data.email_list_id,
         batch_size=data.batch_size,
+        base_url=str(request.base_url).rstrip("/"),
     )
 
     return {"job_id": job_id, "status": "running", "total": len(prospects_data)}
@@ -549,7 +552,7 @@ async def _run_bulk_send_job(
     api_key: str, from_email: str, from_name: str, delay_s: float,
     template_key: str, tmpl: dict, att_b64: str, att_name: str,
     prospects_data: list, campaign_id, email_only: bool, email_list_id,
-    batch_size=None,
+    batch_size=None, base_url="",
 ):
     from sendgrid import SendGridAPIClient
     from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition, CustomArg
@@ -561,7 +564,7 @@ async def _run_bulk_send_job(
 
     for pdata in prospects_data:
         try:
-            unsub = _unsub_url(pdata["id"], org_id)
+            unsub = _unsub_url(pdata["id"], org_id, base=base_url)
             tmpl_vars = {
                 "nombre":   pdata["name"],
                 "empresa":  pdata["company"],
@@ -643,6 +646,7 @@ async def _run_bulk_send_job(
             source_email_only=email_only or False,
             source_email_list_id=email_list_id,
             source_batch_size=batch_size,
+            sent_details=json.dumps(job["sent_list"]) if job["sent_list"] else None,
         )
         s.add(log_entry)
         s.commit()
@@ -688,10 +692,26 @@ def get_email_history(
             "source_email_only": l.source_email_only or False,
             "source_email_list_id": l.source_email_list_id,
             "source_batch_size": l.source_batch_size,
+            "sent_details": json.loads(l.sent_details) if l.sent_details else [],
             "error_details": json.loads(l.error_details) if l.error_details else [],
         }
         for l in logs
     ]
+
+
+@router.patch("/email/contacts/{prospect_id}/unsubscribe")
+def toggle_contact_unsubscribe(
+    prospect_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    prospect = session.get(Prospect, prospect_id)
+    if not prospect or (current_user.role != "superadmin" and prospect.organization_id != current_user.organization_id):
+        raise HTTPException(status_code=404, detail="Contacto no encontrado")
+    prospect.email_unsubscribed = not prospect.email_unsubscribed
+    session.add(prospect)
+    session.commit()
+    return {"email_unsubscribed": prospect.email_unsubscribed}
 
 
 @router.get("/email/validate-recipients")

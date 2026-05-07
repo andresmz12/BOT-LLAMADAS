@@ -11,7 +11,7 @@ import {
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
   getEmailLists, createEmailList, deleteEmailList,
   getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList,
-  getScheduledEmails, cancelScheduledEmail,
+  getScheduledEmails, cancelScheduledEmail, toggleContactUnsubscribe,
 } from '../api/client'
 
 const FIXED_TEMPLATES = [
@@ -183,6 +183,7 @@ export default function EmailMarketing() {
 
   // History error detail modal
   const [errorDetailLog, setErrorDetailLog] = useState(null) // {template_subject, error_details:[]}
+  const [sentDetailLog, setSentDetailLog] = useState(null)   // {template_subject, total_sent, sent_details:[]}
 
   // Template editor
   const [editingTmpl, setEditingTmpl] = useState(null)
@@ -336,6 +337,20 @@ export default function EmailMarketing() {
         l.id === listId ? { ...l, total: l.total - 1, with_email: l.with_email - 1 } : l
       ))
     } catch (e) { alert('Error al eliminar contacto') }
+  }
+
+  const handleToggleUnsubscribe = async (listId, contactId) => {
+    try {
+      const r = await toggleContactUnsubscribe(contactId)
+      setListContacts(prev => ({
+        ...prev,
+        contacts: prev.contacts.map(c => c.id === contactId ? { ...c, unsubscribed: r.email_unsubscribed } : c),
+      }))
+      setEmailLists(prev => prev.map(l => {
+        if (l.id !== listId) return l
+        return { ...l, with_email: l.with_email + (r.email_unsubscribed ? -1 : 1) }
+      }))
+    } catch (e) { alert('Error al actualizar') }
   }
 
   const handleAddContact = async () => {
@@ -686,10 +701,19 @@ export default function EmailMarketing() {
                                   </td>
                                   <td className="px-3 py-2 text-slate-500 max-w-[120px] truncate">{c.company || '—'}</td>
                                   <td className="px-3 py-2 text-right">
-                                    <button onClick={() => handleDeleteContact(list.id, c.id)}
-                                      className="text-slate-600 hover:text-red-400 transition-colors p-0.5">
-                                      <TrashIcon className="w-3.5 h-3.5" />
-                                    </button>
+                                    <div className="flex items-center justify-end gap-1">
+                                      <button
+                                        onClick={() => handleToggleUnsubscribe(list.id, c.id)}
+                                        className={`p-1.5 transition-colors ${c.unsubscribed ? 'text-amber-500 hover:text-amber-300' : 'text-slate-600 hover:text-amber-400'}`}
+                                        title={c.unsubscribed ? 'Reactivar contacto' : 'Desuscribir contacto'}
+                                      >
+                                        <UserMinusIcon className="w-3.5 h-3.5" />
+                                      </button>
+                                      <button onClick={() => handleDeleteContact(list.id, c.id)}
+                                        className="text-slate-600 hover:text-red-400 transition-colors p-0.5">
+                                        <TrashIcon className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               ))}
@@ -1368,13 +1392,24 @@ export default function EmailMarketing() {
                     </td>
                     <td className="px-4 py-2.5 text-xs text-slate-500 truncate max-w-[120px]">{h.initiated_by || '—'}</td>
                     <td className="px-4 py-2.5 text-right">
-                      <button
-                        onClick={() => resumeFromHistory(h)}
-                        className="text-xs text-blue-400 hover:text-blue-300 border border-blue-400/20 hover:border-blue-400/40 rounded-lg px-2.5 py-1 transition-colors whitespace-nowrap"
-                        title="Pre-llenar el formulario con estos parámetros para enviar el siguiente lote"
-                      >
-                        Reanudar →
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {h.total_sent > 0 && (
+                          <button
+                            onClick={() => setSentDetailLog(h)}
+                            className="text-xs text-slate-400 hover:text-slate-200 border border-slate-600/40 hover:border-slate-500/60 rounded-lg px-2.5 py-1 transition-colors whitespace-nowrap"
+                            title="Ver quiénes recibieron este envío"
+                          >
+                            Ver enviados
+                          </button>
+                        )}
+                        <button
+                          onClick={() => resumeFromHistory(h)}
+                          className="text-xs text-blue-400 hover:text-blue-300 border border-blue-400/20 hover:border-blue-400/40 rounded-lg px-2.5 py-1 transition-colors whitespace-nowrap"
+                          title="Pre-llenar el formulario con estos parámetros para enviar el siguiente lote"
+                        >
+                          Reanudar →
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1460,6 +1495,58 @@ export default function EmailMarketing() {
             </div>
             <div className="p-4 border-t border-z-border flex-shrink-0 flex justify-end">
               <button onClick={() => setRecipientDetailOpen(false)} className="z-btn-ghost text-sm">Cerrar</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: detalle de destinatarios enviados */}
+      {sentDetailLog && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-z-border flex-shrink-0">
+              <div>
+                <h2 className="text-base font-bold text-slate-100">Destinatarios del envío</h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {sentDetailLog.total_sent} email{sentDetailLog.total_sent !== 1 ? 's' : ''} enviados
+                  {sentDetailLog.template_subject && ` · "${sentDetailLog.template_subject}"`}
+                </p>
+              </div>
+              <button onClick={() => setSentDetailLog(null)} className="text-slate-500 hover:text-slate-300">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+
+            <div className="overflow-y-auto flex-1">
+              {sentDetailLog.sent_details?.length > 0 ? (
+                <table className="w-full text-sm">
+                  <thead className="bg-black/20 sticky top-0">
+                    <tr>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Nombre</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Email</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-z-border">
+                    {sentDetailLog.sent_details.map((c, i) => (
+                      <tr key={i} className="hover:bg-white/[0.02]">
+                        <td className="px-4 py-2.5 text-xs text-slate-300 font-medium">{c.name || '—'}</td>
+                        <td className="px-4 py-2.5 text-xs font-mono text-slate-400">{c.email}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="p-8 text-center">
+                  <p className="text-slate-400 text-sm">Detalle no disponible para este envío.</p>
+                  <p className="text-xs mt-1 text-slate-600">Los envíos anteriores a esta versión no guardan el detalle de destinatarios.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-z-border flex-shrink-0 flex justify-end">
+              <button onClick={() => setSentDetailLog(null)} className="z-btn-ghost text-sm">Cerrar</button>
             </div>
           </div>
         </div>

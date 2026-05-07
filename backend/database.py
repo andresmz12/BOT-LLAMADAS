@@ -158,6 +158,9 @@ def run_migrations():
                 if "source_batch_size" not in log_cols:
                     conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN source_batch_size INTEGER"))
                     log.info("Migration: added emailsendlog.source_batch_size")
+                if "sent_details" not in log_cols:
+                    conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN sent_details TEXT"))
+                    log.info("Migration: added emailsendlog.sent_details")
 
         # Indexes for performance on frequently filtered columns
         is_pg = not DATABASE_URL.startswith("sqlite")

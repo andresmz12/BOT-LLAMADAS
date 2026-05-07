@@ -152,6 +152,9 @@ export const uploadTemplateAttachment = (templateKey, file) => {
   return api.post('/settings/email/template-attachment', form).then(r => r.data)
 }
 
+export const toggleContactUnsubscribe = (prospectId) =>
+  api.patch(`/settings/email/contacts/${prospectId}/unsubscribe`).then(r => r.data)
+
 export const getEmailStats = () => api.get('/stats/email').then(r => r.data)
 export const getScheduledEmails = () => api.get('/settings/email/scheduled').then(r => r.data)
 export const cancelScheduledEmail = (id) => api.delete(`/settings/email/scheduled/${id}`).then(r => r.data)
