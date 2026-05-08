@@ -1,6 +1,6 @@
 import os
 from sqlmodel import SQLModel, create_engine, Session, select
-from models import AgentConfig, Organization, User, WebhookLog, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend  # noqa: F401 — ensures table is registered
+from models import AgentConfig, Organization, User, WebhookLog, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, LeadHunt  # noqa: F401 — ensures table is registered
 
 _raw_url = os.getenv("DATABASE_URL", "sqlite:///./calls.db")
 # Railway PostgreSQL URLs start with "postgres://" but SQLAlchemy requires "postgresql://"

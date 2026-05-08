@@ -155,6 +155,18 @@ export const uploadTemplateAttachment = (templateKey, file) => {
 export const toggleContactUnsubscribe = (prospectId) =>
   api.patch(`/settings/email/contacts/${prospectId}/unsubscribe`).then(r => r.data)
 
+// Lead Hunter
+export const scoutLeads = (data) => api.post('/lead-hunter/scout', data).then(r => r.data)
+export const getLeadHunterLeads = (params) => api.get('/lead-hunter/leads', { params }).then(r => r.data)
+export const checkLead = (id) => api.post(`/lead-hunter/leads/${id}/check`).then(r => r.data)
+export const checkAllLeads = () => api.post('/lead-hunter/check-all').then(r => r.data)
+export const craftLeadMessage = (id) => api.post(`/lead-hunter/leads/${id}/craft`).then(r => r.data)
+export const craftAllLeads = () => api.post('/lead-hunter/craft-all').then(r => r.data)
+export const sendLeadMessage = (id, channel) => api.post(`/lead-hunter/leads/${id}/send`, { channel }).then(r => r.data)
+export const updateLeadHunt = (id, data) => api.patch(`/lead-hunter/leads/${id}`, data).then(r => r.data)
+export const deleteLeadHunt = (id) => api.delete(`/lead-hunter/leads/${id}`).then(r => r.data)
+export const deleteAllLeadHunts = () => api.delete('/lead-hunter/leads').then(r => r.data)
+
 export const getEmailStats = () => api.get('/stats/email').then(r => r.data)
 export const getScheduledEmails = () => api.get('/settings/email/scheduled').then(r => r.data)
 export const cancelScheduledEmail = (id) => api.delete(`/settings/email/scheduled/${id}`).then(r => r.data)

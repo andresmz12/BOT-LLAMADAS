@@ -244,6 +244,31 @@ class ScheduledEmailSend(SQLModel, table=True):
     error: Optional[str] = None
 
 
+class LeadHunt(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    org_id: int = Field(foreign_key="organization.id", index=True)
+    name: str
+    phone: Optional[str] = None
+    city: str
+    category: str
+    reviews_count: int = Field(default=0)
+    has_website: bool = Field(default=False)
+    website_url: Optional[str] = None
+    rating: float = Field(default=0.0)
+    pain_point: Optional[str] = None
+    message_es: Optional[str] = None
+    message_en: Optional[str] = None
+    channel: Optional[str] = None           # whatsapp | email
+    passed_checks: Optional[bool] = None
+    check_reason: Optional[str] = None
+    sent: bool = Field(default=False)
+    sent_at: Optional[datetime] = None
+    reply: Optional[str] = None
+    reply_intent: Optional[str] = None      # positivo | negativo | pregunta
+    is_hot: bool = Field(default=False)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class Settings(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     key: str = Field(unique=True)

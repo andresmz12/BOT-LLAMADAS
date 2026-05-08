@@ -6,6 +6,7 @@ import {
   KeyIcon, ArrowRightOnRectangleIcon,
   ChevronLeftIcon, ChevronRightIcon,
   ChatBubbleLeftRightIcon, FireIcon, EnvelopeIcon,
+  MagnifyingGlassIcon,
 } from '@heroicons/react/24/outline'
 import { logout } from '../api/client'
 
@@ -19,6 +20,7 @@ const NAV_BY_ROLE = {
   admin: [
     { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
     { to: '/leads', label: 'Centro de Leads', Icon: FireIcon },
+    { to: '/lead-hunter', label: 'Lead Hunter', Icon: MagnifyingGlassIcon },
     { to: '/agents', label: 'Agentes de Voz', Icon: UserGroupIcon },
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
@@ -31,6 +33,7 @@ const NAV_BY_ROLE = {
   agent: [
     { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
     { to: '/leads', label: 'Centro de Leads', Icon: FireIcon },
+    { to: '/lead-hunter', label: 'Lead Hunter', Icon: MagnifyingGlassIcon },
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
