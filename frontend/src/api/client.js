@@ -49,7 +49,6 @@ export const createUser = (data) => api.post('/admin/users', data).then(r => r.d
 export const updateUser = (id, data) => api.put(`/admin/users/${id}`, data).then(r => r.data)
 export const deleteUser = (id) => api.delete(`/admin/users/${id}`).then(r => r.data)
 export const upgradeOrg = (id) => api.post(`/admin/organizations/${id}/upgrade`).then(r => r.data)
-export const testApifyToken = (id) => api.post(`/admin/organizations/${id}/apify/test`).then(r => r.data)
 
 // Agents
 export const getAgents = () => api.get('/agents').then(r => r.data)
@@ -88,7 +87,6 @@ export const deleteProspect = (id) => api.delete(`/prospects/${id}`).then(r => r
 export const deleteAllProspects = (params) => api.delete('/prospects', { params }).then(r => r.data)
 export const retryProspects = (params) => api.post('/prospects/retry', null, { params }).then(r => r.data)
 export const callProspect = (id) => api.post(`/prospects/${id}/call`).then(r => r.data)
-export const searchApifyProspects = (data) => api.post('/prospects/search-apify', data).then(r => r.data)
 export const expandKeywords = (data) => api.post('/prospects/expand-keywords', data).then(r => r.data)
 
 // Leads

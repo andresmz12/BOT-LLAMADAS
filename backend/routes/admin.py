@@ -11,7 +11,7 @@ from routes.auth import require_superadmin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-_SENSITIVE = {"retell_api_key", "anthropic_api_key", "crm_api_key", "crm_webhook_secret", "whatsapp_access_token", "apify_api_token", "sendgrid_api_key"}
+_SENSITIVE = {"retell_api_key", "anthropic_api_key", "crm_api_key", "crm_webhook_secret", "whatsapp_access_token", "sendgrid_api_key"}
 
 def _mask(key: str | None) -> str:
     if not key:
@@ -49,8 +49,6 @@ class OrgCreate(BaseModel):
     whatsapp_phone_number_id: Optional[str] = None
     whatsapp_access_token: Optional[str] = None
     whatsapp_verify_token: Optional[str] = None
-    apify_enabled: bool = False
-    apify_api_token: Optional[str] = None
     email_enabled: bool = False
     sendgrid_api_key: Optional[str] = None
     email_from: Optional[str] = None
@@ -114,31 +112,6 @@ def update_org(
     return _safe_org(org)
 
 
-@router.post("/organizations/{org_id}/apify/test")
-async def test_apify_token(
-    org_id: int,
-    _: User = Depends(require_superadmin),
-    session: Session = Depends(get_session),
-):
-    import httpx
-    import os
-    org = session.get(Organization, org_id)
-    if not org:
-        raise HTTPException(status_code=404, detail="Organización no encontrada")
-    token = (org.apify_api_token or "").strip() or os.getenv("APIFY_API_TOKEN", "")
-    if not token:
-        return {"ok": False, "detail": "Token de Apify no configurado para esta organización"}
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(
-            "https://api.apify.com/v2/users/me",
-            headers={"Authorization": f"Bearer {token}"},
-        )
-    if resp.status_code == 200:
-        username = resp.json().get("data", {}).get("username", "?")
-        return {"ok": True, "username": username}
-    error_msg = resp.json().get("error", {}).get("message", resp.text[:200]) if resp.headers.get("content-type", "").startswith("application/json") else resp.text[:200]
-    return {"ok": False, "detail": error_msg}
-
 
 @router.get("/organizations/{org_id}/secrets")
 def get_org_secrets(
@@ -154,7 +127,6 @@ def get_org_secrets(
         "anthropic_api_key": org.anthropic_api_key or "",
         "crm_api_key": org.crm_api_key or "",
         "crm_webhook_secret": org.crm_webhook_secret or "",
-        "apify_api_token": org.apify_api_token or "",
         "sendgrid_api_key": org.sendgrid_api_key or "",
     }
 

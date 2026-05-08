@@ -26,8 +26,6 @@ class Organization(SQLModel, table=True):
     whatsapp_access_token: Optional[str] = None
     whatsapp_verify_token: Optional[str] = None
     whatsapp_enabled: bool = Field(default=False)
-    apify_enabled: bool = Field(default=False)
-    apify_api_token: Optional[str] = None
     # Email marketing
     email_enabled: bool = Field(default=False)
     sendgrid_api_key: Optional[str] = None
@@ -136,7 +134,7 @@ class Prospect(SQLModel, table=True):
     last_called_at: Optional[datetime] = None
     notes: Optional[str] = None
     organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
-    # Apify-sourced enrichment fields
+    # Google Maps enrichment fields
     website: Optional[str] = None
     place_id: Optional[str] = Field(default=None, index=True)
     last_review_at: Optional[datetime] = None

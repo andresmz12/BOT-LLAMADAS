@@ -121,8 +121,6 @@ def run_migrations():
                 "whatsapp_access_token": "TEXT",
                 "whatsapp_verify_token": "VARCHAR(255)",
                 "whatsapp_enabled": "BOOLEAN DEFAULT FALSE",
-                "apify_enabled": "BOOLEAN DEFAULT FALSE",
-                "apify_api_token": "TEXT",
                 "email_enabled": "BOOLEAN DEFAULT FALSE",
                 "sendgrid_api_key": "TEXT",
                 "email_from": "VARCHAR(255)",

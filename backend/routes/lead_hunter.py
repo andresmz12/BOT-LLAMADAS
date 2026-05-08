@@ -18,7 +18,6 @@ logger = logging.getLogger(__name__)
 
 class ScoutRequest(BaseModel):
     city: str
-    category: str
     limit: int = 17
 
 
@@ -82,33 +81,24 @@ def _get_lead(lead_id: int, user: User, session: Session) -> LeadHunt:
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
 @router.post("/scout")
-async def scout_leads(
+def scout_leads(
     data: ScoutRequest,
     current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
-    """Run Apify Google Maps search and store matching businesses as LeadHunt records."""
+    """Search Google Maps via Outscraper and store matching businesses as LeadHunt records."""
     city = data.city.strip()
-    category = data.category.strip()
-    if not city or not category:
-        raise HTTPException(status_code=400, detail="Ciudad y categoría son obligatorias")
+    if not city:
+        raise HTTPException(status_code=400, detail="Ciudad es obligatoria")
     if not (1 <= data.limit <= 50):
         raise HTTPException(status_code=400, detail="El límite debe estar entre 1 y 50")
 
-    org = _get_org(current_user, session)
-    if not org.apify_enabled:
-        raise HTTPException(status_code=403, detail="Apify no está habilitado para esta organización. Actívalo en Admin Panel.")
-
-    apify_token = (org.apify_api_token or "").strip() or ""
-
     from services.lead_hunter_service import scout
     try:
-        leads = await scout(
-            org_id=current_user.organization_id,
+        leads = scout(
             city=city,
-            category=category,
             limit=data.limit,
-            apify_token=apify_token,
+            org_id=current_user.organization_id,
             session=session,
         )
     except Exception as e:

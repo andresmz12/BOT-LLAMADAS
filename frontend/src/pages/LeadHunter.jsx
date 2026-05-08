@@ -261,7 +261,7 @@ export default function LeadHunter() {
               : <><MagnifyingGlassIcon className="w-4 h-4" /> Buscar leads</>
             }
           </button>
-          {scouting && <p className="text-xs text-slate-500 animate-pulse">Apify está escaneando Google Maps, puede tomar ~30–60 segundos...</p>}
+          {scouting && <p className="text-xs text-slate-500 animate-pulse">Buscando negocios en Google Maps, puede tomar unos segundos...</p>}
           {scoutMsg && (
             <p className={`text-xs font-medium ${scoutMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
               {scoutMsg.ok ? '✓' : '✗'} {scoutMsg.text}

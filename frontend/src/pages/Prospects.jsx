@@ -4,7 +4,7 @@ import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
 import UpgradeBanner from '../components/UpgradeBanner'
 import CallDetailModal from '../components/CallDetailModal'
-import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus, getCalls, searchApifyProspects, expandKeywords } from '../api/client'
+import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus, getCalls, expandKeywords } from '../api/client'
 import { exportToCsv } from '../utils/exportCsv'
 import { fmtDate } from '../utils/date'
 
@@ -158,322 +158,6 @@ function ProspectHistoryModal({ prospect, onClose }) {
   )
 }
 
-function ApifySearchModal({ campaigns, onClose, onImported }) {
-  const [form, setForm] = useState({
-    search_term: '',
-    location: '',
-    zone: '',
-    max_results: 50,
-    campaign_id: campaigns[0]?.id || '',
-    exclude_keywords: '',
-    exclude_chains: true,
-    dedupe_by_brand: true,
-    min_reviews: 0,
-    max_reviews: 0,
-    min_rating: 0,
-    skip_closed: true,
-    require_phone: true,
-    language: 'en',
-    radius_zip: '',
-    radius_miles: 0,
-    fresh_days: 0,
-    website_filter: 'any',
-    skip_existing_in_org: true,
-  })
-  const [loading, setLoading] = useState(false)
-  const [result, setResult] = useState(null)
-  const [expanding, setExpanding] = useState(false)
-  const [variants, setVariants] = useState([])
-  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
-
-  const expandWithAI = async () => {
-    const seed = form.search_term.trim()
-    if (!seed) {
-      alert('Escribe primero un término base, luego pulsa expandir.')
-      return
-    }
-    setExpanding(true)
-    try {
-      const res = await expandKeywords({ seed: seed.split(',')[0].trim(), language: form.language })
-      setVariants(res.variants || [])
-    } catch (err) {
-      alert(`No se pudieron generar variantes: ${err.response?.data?.detail || err.message}`)
-    } finally {
-      setExpanding(false)
-    }
-  }
-
-  const toggleVariant = (v) => {
-    const current = form.search_term.split(',').map(s => s.trim()).filter(Boolean)
-    const exists = current.some(c => c.toLowerCase() === v.toLowerCase())
-    const next = exists ? current.filter(c => c.toLowerCase() !== v.toLowerCase()) : [...current, v]
-    set('search_term', next.join(', '))
-  }
-  const isSelected = (v) => form.search_term.split(',').map(s => s.trim().toLowerCase()).includes(v.toLowerCase())
-
-  const submit = async (e) => {
-    e.preventDefault()
-    setLoading(true)
-    setResult(null)
-    try {
-      const res = await searchApifyProspects({
-        ...form,
-        campaign_id: Number(form.campaign_id),
-        max_results: Number(form.max_results),
-        min_rating: Number(form.min_rating),
-        min_reviews: Number(form.min_reviews),
-        max_reviews: Number(form.max_reviews),
-        radius_miles: Number(form.radius_miles),
-        fresh_days: Number(form.fresh_days),
-      })
-      setResult(res)
-      onImported()
-    } catch (err) {
-      const detail = err.response?.data?.detail || err.message || 'Error desconocido'
-      const isTokenError = detail.includes('user-or-token-not-found') ||
-        detail.toLowerCase().includes('authentication token') ||
-        detail.toLowerCase().includes('token de apify') ||
-        detail.toLowerCase().includes('token no configurado')
-      alert(isTokenError
-        ? 'Token de Apify inválido o no configurado.\n\nVe a Admin Panel → Organizaciones → edita tu organización → sección "Búsqueda con IA" → actualiza el token de Apify.'
-        : `Error: ${detail}`)
-    } finally { setLoading(false) }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between p-6 border-b border-z-border">
-          <div>
-            <h2 className="text-lg font-bold text-slate-100">Buscar prospectos con IA</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Google Maps via Apify · Los resultados se importan directo a tu campaña</p>
-          </div>
-          <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
-        </div>
-        <form onSubmit={submit} className="p-6 space-y-4">
-
-          {/* Search */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-300 mb-1">
-                ¿Qué tipo de negocio buscas? *
-                <span className="text-slate-500 font-normal ml-1">(separa varios términos por coma)</span>
-              </label>
-              <div className="flex gap-2">
-                <input required value={form.search_term} onChange={e => set('search_term', e.target.value)}
-                  className="z-input flex-1" />
-                <button type="button" onClick={expandWithAI} disabled={expanding}
-                  className="px-3 py-2 rounded-lg bg-purple-500/20 border border-purple-500/40 text-purple-300 text-xs font-semibold hover:bg-purple-500/30 disabled:opacity-50 flex items-center gap-1.5 whitespace-nowrap">
-                  <SparklesIcon className={`w-4 h-4 ${expanding ? 'animate-spin' : ''}`} />
-                  {expanding ? 'Pensando…' : 'Expandir con IA'}
-                </button>
-              </div>
-              <p className="text-xs text-slate-600 mt-1">Captura todas las variantes que usa la gente para describir el mismo servicio</p>
-              {variants.length > 0 && (
-                <div className="mt-2 p-3 bg-purple-500/5 border border-purple-500/20 rounded-lg">
-                  <p className="text-xs text-purple-300 mb-2">Sugerencias de IA — pulsa para agregar/quitar:</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {variants.map(v => (
-                      <button key={v} type="button" onClick={() => toggleVariant(v)}
-                        className={`px-2 py-1 rounded-md text-xs border transition ${isSelected(v) ? 'bg-purple-500/30 border-purple-500 text-white' : 'bg-z-card border-z-border text-slate-300 hover:border-purple-500/40'}`}>
-                        {isSelected(v) ? '✓ ' : '+ '}{v}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
-                Ciudad o estado *
-                <span className="text-slate-500 font-normal ml-1">(varios separados por coma)</span>
-              </label>
-              <input required value={form.location} onChange={e => set('location', e.target.value)}
-                className="z-input" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Idioma de búsqueda</label>
-              <select value={form.language} onChange={e => set('language', e.target.value)} className="z-input">
-                <option value="en">Inglés</option>
-                <option value="es">Español</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-slate-300 mb-1">Zona específica <span className="text-slate-500 font-normal">(opcional)</span></label>
-              <input value={form.zone} onChange={e => set('zone', e.target.value)}
-                className="z-input" />
-              <p className="text-xs text-slate-600 mt-1">Limita la búsqueda a un barrio o código postal específico</p>
-            </div>
-            <div className="col-span-2 border border-z-border rounded-xl p-3 bg-z-card/40">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-2">Radio geográfico (opcional, anula ciudad/estado)</p>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">ZIP / código postal</label>
-                  <input value={form.radius_zip} onChange={e => set('radius_zip', e.target.value)} className="z-input" />
-                </div>
-                <div>
-                  <label className="block text-xs text-slate-400 mb-1">Radio</label>
-                  <select value={form.radius_miles} onChange={e => set('radius_miles', e.target.value)} className="z-input">
-                    <option value={0}>Sin radio</option>
-                    <option value={5}>5 millas</option>
-                    <option value={10}>10 millas</option>
-                    <option value={20}>20 millas</option>
-                    <option value={30}>30 millas</option>
-                    <option value={50}>50 millas</option>
-                  </select>
-                </div>
-              </div>
-              <p className="text-xs text-slate-600 mt-2">Útil si tu cliente cubre solo cierto territorio. Más preciso que ciudad/estado.</p>
-            </div>
-            <div className="col-span-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form.dedupe_by_brand} onChange={e => set('dedupe_by_brand', e.target.checked)} className="w-4 h-4 accent-purple-500" />
-                <span className="text-sm text-slate-300">Solo negocios independientes</span>
-              </label>
-              <p className="text-xs text-slate-600 mt-1 ml-6">Excluir empresas con varias sucursales en la misma área — evita importar la misma marca 5 veces</p>
-            </div>
-          </div>
-
-          {/* Filters */}
-          <div className="border border-z-border rounded-xl p-4 space-y-3">
-            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Filtros de calidad</p>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
-                Excluir negocios que contengan estas palabras
-                <span className="text-slate-500 font-normal ml-1">(separadas por coma)</span>
-              </label>
-              <input value={form.exclude_keywords} onChange={e => set('exclude_keywords', e.target.value)}
-                className="z-input" />
-              <p className="text-xs text-slate-600 mt-1">Se filtrará cualquier negocio cuyo nombre contenga estas palabras</p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Mínimo de reseñas en Google</label>
-                <select value={form.min_reviews} onChange={e => set('min_reviews', e.target.value)} className="z-input">
-                  <option value={0}>Sin mínimo</option>
-                  <option value={5}>5+ reseñas</option>
-                  <option value={10}>10+ reseñas</option>
-                  <option value={25}>25+ reseñas</option>
-                  <option value={50}>50+ reseñas</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Máximo de reseñas <span className="text-slate-500 font-normal">(filtra corporaciones)</span></label>
-                <select value={form.max_reviews} onChange={e => set('max_reviews', e.target.value)} className="z-input">
-                  <option value={0}>Sin máximo</option>
-                  <option value={200}>Hasta 200</option>
-                  <option value={500}>Hasta 500</option>
-                  <option value={1000}>Hasta 1,000</option>
-                  <option value={2000}>Hasta 2,000</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Rating mínimo en Google</label>
-                <select value={form.min_rating} onChange={e => set('min_rating', e.target.value)} className="z-input">
-                  <option value={0}>Sin mínimo</option>
-                  <option value={3}>3.0+ ⭐</option>
-                  <option value={3.5}>3.5+ ⭐</option>
-                  <option value={4}>4.0+ ⭐</option>
-                  <option value={4.5}>4.5+ ⭐</option>
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Actividad reciente <span className="text-slate-500 font-normal">(última reseña)</span></label>
-                <select value={form.fresh_days} onChange={e => set('fresh_days', e.target.value)} className="z-input">
-                  <option value={0}>Cualquiera</option>
-                  <option value={30}>Últimos 30 días</option>
-                  <option value={90}>Últimos 90 días</option>
-                  <option value={180}>Últimos 6 meses</option>
-                  <option value={365}>Último año</option>
-                </select>
-              </div>
-              <div className="col-span-2">
-                <label className="block text-sm font-medium text-slate-300 mb-1">Sitio web</label>
-                <select value={form.website_filter} onChange={e => set('website_filter', e.target.value)} className="z-input">
-                  <option value="any">Cualquiera</option>
-                  <option value="without">Solo sin sitio web (necesitan digitalización)</option>
-                  <option value="with">Solo con sitio web (más establecidos)</option>
-                </select>
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Máx. prospectos a importar</label>
-              <select value={form.max_results} onChange={e => set('max_results', e.target.value)} className="z-input">
-                {[25, 50, 100, 150, 200].map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form.exclude_chains} onChange={e => set('exclude_chains', e.target.checked)} className="w-4 h-4 accent-purple-500" />
-                <span className="text-sm text-slate-300">Excluir cadenas, franquicias y grandes paqueterías</span>
-              </label>
-              <p className="text-xs text-slate-600 ml-6 -mt-1">UPS Store, FedEx, DHL, USPS, Walmart, McDonald's, etc.</p>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form.skip_closed} onChange={e => set('skip_closed', e.target.checked)} className="w-4 h-4 accent-purple-500" />
-                <span className="text-sm text-slate-300">Excluir negocios permanentemente cerrados</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form.require_phone} onChange={e => set('require_phone', e.target.checked)} className="w-4 h-4 accent-purple-500" />
-                <span className="text-sm text-slate-300">Solo importar si tienen número de teléfono</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input type="checkbox" checked={form.skip_existing_in_org} onChange={e => set('skip_existing_in_org', e.target.checked)} className="w-4 h-4 accent-purple-500" />
-                <span className="text-sm text-slate-300">No importar prospectos que ya existen en mi organización</span>
-              </label>
-              <p className="text-xs text-slate-600 ml-6 -mt-1">Evita duplicados entre campañas — no llamarás 3 veces al mismo número</p>
-            </div>
-          </div>
-
-          {/* Campaign */}
-          <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Campaña destino *</label>
-            <select required value={form.campaign_id} onChange={e => set('campaign_id', e.target.value)} className="z-input">
-              {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-
-          {loading && (
-            <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-3 text-xs text-purple-300 flex items-center gap-2">
-              <ArrowPathIcon className="w-4 h-4 animate-spin flex-shrink-0" />
-              Buscando negocios en Google Maps… puede tomar 1-3 minutos.
-            </div>
-          )}
-
-          {result && (
-            <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-3 text-xs text-green-300 space-y-1">
-              <p className="font-semibold">✓ Búsqueda completada</p>
-              <p>Encontrados: {result.total_found} · Importados: <span className="font-bold">{result.imported}</span></p>
-              {result.skipped_no_phone > 0 && <p className="text-slate-500">Sin teléfono: {result.skipped_no_phone}</p>}
-              {result.skipped_no_reviews > 0 && <p className="text-slate-500">Sin suficientes reseñas: {result.skipped_no_reviews}</p>}
-              {result.skipped_too_many_reviews > 0 && <p className="text-slate-500">Demasiadas reseñas (corporación): {result.skipped_too_many_reviews}</p>}
-              {result.skipped_low_rating > 0 && <p className="text-slate-500">Rating bajo: {result.skipped_low_rating}</p>}
-              {result.skipped_duplicates > 0 && <p className="text-slate-500">Sucursales duplicadas eliminadas: {result.skipped_duplicates}</p>}
-              {result.skipped_existing > 0 && <p className="text-slate-500">Ya existían en tu organización: {result.skipped_existing}</p>}
-              {result.skipped_stale > 0 && <p className="text-slate-500">Sin actividad reciente: {result.skipped_stale}</p>}
-              {result.skipped_website > 0 && <p className="text-slate-500">No coinciden con filtro de sitio web: {result.skipped_website}</p>}
-              {result.skipped_excluded > 0 && <p className="text-slate-500">Filtrados por exclusión: {result.skipped_excluded}</p>}
-            </div>
-          )}
-
-          <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="z-btn-ghost">{result ? 'Cerrar' : 'Cancelar'}</button>
-            {!result && (
-              <button type="submit" disabled={loading} className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50">
-                <MagnifyingGlassIcon className="w-4 h-4" />
-                {loading ? 'Buscando...' : 'Buscar e importar'}
-              </button>
-            )}
-          </div>
-        </form>
-      </div>
-    </div>
-  )
-}
-
 export default function Prospects() {
   const [prospects, setProspects] = useState([])
   const [campaigns, setCampaigns] = useState([])
@@ -481,12 +165,10 @@ export default function Prospects() {
   const [filterStatus, setFilterStatus] = useState('')
   const [showImport, setShowImport] = useState(false)
   const [showNew, setShowNew] = useState(false)
-  const [showApifySearch, setShowApifySearch] = useState(false)
   const [callingId, setCallingId] = useState(null)
   const [historyProspect, setHistoryProspect] = useState(null)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const isFree = user.plan === 'free'
-  const apifyEnabled = user.apify_enabled === true
   const [demoStatus, setDemoStatus] = useState(null)
 
   const handleCall = async (p) => {
@@ -579,12 +261,6 @@ export default function Prospects() {
           )}
           {!isFree && (
             <>
-            {apifyEnabled && (
-              <button onClick={() => setShowApifySearch(true)}
-                className="flex items-center gap-2 px-4 py-2 border border-purple-500 text-purple-400 hover:bg-purple-500/10 font-semibold rounded-lg text-sm transition-colors">
-                <MagnifyingGlassIcon className="w-4 h-4" /> Buscar prospectos
-              </button>
-            )}
             <button onClick={() => setShowNew(true)}
               className="flex items-center gap-2 px-4 py-2 border border-z-blue text-z-blue-light hover:bg-z-blue/10 font-semibold rounded-lg text-sm transition-colors">
               <PlusIcon className="w-4 h-4" /> Nuevo prospecto
@@ -722,11 +398,6 @@ export default function Prospects() {
             </div>
           : <ImportCSVModal campaigns={campaigns} onClose={() => setShowImport(false)}
               onImported={() => { setShowImport(false); load() }} />
-      )}
-
-      {showApifySearch && (
-        <ApifySearchModal campaigns={campaigns} onClose={() => setShowApifySearch(false)}
-          onImported={() => { setShowApifySearch(false); load() }} />
       )}
 
       {historyProspect && (
