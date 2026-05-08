@@ -3,6 +3,7 @@ import logging
 import os
 import random
 import re
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 from anthropic import AsyncAnthropic
@@ -30,95 +31,144 @@ CHAIN_BLACKLIST = [
     "EXXON", "BP"
 ]
 
+MIN_RATING = 3.0
+MAX_RATING = 4.6
+MIN_REVIEWS = 5
+MAX_REVIEWS = 80
+
+
+def _fetch_query(client: ApiClient, query: str, city: str, fetch_limit: int) -> list:
+    """Run a single Outscraper query and return raw items list."""
+    try:
+        results = client.google_maps_search(
+            f"{query} en {city}",
+            limit=fetch_limit,
+            language="es",
+            region="us",
+        )
+        items = results[0] if results and isinstance(results[0], list) else results
+        return items or []
+    except Exception as exc:
+        logger.warning(f"[LeadHunter] query '{query}' in '{city}' failed: {exc}")
+        return []
+
 
 def scout(city: str, limit: int = 17, org_id: int = None, session: Session = None) -> list:
     """
     Search Google Maps via Outscraper for small Latino businesses in city.
     Filters: rating 3.0–4.6, reviews 5–80, has phone, not a chain.
+    Runs up to `limit` queries in parallel (ThreadPoolExecutor).
     Deduplicates against existing LeadHunt records for the org.
+    Saves results to DB when session is provided.
     """
-    client = ApiClient(api_key=os.getenv("OUTSCRAPER_API_KEY"))
+    api_key = os.getenv("OUTSCRAPER_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("OUTSCRAPER_API_KEY no configurada")
+
+    client = ApiClient(api_key=api_key)
     queries = random.sample(LATINO_QUERIES, min(len(LATINO_QUERIES), limit))
+    fetch_limit = max(limit * 2, 10)
 
     existing_phones: set[str] = set()
+    existing_names: set[str] = set()
     if session and org_id:
         rows = session.exec(
-            select(LeadHunt.phone).where(LeadHunt.org_id == org_id)
+            select(LeadHunt.phone, LeadHunt.name).where(LeadHunt.org_id == org_id)
         ).all()
-        existing_phones = {p for p in rows if p}
+        for phone, name in rows:
+            if phone:
+                existing_phones.add(phone)
+            if name:
+                existing_names.add(name.lower().strip())
+
+    # Run all queries in parallel — Outscraper calls are blocking HTTP
+    raw_results: dict[str, list] = {}
+    with ThreadPoolExecutor(max_workers=min(len(queries), 5)) as pool:
+        futures = {
+            pool.submit(_fetch_query, client, q, city, fetch_limit): q
+            for q in queries
+        }
+        for future in as_completed(futures):
+            query = futures[future]
+            raw_results[query] = future.result()
 
     collected: list[LeadHunt] = []
 
     for query in queries:
         if len(collected) >= limit:
             break
-        try:
-            results = client.google_maps_search(
-                f"{query} en {city}",
-                limit=limit * 2,
-                language="es",
-                region="us",
-            )
-            items = results[0] if results and isinstance(results[0], list) else results
-            for item in items:
-                if len(collected) >= limit:
-                    break
-                rating = item.get("rating") or 0
-                reviews = item.get("reviews_count") or item.get("reviews") or 0
-                phone = (item.get("phone") or "").strip()
-                name = (item.get("name") or "").upper()
+        for item in raw_results.get(query, []):
+            if len(collected) >= limit:
+                break
 
-                if not (3.0 <= rating <= 4.6):
-                    continue
-                if not (5 <= reviews <= 80):
-                    continue
-                if not phone:
-                    continue
-                if any(chain in name for chain in CHAIN_BLACKLIST):
-                    continue
-                if item.get("is_chain") or item.get("chain"):
-                    continue
-                if phone in existing_phones:
-                    continue
+            rating = float(item.get("rating") or 0)
+            reviews = int(item.get("reviews_count") or item.get("reviews") or 0)
+            phone = (item.get("phone") or "").strip()
+            name = (item.get("name") or "").strip()
+            name_upper = name.upper()
 
-                existing_phones.add(phone)
-                website = (item.get("site") or item.get("website") or "").strip()
-                collected.append(LeadHunt(
-                    name=item.get("name") or "",
-                    phone=phone,
-                    city=city,
-                    category=query,
-                    reviews_count=reviews,
-                    rating=rating,
-                    has_website=bool(website),
-                    website_url=website or None,
-                    org_id=org_id,
-                ))
-        except Exception:
-            continue
+            if not (MIN_RATING <= rating <= MAX_RATING):
+                continue
+            if not (MIN_REVIEWS <= reviews <= MAX_REVIEWS):
+                continue
+            if not phone:
+                continue
+            if any(chain in name_upper for chain in CHAIN_BLACKLIST):
+                continue
+            if item.get("is_chain") or item.get("chain"):
+                continue
+            if phone in existing_phones:
+                continue
+            if name.lower().strip() in existing_names:
+                continue
+
+            existing_phones.add(phone)
+            existing_names.add(name.lower().strip())
+            website = (item.get("site") or item.get("website") or "").strip()
+            collected.append(LeadHunt(
+                name=name,
+                phone=phone,
+                city=city,
+                category=query,
+                reviews_count=reviews,
+                rating=rating,
+                has_website=bool(website),
+                website_url=website or None,
+                org_id=org_id,
+            ))
+
+    leads = collected[:limit]
+
+    if session and leads:
+        for lead in leads:
+            session.add(lead)
+        session.commit()
+        for lead in leads:
+            session.refresh(lead)
 
     logger.info(
-        f"[LeadHunter] scout org={org_id} city={city!r} collected={len(collected)}"
+        f"[LeadHunter] scout org={org_id} city={city!r} "
+        f"queries={len(queries)} collected={len(leads)}"
     )
-    return collected[:limit]
+    return leads
 
 
 def checker(leads: list, session=None) -> list:
     """
     Quality-check each lead in-place.
-    Passes when: has phone AND 3.5 ≤ rating ≤ 4.5 AND reviews_count < 80.
+    Passes when: has phone AND MIN_RATING ≤ rating ≤ MAX_RATING AND MIN_REVIEWS ≤ reviews ≤ MAX_REVIEWS.
     Sets passed_checks (bool) and check_reason (str | None).
     """
     for lead in leads:
         if not lead.phone:
             lead.passed_checks = False
             lead.check_reason = "Sin número de teléfono"
-        elif not (3.5 <= lead.rating <= 4.5):
+        elif not (MIN_RATING <= lead.rating <= MAX_RATING):
             lead.passed_checks = False
             lead.check_reason = f"Rating fuera del rango óptimo ({lead.rating:.1f})"
-        elif lead.reviews_count >= 80:
+        elif not (MIN_REVIEWS <= lead.reviews_count <= MAX_REVIEWS):
             lead.passed_checks = False
-            lead.check_reason = f"Demasiadas reseñas ({lead.reviews_count}) — negocio ya establecido"
+            lead.check_reason = f"Reseñas fuera del rango ({lead.reviews_count})"
         else:
             lead.passed_checks = True
             lead.check_reason = None

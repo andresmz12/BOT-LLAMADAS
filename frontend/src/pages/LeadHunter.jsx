@@ -55,7 +55,7 @@ export default function LeadHunter() {
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(false)
   const [scouting, setScouting] = useState(false)
-  const [scoutForm, setScoutForm] = useState({ city: '', category: '', limit: 17 })
+  const [scoutForm, setScoutForm] = useState({ city: '', limit: 17 })
   const [scoutMsg, setScoutMsg] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [actingId, setActingId] = useState(null)   // id of lead being processed
@@ -75,11 +75,11 @@ export default function LeadHunter() {
   useEffect(() => { loadLeads(filter) }, [filter])
 
   const handleScout = async () => {
-    const { city, category, limit } = scoutForm
-    if (!city.trim() || !category.trim()) return
+    const { city, limit } = scoutForm
+    if (!city.trim()) return
     setScouting(true); setScoutMsg(null)
     try {
-      const r = await scoutLeads({ city: city.trim(), category: category.trim(), limit: Number(limit) || 17 })
+      const r = await scoutLeads({ city: city.trim(), limit: Number(limit) || 17 })
       setScoutMsg({ ok: true, text: `${r.found} leads encontrados y guardados` })
       setFilter('all')
       loadLeads('all')
@@ -222,21 +222,12 @@ export default function LeadHunter() {
         <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
           <MagnifyingGlassIcon className="w-4 h-4 text-blue-400" /> Buscar negocios
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-slate-500 mb-1 block">Ciudad / Estado</label>
             <input
               type="text" value={scoutForm.city} placeholder="Miami, FL"
               onChange={e => setScoutForm(p => ({ ...p, city: e.target.value }))}
-              onKeyDown={e => e.key === 'Enter' && handleScout()}
-              className="z-input w-full text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 mb-1 block">Categoría / Rubro</label>
-            <input
-              type="text" value={scoutForm.category} placeholder="paquetería, tax preparation..."
-              onChange={e => setScoutForm(p => ({ ...p, category: e.target.value }))}
               onKeyDown={e => e.key === 'Enter' && handleScout()}
               className="z-input w-full text-sm"
             />
@@ -253,7 +244,7 @@ export default function LeadHunter() {
         <div className="flex items-center gap-3 flex-wrap">
           <button
             onClick={handleScout}
-            disabled={scouting || !scoutForm.city.trim() || !scoutForm.category.trim()}
+            disabled={scouting || !scoutForm.city.trim()}
             className="z-btn-primary flex items-center gap-2 disabled:opacity-50"
           >
             {scouting
@@ -269,7 +260,7 @@ export default function LeadHunter() {
           )}
         </div>
         <p className="text-xs text-slate-600">
-          Filtra automáticamente negocios con rating 3.5–4.5 ⭐ y menos de 80 reseñas — el sweet spot donde tu propuesta tiene más impacto.
+          Busca automáticamente negocios latinos (taquerías, panaderías, barberías...) con rating 3.0–4.6 ⭐ y entre 5–80 reseñas — el sweet spot donde tu propuesta tiene más impacto.
         </p>
       </div>
 
