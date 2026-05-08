@@ -4,6 +4,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
+from sqlalchemy import delete as sa_delete
 from sqlmodel import Session, select
 
 from database import get_session
@@ -101,6 +102,8 @@ def scout_leads(
             org_id=current_user.organization_id,
             session=session,
         )
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -198,6 +201,10 @@ async def craft_all_leads(
     if not leads:
         return {"crafted": 0}
 
+    # Cap at 8 per request to stay well under Railway's 30s timeout
+    total_pending = len(leads)
+    leads = leads[:8]
+
     from services.lead_hunter_service import craft_messages
     import asyncio
     crafted = 0
@@ -206,11 +213,11 @@ async def craft_all_leads(
         try:
             await craft_messages(lead, org, session=session)
             crafted += 1
-            await asyncio.sleep(0.3)   # gentle rate limiting
+            await asyncio.sleep(0.3)
         except Exception as e:
             logger.warning(f"[LeadHunter] craft-all lead={lead.id} error: {e}")
             errors += 1
-    return {"crafted": crafted, "errors": errors}
+    return {"crafted": crafted, "errors": errors, "remaining": total_pending - crafted}
 
 
 @router.post("/leads/{lead_id}/send")
@@ -268,10 +275,8 @@ def delete_all_leads(
     session: Session = Depends(get_session),
 ):
     """Delete all Lead Hunter records for the org."""
-    leads = session.exec(
-        select(LeadHunt).where(LeadHunt.org_id == current_user.organization_id)
-    ).all()
-    for lead in leads:
-        session.delete(lead)
+    result = session.exec(
+        sa_delete(LeadHunt).where(LeadHunt.org_id == current_user.organization_id)
+    )
     session.commit()
-    return {"deleted": len(leads)}
+    return {"deleted": result.rowcount}
