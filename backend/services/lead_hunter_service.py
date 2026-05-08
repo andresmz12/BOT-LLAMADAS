@@ -1,140 +1,106 @@
-import asyncio
 import json
 import logging
 import os
+import random
 import re
 from datetime import datetime
 
-import httpx
 from anthropic import AsyncAnthropic
+from outscraper import ApiClient
+from sqlmodel import Session, select
 
 from models import LeadHunt, Organization
 
 logger = logging.getLogger(__name__)
 
-APIFY_ACTOR = "compass~crawler-google-places"
-APIFY_BASE = "https://api.apify.com/v2"
+LATINO_QUERIES = [
+    "pupusería", "taquería", "frutería", "panadería latina",
+    "carnicería hispana", "tienda latina", "restaurante mexicano",
+    "restaurante salvadoreño", "restaurante colombiano", "restaurante cubano",
+    "barbería latina", "salón de belleza hispano", "uñas latina",
+    "lavandería hispana", "ferretería latina", "tortillería",
+    "dulcería mexicana", "joyería latina", "envíos de dinero",
+    "notaría latina"
+]
+
+CHAIN_BLACKLIST = [
+    "MCDONALD", "SUBWAY", "WALMART", "BURGER KING", "WENDY", "TACO BELL",
+    "DOMINO", "PIZZA HUT", "STARBUCKS", "CHIPOTLE", "POPEYES", "KFC",
+    "DUNKIN", "SEVEN ELEVEN", "7-ELEVEN", "CIRCLE K", "CHEVRON", "SHELL",
+    "EXXON", "BP"
+]
 
 
-async def scout(
-    org_id: int,
-    city: str,
-    category: str,
-    limit: int = 17,
-    apify_token: str = "",
-    session=None,
-) -> list:
+def scout(city: str, limit: int = 17, org_id: int = None, session: Session = None) -> list:
     """
-    Search Google Maps for businesses matching category in city.
-    Filters: rating 3.5–4.5, reviewsCount < 80.
-    Prioritizes: has_phone first, then by reviewsCount desc.
-    Saves results as LeadHunt records and returns them.
+    Search Google Maps via Outscraper for small Latino businesses in city.
+    Filters: rating 3.0–4.6, reviews 5–80, has phone, not a chain.
+    Deduplicates against existing LeadHunt records for the org.
     """
-    token = apify_token.strip() or os.getenv("APIFY_API_TOKEN", "").strip()
-    if not token:
-        raise ValueError("APIFY_API_TOKEN no configurado para esta organización")
+    client = ApiClient(api_key=os.getenv("OUTSCRAPER_API_KEY"))
+    queries = random.sample(LATINO_QUERIES, min(len(LATINO_QUERIES), limit))
 
-    actor_input = {
-        "searchStringsArray": [f"{category} in {city}"],
-        "maxCrawledPlacesPerSearch": min(limit * 3, 150),
-        "includeHistogram": False,
-        "includeOpeningHours": False,
-        "includePeopleAlsoSearchFor": False,
-        "language": "en",
-        "skipClosedPlaces": True,
-    }
+    existing_phones: set[str] = set()
+    if session and org_id:
+        rows = session.exec(
+            select(LeadHunt.phone).where(LeadHunt.org_id == org_id)
+        ).all()
+        existing_phones = {p for p in rows if p}
 
-    async with httpx.AsyncClient(timeout=300) as client:
-        run_resp = await client.post(
-            f"{APIFY_BASE}/acts/{APIFY_ACTOR}/runs",
-            headers={"Authorization": f"Bearer {token}"},
-            json=actor_input,
-        )
-        if run_resp.status_code >= 400:
-            raise RuntimeError(f"Error Apify {run_resp.status_code}: {run_resp.text[:300]}")
+    collected: list[LeadHunt] = []
 
-        run_id = run_resp.json().get("data", {}).get("id", "")
-        if not run_id:
-            raise RuntimeError("Apify no devolvió run_id")
-
-        run_status = ""
-        for _ in range(70):
-            await asyncio.sleep(3)
-            sr = await client.get(
-                f"{APIFY_BASE}/actor-runs/{run_id}",
-                headers={"Authorization": f"Bearer {token}"},
+    for query in queries:
+        if len(collected) >= limit:
+            break
+        try:
+            results = client.google_maps_search(
+                f"{query} en {city}",
+                limit=limit * 2,
+                language="es",
+                region="us",
             )
-            run_status = sr.json().get("data", {}).get("status", "")
-            if run_status in ("SUCCEEDED", "FAILED", "ABORTED", "TIMED-OUT"):
-                break
+            items = results[0] if results and isinstance(results[0], list) else results
+            for item in items:
+                if len(collected) >= limit:
+                    break
+                rating = item.get("rating") or 0
+                reviews = item.get("reviews_count") or item.get("reviews") or 0
+                phone = (item.get("phone") or "").strip()
+                name = (item.get("name") or "").upper()
 
-        if run_status != "SUCCEEDED":
-            raise RuntimeError(f"Apify run terminó con estado: {run_status}")
+                if not (3.0 <= rating <= 4.6):
+                    continue
+                if not (5 <= reviews <= 80):
+                    continue
+                if not phone:
+                    continue
+                if any(chain in name for chain in CHAIN_BLACKLIST):
+                    continue
+                if item.get("is_chain") or item.get("chain"):
+                    continue
+                if phone in existing_phones:
+                    continue
 
-        items_resp = await client.get(
-            f"{APIFY_BASE}/actor-runs/{run_id}/dataset/items",
-            headers={"Authorization": f"Bearer {token}"},
-            params={"format": "json", "limit": limit * 3},
-        )
-        items = items_resp.json() if items_resp.status_code == 200 else []
-
-    # Filter: rating 3.5–4.5, reviews < 80
-    filtered = []
-    for item in items:
-        rating = float(item.get("totalScore") or item.get("rating") or 0)
-        reviews = int(item.get("reviewsCount") or item.get("numRatings") or 0)
-        if not (3.5 <= rating <= 4.5):
+                existing_phones.add(phone)
+                website = (item.get("site") or item.get("website") or "").strip()
+                collected.append(LeadHunt(
+                    name=item.get("name") or "",
+                    phone=phone,
+                    city=city,
+                    category=query,
+                    reviews_count=reviews,
+                    rating=rating,
+                    has_website=bool(website),
+                    website_url=website or None,
+                    org_id=org_id,
+                ))
+        except Exception:
             continue
-        if reviews >= 80:
-            continue
-        filtered.append(item)
-
-    # Prioritize: phone-equipped leads first, then sort by reviews desc
-    def _has_phone(i):
-        return bool((i.get("phone") or i.get("phoneUnformatted") or "").strip())
-
-    def _reviews(i):
-        return int(i.get("reviewsCount") or i.get("numRatings") or 0)
-
-    has_phone = sorted([i for i in filtered if _has_phone(i)], key=_reviews, reverse=True)
-    no_phone  = sorted([i for i in filtered if not _has_phone(i)], key=_reviews, reverse=True)
-    prioritized = (has_phone + no_phone)[:limit]
-
-    saved = []
-    for item in prioritized:
-        name = (item.get("title") or item.get("name") or "").strip()
-        if not name:
-            continue
-        phone = (item.get("phone") or item.get("phoneUnformatted") or "").strip()
-        website = (item.get("website") or item.get("url") or "").strip()
-        rating = float(item.get("totalScore") or item.get("rating") or 0)
-        reviews = int(item.get("reviewsCount") or item.get("numRatings") or 0)
-
-        lead = LeadHunt(
-            org_id=org_id,
-            name=name,
-            phone=phone or None,
-            city=city,
-            category=category,
-            reviews_count=reviews,
-            has_website=bool(website),
-            website_url=website or None,
-            rating=rating,
-        )
-        if session:
-            session.add(lead)
-        saved.append(lead)
-
-    if session and saved:
-        session.commit()
-        for lead in saved:
-            session.refresh(lead)
 
     logger.info(
-        f"[LeadHunter] scout org={org_id} city={city!r} category={category!r} "
-        f"raw={len(items)} filtered={len(filtered)} saved={len(saved)}"
+        f"[LeadHunter] scout org={org_id} city={city!r} collected={len(collected)}"
     )
-    return saved
+    return collected[:limit]
 
 
 def checker(leads: list, session=None) -> list:
