@@ -157,8 +157,8 @@ function ImagesTab() {
             <label className="text-xs text-slate-400 mb-1 block">Formato</label>
             <select value={size} onChange={e => setSize(e.target.value)} className="z-input-light text-sm">
               <option value="1024x1024">Cuadrado (1:1)</option>
-              <option value="1792x1024">Horizontal (16:9)</option>
-              <option value="1024x1792">Vertical (9:16)</option>
+              <option value="1536x1024">Horizontal (3:2)</option>
+              <option value="1024x1536">Vertical (2:3)</option>
             </select>
           </div>
           <div>
@@ -207,9 +207,7 @@ function ImagesTab() {
               <div className="px-4 py-3">
                 <a
                   href={url}
-                  download
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  download={`imagen-${i + 1}.png`}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 border border-z-border rounded-lg hover:bg-white/5 hover:text-slate-200 transition-colors w-fit"
                 >
                   <ArrowDownTrayIcon className="w-3.5 h-3.5" /> Descargar

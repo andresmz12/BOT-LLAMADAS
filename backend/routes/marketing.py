@@ -52,9 +52,15 @@ async def generate_image(
     client = AsyncOpenAI(api_key=api_key)
     n = max(1, min(int(n), 4))
 
+    # Map legacy dall-e-3 params → gpt-image-1
+    quality_map = {"standard": "medium", "hd": "high", "medium": "medium", "high": "high", "low": "low", "auto": "auto"}
+    gpt_quality = quality_map.get(quality, "medium")
+    size_map = {"1792x1024": "1536x1024", "1024x1792": "1024x1536"}
+    gpt_size = size_map.get(size, size)  # 1024x1024 passes through unchanged
+
     final_prompt = prompt.strip()[:4000]
 
-    # If a reference image is provided, use GPT-4o Vision to build a DALL-E prompt from it
+    # If a reference image is provided, use GPT-4o Vision to build a prompt from it
     if image and image.filename:
         image_bytes = await image.read()
         if len(image_bytes) > 10 * 1024 * 1024:
@@ -71,7 +77,7 @@ async def generate_image(
                         {"type": "text", "text": (
                             f"Analyze this reference image in detail. "
                             f"The user wants to create something similar with this request: {prompt}. "
-                            "Write a single concise DALL-E 3 prompt in English that captures the visual "
+                            "Write a single concise image generation prompt in English that captures the visual "
                             "style, composition, colors and key elements of the reference image while "
                             "incorporating the user request. Output only the prompt, no explanations."
                         )},
@@ -83,20 +89,17 @@ async def generate_image(
         except Exception as e:
             logger.warning(f"GPT-4o vision failed, using original prompt: {e}")
 
-    # DALL-E 3 only supports n=1 per call; make parallel requests
-    async def _one_image():
-        resp = await client.images.generate(
-            model="dall-e-3",
-            prompt=final_prompt,
-            n=1,
-            size=size,
-            quality=quality,
-        )
-        return resp.data[0].url
-
+    # gpt-image-1 supports n>1 in a single call and returns b64_json
     try:
-        urls = await asyncio.gather(*[_one_image() for _ in range(n)])
-        return {"urls": list(urls)}
+        resp = await client.images.generate(
+            model="gpt-image-1",
+            prompt=final_prompt,
+            n=n,
+            size=gpt_size,
+            quality=gpt_quality,
+        )
+        urls = [f"data:image/png;base64,{img.b64_json}" for img in resp.data]
+        return {"urls": urls}
     except Exception as e:
         err = str(e)
         if "content_policy" in err.lower() or "safety" in err.lower():
