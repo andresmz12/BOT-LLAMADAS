@@ -191,7 +191,15 @@ export const updateTeamMember = (id, data) => api.put(`/team/${id}`, data).then(
 export const deleteTeamMember = (id) => api.delete(`/team/${id}`).then(r => r.data)
 
 // Marketing IA
-export const generateImage = (data) => api.post('/marketing/generate-image', data).then(r => r.data)
+export const generateImage = (data, imageFile = null) => {
+  const fd = new FormData()
+  Object.entries(data).forEach(([k, v]) => fd.append(k, v))
+  if (imageFile) fd.append('image', imageFile)
+  return api.post('/marketing/generate-image', fd, {
+    timeout: 120000,
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then(r => r.data)
+}
 export const generateVideo = (formData) =>
   api.post('/marketing/generate-video', formData, {
     timeout: 750000,

@@ -73,15 +73,24 @@ function ImagesTab() {
   const [quality, setQuality] = useState('standard')
   const [style, setStyle]     = useState('vivid')
   const [quantity, setQty]    = useState(1)
+  const [refFile, setRefFile] = useState(null)
   const [loading, setLoading] = useState(false)
   const [images, setImages]   = useState([])
   const [error, setError]     = useState(null)
+  const fileRef = useRef(null)
+
+  const pickRef = (e) => {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (f.size > 10 * 1024 * 1024) { setError('La imagen de referencia no puede superar 10 MB.'); return }
+    setRefFile(f); setError(null)
+  }
 
   const generate = async () => {
     if (!prompt.trim()) return
     setLoading(true); setError(null); setImages([])
     try {
-      const r = await generateImage({ prompt, size, quality, style, n: quantity })
+      const r = await generateImage({ prompt, size, quality, style, n: quantity }, refFile)
       setImages(r.urls || [])
     } catch (e) {
       setError(e.response?.data?.detail || 'Error al generar la imagen.')
@@ -107,6 +116,41 @@ function ImagesTab() {
             placeholder="ej: logo minimalista para una tienda de envíos, fondo blanco, colores azul y dorado, estilo moderno y profesional"
             className="z-input-light text-sm resize-none"
           />
+        </div>
+
+        {/* Reference image upload */}
+        <div>
+          <label className="text-xs text-slate-400 mb-1.5 block">Imagen de referencia <span className="text-slate-600">(opcional)</span></label>
+          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pickRef} />
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg bg-white/5 border border-z-border text-slate-300 hover:bg-white/10 hover:text-slate-100 transition-colors"
+            >
+              <PhotoIcon className="w-3.5 h-3.5" />
+              {refFile ? refFile.name : 'Subir imagen de referencia'}
+            </button>
+            {refFile && (
+              <>
+                <img
+                  src={URL.createObjectURL(refFile)}
+                  alt="referencia"
+                  className="w-12 h-12 object-cover rounded-lg border border-z-border flex-shrink-0"
+                />
+                <button
+                  onClick={() => { setRefFile(null); fileRef.current && (fileRef.current.value = '') }}
+                  className="text-xs text-slate-500 hover:text-red-400 transition-colors"
+                >
+                  ✕ Quitar
+                </button>
+              </>
+            )}
+          </div>
+          {refFile && (
+            <p className="text-xs text-z-blue-light mt-1.5">
+              ✓ GPT-4o analizará tu imagen y guiará a DALL-E 3 para generar algo similar
+            </p>
+          )}
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -153,7 +197,7 @@ function ImagesTab() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              Generando con DALL-E 3...
+              {refFile ? 'Analizando imagen y generando...' : 'Generando con DALL-E 3...'}
             </>
           ) : (
             <>✨ Generar imagen</>
@@ -283,7 +327,7 @@ function VideosTab() {
             </select>
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Imagen base (opcional)</label>
+            <label className="text-xs text-slate-400 mb-1 block">Imagen base <span className="text-slate-600">(opcional)</span></label>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pickFile} />
             <button
               onClick={() => fileRef.current?.click()}
@@ -291,6 +335,7 @@ function VideosTab() {
             >
               {imageFile ? imageFile.name : 'Subir imagen...'}
             </button>
+            <p className="text-xs text-slate-600 mt-1">Sube una foto para animarla (imagen→video)</p>
           </div>
         </div>
 

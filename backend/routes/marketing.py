@@ -33,17 +33,14 @@ def _get_anthropic_key(org: Optional[Organization]) -> str:
 
 # ── 1. Imágenes IA — DALL-E 3 ────────────────────────────────────────────────
 
-class ImageRequest(BaseModel):
-    prompt: str
-    size: str = "1024x1024"      # 1024x1024 | 1792x1024 | 1024x1792
-    quality: str = "standard"    # standard | hd
-    style: str = "vivid"         # vivid | natural
-    n: int = 1                   # 1-4 (DALL-E 3 makes sequential calls)
-
-
 @router.post("/generate-image")
 async def generate_image(
-    data: ImageRequest,
+    prompt: str = Form(...),
+    size: str = Form("1024x1024"),
+    quality: str = Form("standard"),
+    style: str = Form("vivid"),
+    n: int = Form(1),
+    image: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -54,17 +51,48 @@ async def generate_image(
 
     from openai import AsyncOpenAI
     client = AsyncOpenAI(api_key=api_key)
-    n = max(1, min(int(data.n), 4))
+    n = max(1, min(int(n), 4))
+
+    final_prompt = prompt.strip()[:4000]
+
+    # If a reference image is provided, use GPT-4o Vision to build a DALL-E prompt from it
+    if image and image.filename:
+        image_bytes = await image.read()
+        if len(image_bytes) > 10 * 1024 * 1024:
+            raise HTTPException(status_code=400, detail="La imagen de referencia supera el límite de 10 MB.")
+        b64 = base64.b64encode(image_bytes).decode()
+        mime = image.content_type or "image/jpeg"
+        try:
+            vision = await client.chat.completions.create(
+                model="gpt-4o",
+                messages=[{
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                        {"type": "text", "text": (
+                            f"Analyze this reference image in detail. "
+                            f"The user wants to create something similar with this request: {prompt}. "
+                            "Write a single concise DALL-E 3 prompt in English that captures the visual "
+                            "style, composition, colors and key elements of the reference image while "
+                            "incorporating the user request. Output only the prompt, no explanations."
+                        )},
+                    ],
+                }],
+                max_tokens=400,
+            )
+            final_prompt = vision.choices[0].message.content.strip()
+        except Exception as e:
+            logger.warning(f"GPT-4o vision failed, using original prompt: {e}")
 
     # DALL-E 3 only supports n=1 per call; make parallel requests
     async def _one_image():
         resp = await client.images.generate(
             model="dall-e-3",
-            prompt=data.prompt[:4000],
+            prompt=final_prompt,
             n=1,
-            size=data.size,
-            quality=data.quality,
-            style=data.style,
+            size=size,
+            quality=quality,
+            style=style,
         )
         return resp.data[0].url
 
