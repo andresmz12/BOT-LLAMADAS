@@ -116,6 +116,8 @@ def run_migrations():
                 "email_templates": "TEXT",
                 "email_attachment": "BYTEA" if is_pg else "BLOB",
                 "email_attachment_name": "VARCHAR(255)",
+                "openai_api_key": "TEXT",
+                "google_api_key": "TEXT",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():

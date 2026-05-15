@@ -16,6 +16,7 @@ from routes import demo
 from routes import whatsapp_webhook
 from routes import whatsapp
 from routes import team
+from routes import marketing
 from routes import webhook as webhook_module
 
 logging.basicConfig(level=logging.INFO)
@@ -145,6 +146,7 @@ app.include_router(whatsapp.router)
 app.include_router(team.router)
 app.include_router(settings.router)
 app.include_router(leads.router)
+app.include_router(marketing.router)
 
 
 @app.websocket("/ws/{campaign_id}")

@@ -40,6 +40,9 @@ class Organization(SQLModel, table=True):
     email_templates: Optional[str] = None
     email_attachment: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary))
     email_attachment_name: Optional[str] = None
+    # AI Marketing
+    openai_api_key: Optional[str] = None
+    google_api_key: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")
