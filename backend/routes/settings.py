@@ -53,14 +53,16 @@ router = APIRouter(prefix="/settings", tags=["settings"])
 
 _bulk_jobs: dict = {}
 
-SECRET_FIELDS = {"retell_api_key", "anthropic_api_key"}
-CREDENTIAL_FIELDS = {"retell_api_key", "retell_phone_number", "anthropic_api_key"}
+SECRET_FIELDS = {"retell_api_key", "anthropic_api_key", "openai_api_key", "google_api_key"}
+CREDENTIAL_FIELDS = {"retell_api_key", "retell_phone_number", "anthropic_api_key", "openai_api_key", "google_api_key"}
 
 
 class CredentialsUpdate(BaseModel):
     retell_api_key: Optional[str] = None
     retell_phone_number: Optional[str] = None
     anthropic_api_key: Optional[str] = None
+    openai_api_key: Optional[str] = None
+    google_api_key: Optional[str] = None
 
 
 def _mask(value: str) -> str:
@@ -77,12 +79,18 @@ def get_settings(
     org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
     retell_key = org.retell_api_key if org else ""
     anthropic_key = org.anthropic_api_key if org else ""
+    openai_key = ((org.openai_api_key if org else "") or "").strip()
+    google_key = ((org.google_api_key if org else "") or "").strip()
     return {
         "retell_api_key": _mask(retell_key),
         "retell_phone_number": org.retell_phone_number if org else "",
         "anthropic_api_key": _mask(anthropic_key),
         "retell_api_key_configured": bool(retell_key),
         "anthropic_api_key_configured": bool(anthropic_key),
+        "openai_api_key": _mask(openai_key),
+        "openai_api_key_configured": bool(openai_key or os.getenv("OPENAI_API_KEY", "")),
+        "google_api_key": _mask(google_key),
+        "google_api_key_configured": bool(google_key or os.getenv("GOOGLE_API_KEY", "")),
     }
 
 

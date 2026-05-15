@@ -133,6 +133,8 @@ def run_migrations():
                 "email_attachment": "BYTEA" if is_pg else "BLOB",
                 "email_attachment_name": "VARCHAR(255)",
                 "email_send_delay_ms": "INTEGER DEFAULT 0",
+                "openai_api_key": "TEXT",
+                "google_api_key": "TEXT",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():

@@ -190,4 +190,14 @@ export const createTeamMember = (data) => api.post('/team', data).then(r => r.da
 export const updateTeamMember = (id, data) => api.put(`/team/${id}`, data).then(r => r.data)
 export const deleteTeamMember = (id) => api.delete(`/team/${id}`).then(r => r.data)
 
+// Marketing IA
+export const generateImage = (data) => api.post('/marketing/generate-image', data).then(r => r.data)
+export const generateVideo = (formData) =>
+  api.post('/marketing/generate-video', formData, {
+    timeout: 750000,
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then(r => r.data)
+export const generateCopy = (data) => api.post('/marketing/generate-copy', data).then(r => r.data)
+export const generateCalendar = (data) => api.post('/marketing/generate-calendar', data).then(r => r.data)
+
 export default api
