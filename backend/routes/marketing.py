@@ -38,7 +38,6 @@ async def generate_image(
     prompt: str = Form(...),
     size: str = Form("1024x1024"),
     quality: str = Form("standard"),
-    style: str = Form("vivid"),
     n: int = Form(1),
     image: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_current_user),
@@ -92,7 +91,6 @@ async def generate_image(
             n=1,
             size=size,
             quality=quality,
-            style=style,
         )
         return resp.data[0].url
 

@@ -71,7 +71,6 @@ function ImagesTab() {
   const [prompt, setPrompt]   = useState('')
   const [size, setSize]       = useState('1024x1024')
   const [quality, setQuality] = useState('standard')
-  const [style, setStyle]     = useState('vivid')
   const [quantity, setQty]    = useState(1)
   const [refFile, setRefFile] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -90,7 +89,7 @@ function ImagesTab() {
     if (!prompt.trim()) return
     setLoading(true); setError(null); setImages([])
     try {
-      const r = await generateImage({ prompt, size, quality, style, n: quantity }, refFile)
+      const r = await generateImage({ prompt, size, quality, n: quantity }, refFile)
       setImages(r.urls || [])
     } catch (e) {
       setError(e.response?.data?.detail || 'Error al generar la imagen.')
@@ -153,7 +152,7 @@ function ImagesTab() {
           )}
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <div>
             <label className="text-xs text-slate-400 mb-1 block">Formato</label>
             <select value={size} onChange={e => setSize(e.target.value)} className="z-input-light text-sm">
@@ -167,13 +166,6 @@ function ImagesTab() {
             <select value={quality} onChange={e => setQuality(e.target.value)} className="z-input-light text-sm">
               <option value="standard">Estándar</option>
               <option value="hd">HD</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-xs text-slate-400 mb-1 block">Estilo</label>
-            <select value={style} onChange={e => setStyle(e.target.value)} className="z-input-light text-sm">
-              <option value="vivid">Vívido</option>
-              <option value="natural">Natural</option>
             </select>
           </div>
           <div>
