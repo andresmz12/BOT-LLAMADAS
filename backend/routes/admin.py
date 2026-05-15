@@ -53,6 +53,7 @@ class OrgCreate(BaseModel):
     sendgrid_api_key: Optional[str] = None
     email_from: Optional[str] = None
     email_from_name: Optional[str] = None
+    marketing_enabled: bool = False
 
 
 class UserCreate(BaseModel):

@@ -22,6 +22,21 @@ export default function Marketing() {
   const [activeTab, setActiveTab] = useState('images')
   const [copyPrefill, setCopyPrefill] = useState(null)
 
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  if (user.role !== 'superadmin' && !user.marketing_enabled) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4">
+        <div className="p-4 rounded-full bg-slate-800 border border-z-border">
+          <SparklesIcon className="w-10 h-10 text-slate-500" />
+        </div>
+        <h2 className="text-xl font-bold text-slate-200">Marketing IA no habilitado</h2>
+        <p className="text-slate-500 max-w-sm">
+          Esta función no está activa para tu organización. Contacta al administrador para que la habilite desde el Panel de Admin.
+        </p>
+      </div>
+    )
+  }
+
   const goToCopy = (prefill) => {
     setCopyPrefill(prefill)
     setActiveTab('copy')

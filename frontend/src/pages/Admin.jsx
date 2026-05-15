@@ -303,6 +303,7 @@ function OrgModal({ org, onClose, onSaved }) {
       try { return org.crm_extra_config ? JSON.parse(org.crm_extra_config) : null }
       catch { return null }
     })(),
+    marketing_enabled: org.marketing_enabled || false,
     whatsapp_enabled: org.whatsapp_enabled || false,
     whatsapp_phone_number_id: org.whatsapp_phone_number_id || '',
     whatsapp_access_token: org.whatsapp_access_token || '',
@@ -317,6 +318,7 @@ function OrgModal({ org, onClose, onSaved }) {
     crm_type: 'none', crm_webhook_url: '', crm_webhook_enabled: false,
     crm_webhook_secret: '', crm_events: '["call_ended","interested"]',
     crm_api_key: '', crm_board_or_list_id: '', crm_extra_config: null,
+    marketing_enabled: false,
     whatsapp_enabled: false, whatsapp_phone_number_id: '',
     whatsapp_access_token: '', whatsapp_verify_token: '',
     email_enabled: false,
@@ -437,6 +439,16 @@ function OrgModal({ org, onClose, onSaved }) {
             <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} className="w-4 h-4 accent-blue-500" />
             <span className="text-sm text-slate-300">Organización activa</span>
           </label>
+
+          {/* ── Marketing IA ────────────────────────────────────────────────── */}
+          <div className="border-t border-z-border pt-4 space-y-2">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Marketing IA</h3>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={!!form.marketing_enabled} onChange={e => set('marketing_enabled', e.target.checked)} className="w-4 h-4 accent-blue-500" />
+              <span className="text-sm text-slate-300">Activar módulo de Marketing IA para esta organización</span>
+            </label>
+            <p className="text-xs text-slate-600">Permite a los usuarios de esta org generar imágenes, videos y copy con IA.</p>
+          </div>
 
           {/* ── WhatsApp Bot ─────────────────────────────────────────────────── */}
           <div className="border-t border-z-border pt-4 space-y-4">

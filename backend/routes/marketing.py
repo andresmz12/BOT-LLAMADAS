@@ -19,6 +19,16 @@ def _load_org(user: User, session: Session) -> Optional[Organization]:
     return session.get(Organization, user.organization_id) if user.organization_id else None
 
 
+def _require_marketing(user: User, org: Optional[Organization]):
+    if user.role == "superadmin":
+        return
+    if not org or not org.marketing_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="MARKETING_DISABLED: Marketing IA no está habilitado para tu organización. Contacta al administrador.",
+        )
+
+
 def _get_openai_key(org: Optional[Organization]) -> str:
     return ((org.openai_api_key if org else "") or "").strip() or os.getenv("OPENAI_API_KEY", "").strip()
 
@@ -44,6 +54,7 @@ async def generate_image(
     session: Session = Depends(get_session),
 ):
     org = _load_org(current_user, session)
+    _require_marketing(current_user, org)
     api_key = _get_openai_key(org)
     if not api_key:
         raise HTTPException(status_code=503, detail="OpenAI API key no configurada. Configura OPENAI_API_KEY en Railway o en Configuración.")
@@ -121,6 +132,7 @@ async def generate_video(
     session: Session = Depends(get_session),
 ):
     org = _load_org(current_user, session)
+    _require_marketing(current_user, org)
     api_key = _get_google_key(org)
     if not api_key:
         raise HTTPException(
@@ -241,6 +253,7 @@ async def generate_copy(
     session: Session = Depends(get_session),
 ):
     org = _load_org(current_user, session)
+    _require_marketing(current_user, org)
     api_key = _get_anthropic_key(org)
     if not api_key:
         raise HTTPException(status_code=503, detail="Anthropic API key no configurada.")
@@ -291,6 +304,7 @@ async def generate_calendar(
     session: Session = Depends(get_session),
 ):
     org = _load_org(current_user, session)
+    _require_marketing(current_user, org)
     api_key = _get_anthropic_key(org)
     if not api_key:
         raise HTTPException(status_code=503, detail="Anthropic API key no configurada.")

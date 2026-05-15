@@ -195,6 +195,7 @@ def me(
     result = user.dict(exclude={"password_hash"})
     result["organization_name"] = org.name if org else ""
     result["plan"] = org.plan if org else "free"
+    result["marketing_enabled"] = org.marketing_enabled if org else False
     return result
 
 

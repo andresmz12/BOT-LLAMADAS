@@ -40,6 +40,7 @@ class Organization(SQLModel, table=True):
     email_attachment_name: Optional[str] = None
     email_send_delay_ms: int = Field(default=0)
     # AI Marketing
+    marketing_enabled: bool = Field(default=False)
     openai_api_key: Optional[str] = None
     google_api_key: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)

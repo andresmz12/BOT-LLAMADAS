@@ -75,7 +75,9 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const role = user.role || 'viewer'
   const plan = user.plan || 'pro'
-  const baseItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer
+  const marketingEnabled = user.marketing_enabled || false
+  const baseItems = (NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer)
+    .filter(item => item.to !== '/marketing' || role === 'superadmin' || marketingEnabled)
   const navItems = (role === 'admin' || role === 'agent')
     ? plan === 'free'
       ? [...baseItems.filter(i => i.to !== '/campaigns' && i.to !== '/prospects'),
