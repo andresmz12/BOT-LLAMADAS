@@ -103,7 +103,7 @@ function ImagesTab() {
       <div className="bg-z-card rounded-xl border border-z-border p-5 space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <PhotoIcon className="w-4 h-4 text-z-blue-light" />
-          <h2 className="text-sm font-semibold text-slate-200">Generador de imágenes con DALL-E 3</h2>
+          <h2 className="text-sm font-semibold text-slate-200">Generador de imágenes</h2>
         </div>
 
         <div>
@@ -147,7 +147,7 @@ function ImagesTab() {
           </div>
           {refFile && (
             <p className="text-xs text-z-blue-light mt-1.5">
-              ✓ GPT-4o analizará tu imagen y guiará a DALL-E 3 para generar algo similar
+              ✓ La IA analizará tu imagen y generará algo similar
             </p>
           )}
         </div>
@@ -189,7 +189,7 @@ function ImagesTab() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              {refFile ? 'Analizando imagen y generando...' : 'Generando con DALL-E 3...'}
+              {refFile ? 'Analizando imagen y generando...' : 'Generando imagen...'}
             </>
           ) : (
             <>✨ Generar imagen</>
@@ -280,12 +280,12 @@ function VideosTab() {
       <div className="bg-z-card rounded-xl border border-z-border p-5 space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <FilmIcon className="w-4 h-4 text-purple-400" />
-          <h2 className="text-sm font-semibold text-slate-200">Generador de videos con Google Veo 3</h2>
+          <h2 className="text-sm font-semibold text-slate-200">Generador de videos</h2>
         </div>
 
         <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-4 py-2.5 text-xs text-amber-300">
           La generación tarda entre 1 y 12 minutos. No cierres esta pestaña mientras espera.
-          Requiere una cuenta Google Cloud con acceso a Veo 3.
+          Requiere configuración de Google Cloud en Ajustes.
         </div>
 
         <div>
@@ -340,7 +340,7 @@ function VideosTab() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              Generando video con Veo 3...
+              Generando video...
             </>
           ) : (
             <>🎬 Generar video</>
@@ -429,7 +429,7 @@ function CopyTab({ prefill, onPrefillUsed }) {
       <div className="bg-z-card rounded-xl border border-z-border p-5 space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <DocumentTextIcon className="w-4 h-4 text-green-400" />
-          <h2 className="text-sm font-semibold text-slate-200">Generador de copy con Claude</h2>
+          <h2 className="text-sm font-semibold text-slate-200">Generador de copy</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -589,7 +589,7 @@ function CalendarTab({ onGenerateCopy }) {
       <div className="bg-z-card rounded-xl border border-z-border p-5 space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <CalendarDaysIcon className="w-4 h-4 text-amber-400" />
-          <h2 className="text-sm font-semibold text-slate-200">Generador de calendario con Claude</h2>
+          <h2 className="text-sm font-semibold text-slate-200">Generador de calendario</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
