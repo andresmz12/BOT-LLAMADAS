@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 
 class ScoutRequest(BaseModel):
     city: str
+    query: Optional[str] = None
     limit: int = 17
 
 
@@ -101,6 +102,7 @@ def scout_leads(
             limit=data.limit,
             org_id=current_user.organization_id,
             session=session,
+            query=data.query.strip() if data.query else None,
         )
     except ValueError as e:
         raise HTTPException(status_code=503, detail=str(e))

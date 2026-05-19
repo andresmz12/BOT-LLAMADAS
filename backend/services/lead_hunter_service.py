@@ -53,7 +53,7 @@ def _fetch_query(client: ApiClient, query: str, city: str, fetch_limit: int) -> 
         return []
 
 
-def scout(city: str, limit: int = 17, org_id: int = None, session: Session = None) -> list:
+def scout(city: str, limit: int = 17, org_id: int = None, session: Session = None, query: str = None) -> list:
     """
     Search Google Maps via Outscraper for small Latino businesses in city.
     Filters: rating 3.0–4.6, reviews 5–80, has phone, not a chain.
@@ -66,8 +66,12 @@ def scout(city: str, limit: int = 17, org_id: int = None, session: Session = Non
         raise ValueError("OUTSCRAPER_API_KEY no configurada")
 
     client = ApiClient(api_key=api_key)
-    queries = random.sample(LATINO_QUERIES, min(len(LATINO_QUERIES), limit))
-    fetch_limit = max(limit * 2, 10)
+    if query:
+        queries = [query]
+        fetch_limit = max(limit * 3, 20)
+    else:
+        queries = random.sample(LATINO_QUERIES, min(len(LATINO_QUERIES), limit))
+        fetch_limit = max(limit * 2, 10)
 
     existing_phones: set[str] = set()
     existing_names: set[str] = set()

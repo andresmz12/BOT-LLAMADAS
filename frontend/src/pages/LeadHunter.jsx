@@ -55,7 +55,7 @@ export default function LeadHunter() {
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(false)
   const [scouting, setScouting] = useState(false)
-  const [scoutForm, setScoutForm] = useState({ city: '', limit: 17 })
+  const [scoutForm, setScoutForm] = useState({ city: '', query: '', limit: 17 })
   const [scoutMsg, setScoutMsg] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [actingId, setActingId] = useState(null)   // id of lead being processed
@@ -79,7 +79,8 @@ export default function LeadHunter() {
     if (!city.trim()) return
     setScouting(true); setScoutMsg(null)
     try {
-      const r = await scoutLeads({ city: city.trim(), limit: Number(limit) || 17 })
+      const { query } = scoutForm
+      const r = await scoutLeads({ city: city.trim(), query: query.trim() || undefined, limit: Number(limit) || 17 })
       setScoutMsg({ ok: true, text: `${r.found} leads encontrados y guardados` })
       setFilter('all')
       loadLeads('all')
@@ -240,6 +241,21 @@ export default function LeadHunter() {
               className="z-input w-full text-sm"
             />
           </div>
+        </div>
+        <div>
+          <label className="text-xs text-slate-500 mb-1 block">
+            ¿Qué tipo de negocio? <span className="text-slate-700">(opcional)</span>
+          </label>
+          <input
+            type="text" value={scoutForm.query}
+            placeholder="ej: dentista, taller de carros, abogado, restaurante chino..."
+            onChange={e => setScoutForm(p => ({ ...p, query: e.target.value }))}
+            onKeyDown={e => e.key === 'Enter' && handleScout()}
+            className="z-input w-full text-sm"
+          />
+          <p className="text-xs text-slate-700 mt-1">
+            Si lo dejas vacío, buscará automáticamente negocios latinos (taquerías, barberías, etc.)
+          </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <button
