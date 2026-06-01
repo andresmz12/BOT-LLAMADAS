@@ -339,18 +339,16 @@ export default function EmailMarketing() {
     } catch (e) { alert('Error al eliminar contacto') }
   }
 
-  const handleToggleUnsubscribe = async (listId, contactId) => {
+  const handleUnsubscribeAndDelete = async (listId, contactId) => {
+    if (!confirm('¿Desuscribir y eliminar este contacto de la lista? Esta acción no se puede deshacer.')) return
     try {
-      const r = await toggleContactUnsubscribe(contactId)
-      setListContacts(prev => ({
-        ...prev,
-        contacts: prev.contacts.map(c => c.id === contactId ? { ...c, unsubscribed: r.email_unsubscribed } : c),
-      }))
-      setEmailLists(prev => prev.map(l => {
-        if (l.id !== listId) return l
-        return { ...l, with_email: l.with_email + (r.email_unsubscribed ? -1 : 1) }
-      }))
-    } catch (e) { alert('Error al actualizar') }
+      await toggleContactUnsubscribe(contactId)
+      await deleteEmailListContact(listId, contactId)
+      setListContacts(prev => ({ ...prev, contacts: prev.contacts.filter(c => c.id !== contactId) }))
+      setEmailLists(prev => prev.map(l =>
+        l.id === listId ? { ...l, total: l.total - 1, with_email: l.with_email - 1 } : l
+      ))
+    } catch (e) { alert('Error al desuscribir') }
   }
 
   const handleAddContact = async () => {
@@ -703,14 +701,16 @@ export default function EmailMarketing() {
                                   <td className="px-3 py-2 text-right">
                                     <div className="flex items-center justify-end gap-1">
                                       <button
-                                        onClick={() => handleToggleUnsubscribe(list.id, c.id)}
-                                        className={`p-1.5 transition-colors ${c.unsubscribed ? 'text-amber-500 hover:text-amber-300' : 'text-slate-600 hover:text-amber-400'}`}
-                                        title={c.unsubscribed ? 'Reactivar contacto' : 'Desuscribir contacto'}
+                                        onClick={() => handleUnsubscribeAndDelete(list.id, c.id)}
+                                        className="flex items-center gap-1 px-2 py-1 text-xs text-amber-500 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors"
+                                        title="Desuscribir y eliminar de la lista"
                                       >
                                         <UserMinusIcon className="w-3.5 h-3.5" />
+                                        Desuscribir
                                       </button>
                                       <button onClick={() => handleDeleteContact(list.id, c.id)}
-                                        className="text-slate-600 hover:text-red-400 transition-colors p-0.5">
+                                        className="text-slate-600 hover:text-red-400 transition-colors p-1.5"
+                                        title="Eliminar contacto">
                                         <TrashIcon className="w-3.5 h-3.5" />
                                       </button>
                                     </div>

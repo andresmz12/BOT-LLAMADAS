@@ -837,7 +837,11 @@ def email_unsubscribe(
         prospect = session.get(Prospect, prospect_id)
         if prospect and prospect.organization_id == org_id:
             prospect.email_unsubscribed = True
-            session.add(prospect)
+            # If contact belongs to an email list, remove them from it entirely
+            if prospect.email_list_id is not None:
+                session.delete(prospect)
+            else:
+                session.add(prospect)
             session.commit()
             name = _html.escape(prospect.name or "Estimado/a")
             return HTMLResponse(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
