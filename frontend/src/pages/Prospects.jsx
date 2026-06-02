@@ -1,17 +1,39 @@
 import { useState, useEffect } from 'react'
-import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon, ClockIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
+import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon, ClockIcon, ArrowDownTrayIcon, MagnifyingGlassIcon, SparklesIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
 import UpgradeBanner from '../components/UpgradeBanner'
 import CallDetailModal from '../components/CallDetailModal'
-import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus, getCalls } from '../api/client'
+import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus, getCalls, expandKeywords } from '../api/client'
 import { exportToCsv } from '../utils/exportCsv'
 import { fmtDate } from '../utils/date'
 
 const STATUSES = ['', 'pending', 'calling', 'answered', 'voicemail', 'failed', 'do_not_call']
 
+const PHONE_PREFIXES = [
+  { code: '+1',   flag: '🇺🇸', label: '+1' },
+  { code: '+52',  flag: '🇲🇽', label: '+52' },
+  { code: '+57',  flag: '🇨🇴', label: '+57' },
+  { code: '+54',  flag: '🇦🇷', label: '+54' },
+  { code: '+56',  flag: '🇨🇱', label: '+56' },
+  { code: '+51',  flag: '🇵🇪', label: '+51' },
+  { code: '+34',  flag: '🇪🇸', label: '+34' },
+  { code: '+55',  flag: '🇧🇷', label: '+55' },
+  { code: '+58',  flag: '🇻🇪', label: '+58' },
+  { code: '+593', flag: '🇪🇨', label: '+593' },
+  { code: '+502', flag: '🇬🇹', label: '+502' },
+  { code: '+503', flag: '🇸🇻', label: '+503' },
+  { code: '+504', flag: '🇭🇳', label: '+504' },
+  { code: '+505', flag: '🇳🇮', label: '+505' },
+  { code: '+506', flag: '🇨🇷', label: '+506' },
+  { code: '+507', flag: '🇵🇦', label: '+507' },
+  { code: '+598', flag: '🇺🇾', label: '+598' },
+  { code: '+595', flag: '🇵🇾', label: '+595' },
+  { code: '+591', flag: '🇧🇴', label: '+591' },
+]
+
 function NewProspectModal({ campaigns, onClose, onSaved }) {
-  const [form, setForm] = useState({ name: '', phone: '', company: '', campaign_id: campaigns[0]?.id || '' })
+  const [form, setForm] = useState({ name: '', phoneDigits: '', phonePrefix: '+1', company: '', campaign_id: campaigns[0]?.id || '' })
   const [loading, setLoading] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -19,7 +41,8 @@ function NewProspectModal({ campaigns, onClose, onSaved }) {
     e.preventDefault()
     setLoading(true)
     try {
-      await createProspect({ ...form, campaign_id: Number(form.campaign_id) })
+      const phone = form.phonePrefix + form.phoneDigits.replace(/\D/g, '')
+      await createProspect({ name: form.name, phone, company: form.company, campaign_id: Number(form.campaign_id) })
       onSaved()
     } catch (err) {
       alert('Error: ' + (err.response?.data?.detail || err.message))
@@ -41,9 +64,18 @@ function NewProspectModal({ campaigns, onClose, onSaved }) {
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Teléfono *</label>
-            <input required value={form.phone} onChange={e => set('phone', e.target.value)}
-              placeholder="+521234567890" className="z-input font-mono" />
-            <p className="text-xs text-slate-500 mt-1">Formato E.164 con código de país</p>
+            <div className="flex gap-2">
+              <select value={form.phonePrefix} onChange={e => set('phonePrefix', e.target.value)}
+                className="z-input w-28 flex-shrink-0 font-mono">
+                {PHONE_PREFIXES.map(p => (
+                  <option key={p.code} value={p.code}>{p.flag} {p.label}</option>
+                ))}
+              </select>
+              <input required value={form.phoneDigits} onChange={e => set('phoneDigits', e.target.value)}
+                placeholder="5551234567" className="z-input flex-1 font-mono"
+                inputMode="numeric" />
+            </div>
+            <p className="text-xs text-slate-500 mt-1">Solo dígitos, sin espacios ni guiones</p>
           </div>
           <div>
             <label className="block text-sm font-medium text-slate-300 mb-1">Empresa</label>
@@ -149,7 +181,8 @@ export default function Prospects() {
 
   const load = () => {
     const params = {}
-    if (filterCampaign) params.campaign_id = filterCampaign
+    if (filterCampaign === 'email_only') params.email_only = true
+    else if (filterCampaign) params.campaign_id = filterCampaign
     if (filterStatus) params.status = filterStatus
     getProspects(params).then(setProspects).catch(() => {})
   }
@@ -173,7 +206,8 @@ export default function Prospects() {
     if (!confirm(`¿Reintentar llamadas para ${label}?\n\nSe resetearán a "pending" para la próxima ejecución de campaña.`)) return
     try {
       const params = {}
-      if (filterCampaign) params.campaign_id = filterCampaign
+      if (filterCampaign === 'email_only') params.email_only = true
+      else if (filterCampaign) params.campaign_id = filterCampaign
       if (filterStatus) params.status = filterStatus
       const res = await retryProspects(params)
       alert(`${res.reset} prospectos marcados para reintento.`)
@@ -182,12 +216,16 @@ export default function Prospects() {
   }
 
   const handleDeleteAll = async () => {
-    const scope = filterCampaign
-      ? `los ${prospects.length} prospectos de esta campaña`
-      : `TODOS los ${prospects.length} prospectos`
+    const scope = filterCampaign === 'email_only'
+      ? `los ${prospects.length} contactos de email`
+      : filterCampaign
+        ? `los ${prospects.length} prospectos de esta campaña`
+        : `TODOS los ${prospects.length} prospectos`
     if (!confirm(`¿Eliminar ${scope}? Esta acción no se puede deshacer.`)) return
     try {
-      const params = filterCampaign ? { campaign_id: filterCampaign } : {}
+      const params = filterCampaign === 'email_only'
+        ? { email_only: true }
+        : filterCampaign ? { campaign_id: filterCampaign } : {}
       const res = await deleteAllProspects(params)
       alert(`${res.deleted} prospectos eliminados.`)
       load()
@@ -204,7 +242,10 @@ export default function Prospects() {
     ])
   }
 
-  const campaignName = (id) => campaigns.find(c => c.id === id)?.name || `#${id}`
+  const campaignName = (id) => {
+    if (id == null) return null
+    return campaigns.find(c => c.id === id)?.name || `#${id}`
+  }
   const noCampaigns = campaigns.length === 0
 
   return (
@@ -239,6 +280,7 @@ export default function Prospects() {
       <div className="flex gap-3 flex-wrap items-center">
         <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-full sm:w-auto">
           <option value="">Todas las campañas</option>
+          <option value="email_only">Contactos de email</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="z-input w-full sm:w-auto">
@@ -266,7 +308,7 @@ export default function Prospects() {
         <table className="w-full text-sm min-w-[640px]">
           <thead className="bg-black/20">
             <tr>
-              {['Nombre', 'Empresa', 'Teléfono', 'Campaña', 'Estado', 'Intentos', 'Última llamada', 'Acciones'].map(h => (
+              {['Nombre', 'Empresa', 'Teléfono', 'Score', 'Campaña', 'Estado', 'Intentos', 'Última llamada', 'Email', 'Acciones'].map(h => (
                 <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
               ))}
             </tr>
@@ -277,11 +319,38 @@ export default function Prospects() {
                 <td className="px-6 py-3 font-medium text-slate-200">{p.name}</td>
                 <td className="px-6 py-3 text-slate-400">{p.company || '—'}</td>
                 <td className="px-6 py-3 text-slate-300 font-mono text-xs">{p.phone}</td>
-                <td className="px-6 py-3 text-slate-400 text-xs">{campaignName(p.campaign_id)}</td>
+                <td className="px-6 py-3">
+                  {p.quality_score != null ? (
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-bold ${p.quality_score >= 75 ? 'bg-green-500/20 text-green-300' : p.quality_score >= 50 ? 'bg-yellow-500/20 text-yellow-300' : 'bg-slate-500/20 text-slate-400'}`}>
+                      {p.quality_score}
+                    </span>
+                  ) : <span className="text-slate-600 text-xs">—</span>}
+                </td>
+                <td className="px-6 py-3 text-slate-400 text-xs">
+                  {p.campaign_id == null
+                    ? <span className="px-2 py-0.5 rounded-full bg-blue-500/15 text-blue-400 text-xs font-medium">Email</span>
+                    : campaignName(p.campaign_id)}
+                </td>
                 <td className="px-6 py-3"><StatusBadge status={p.status} /></td>
                 <td className="px-6 py-3 text-slate-400">{p.call_attempts}</td>
                 <td className="px-6 py-3 text-slate-500 text-xs">
                   {fmtDate(p.last_called_at)}
+                </td>
+                <td className="px-6 py-3">
+                  {p.email_unsubscribed ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-slate-600" title="Desuscrito">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-600 inline-block" /> Des.
+                    </span>
+                  ) : p.last_email_sent_at ? (
+                    <span className="inline-flex items-center gap-1 text-xs text-blue-400" title={`${p.email_send_count || 1} email(s) enviado(s)\nÚltimo: ${fmtDate(p.last_email_sent_at)}`}>
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-400 inline-block" />
+                      {fmtDate(p.last_email_sent_at)}
+                    </span>
+                  ) : p.email ? (
+                    <span className="text-xs text-slate-600">—</span>
+                  ) : (
+                    <span className="text-xs text-slate-700 italic">Sin email</span>
+                  )}
                 </td>
                 <td className="px-6 py-3">
                   <div className="flex items-center gap-2">
@@ -300,7 +369,7 @@ export default function Prospects() {
               </tr>
             ))}
             {prospects.length === 0 && (
-              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-500">No hay prospectos</td></tr>
+              <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-500">No hay prospectos</td></tr>
             )}
           </tbody>
         </table>

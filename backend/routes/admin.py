@@ -11,7 +11,7 @@ from routes.auth import require_superadmin
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
-_SENSITIVE = {"retell_api_key", "anthropic_api_key", "crm_api_key", "crm_webhook_secret", "whatsapp_access_token"}
+_SENSITIVE = {"retell_api_key", "anthropic_api_key", "crm_api_key", "crm_webhook_secret", "whatsapp_access_token", "sendgrid_api_key"}
 
 def _mask(key: str | None) -> str:
     if not key:
@@ -19,11 +19,13 @@ def _mask(key: str | None) -> str:
     return f"{'*' * max(0, len(key) - 4)}{key[-4:]}" if len(key) > 4 else "****"
 
 def _safe_org(org: Organization) -> dict:
-    d = org.dict()
+    d = org.dict(exclude={"email_attachment"})  # bytes not JSON-serializable
     for field in _SENSITIVE:
         if d.get(field):
             d[field] = _mask(d[field])
     d.setdefault("demo_calls_used", 0)
+    d["email_attachment_name"] = org.email_attachment_name
+    d["has_email_attachment"] = bool(org.email_attachment)
     return d
 
 
@@ -47,6 +49,11 @@ class OrgCreate(BaseModel):
     whatsapp_phone_number_id: Optional[str] = None
     whatsapp_access_token: Optional[str] = None
     whatsapp_verify_token: Optional[str] = None
+    email_enabled: bool = False
+    sendgrid_api_key: Optional[str] = None
+    email_from: Optional[str] = None
+    email_from_name: Optional[str] = None
+    marketing_enabled: bool = False
 
 
 class UserCreate(BaseModel):
@@ -74,7 +81,7 @@ def create_org(
     session.add(org)
     session.commit()
     session.refresh(org)
-    return org
+    return _safe_org(org)
 
 
 @router.get("/organizations")
@@ -96,11 +103,15 @@ def update_org(
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
     for k, v in data.dict().items():
+        # Never overwrite a real secret with a masked placeholder (e.g. "****xxxx")
+        if k in _SENSITIVE and isinstance(v, str) and v.startswith("***"):
+            continue
         setattr(org, k, v)
     session.add(org)
     session.commit()
     session.refresh(org)
-    return org
+    return _safe_org(org)
+
 
 
 @router.get("/organizations/{org_id}/secrets")
@@ -117,6 +128,7 @@ def get_org_secrets(
         "anthropic_api_key": org.anthropic_api_key or "",
         "crm_api_key": org.crm_api_key or "",
         "crm_webhook_secret": org.crm_webhook_secret or "",
+        "sendgrid_api_key": org.sendgrid_api_key or "",
     }
 
 

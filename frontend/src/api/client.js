@@ -57,6 +57,7 @@ export const updateAgent = (id, data) => api.put(`/agents/${id}`, data).then(r =
 export const deleteAgent = (id) => api.delete(`/agents/${id}`).then(r => r.data)
 export const setDefaultAgent = (id) => api.post(`/agents/${id}/set-default`).then(r => r.data)
 export const syncAgent = (id) => api.post(`/agents/${id}/sync`).then(r => r.data)
+export const getAgentPromptPreview = (id) => api.get(`/agents/${id}/prompt-preview`).then(r => r.data)
 export const uploadKnowledgeBase = (id, file) => {
   const form = new FormData()
   form.append('file', file)
@@ -66,6 +67,7 @@ export const uploadKnowledgeBase = (id, file) => {
 // Campaigns
 export const getCampaigns = () => api.get('/campaigns').then(r => r.data)
 export const createCampaign = (data) => api.post('/campaigns', data).then(r => r.data)
+export const updateCampaign = (id, data) => api.put(`/campaigns/${id}`, data).then(r => r.data)
 export const startCampaign = (id) => api.post(`/campaigns/${id}/start`).then(r => r.data)
 export const pauseCampaign = (id) => api.post(`/campaigns/${id}/pause`).then(r => r.data)
 export const deleteCampaign = (id) => api.delete(`/campaigns/${id}`).then(r => r.data)
@@ -73,10 +75,11 @@ export const deleteCampaign = (id) => api.delete(`/campaigns/${id}`).then(r => r
 // Prospects
 export const getProspects = (params) => api.get('/prospects', { params }).then(r => r.data)
 export const createProspect = (data) => api.post('/prospects', data).then(r => r.data)
-export const importProspects = (campaignId, file) => {
+export const importProspects = (campaignId, file, countryCode = '+1') => {
   const form = new FormData()
   form.append('campaign_id', campaignId)
   form.append('file', file)
+  form.append('phone_country_code', countryCode)
   return api.post('/prospects/import', form).then(r => r.data)
 }
 export const updateProspect = (id, data) => api.put(`/prospects/${id}`, data).then(r => r.data)
@@ -84,6 +87,7 @@ export const deleteProspect = (id) => api.delete(`/prospects/${id}`).then(r => r
 export const deleteAllProspects = (params) => api.delete('/prospects', { params }).then(r => r.data)
 export const retryProspects = (params) => api.post('/prospects/retry', null, { params }).then(r => r.data)
 export const callProspect = (id) => api.post(`/prospects/${id}/call`).then(r => r.data)
+export const expandKeywords = (data) => api.post('/prospects/expand-keywords', data).then(r => r.data)
 
 // Leads
 export const getLeads = (params) => api.get('/leads', { params }).then(r => r.data)
@@ -107,6 +111,66 @@ export const getCampaignStats = (id) => api.get(`/stats/${id}`).then(r => r.data
 export const getSettings = () => api.get('/settings').then(r => r.data)
 export const saveSettings = (data) => api.post('/settings', data).then(r => r.data)
 
+// Email marketing settings
+export const getEmailSettings = () => api.get('/settings/email').then(r => r.data)
+export const saveEmailSettings = (data) => api.post('/settings/email', data).then(r => r.data)
+export const uploadEmailAttachment = (file) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/settings/email/attachment', form).then(r => r.data)
+}
+export const sendTestEmail = (data) => api.post('/settings/email/test', data).then(r => r.data)
+export const bulkSendEmail = (data) => api.post('/settings/email/bulk-send', data).then(r => r.data)
+export const getBulkSendStatus = (jobId) => api.get(`/settings/email/bulk-send/status/${jobId}`).then(r => r.data)
+export const getEmailHistory = () => api.get('/settings/email/history').then(r => r.data)
+export const getEmailContactsCount = () => api.get('/settings/email/email-contacts-count').then(r => r.data)
+export const importEmailContacts = (file) => {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/settings/email/import-contacts', form).then(r => r.data)
+}
+export const validateEmailRecipients = (params) => api.get('/settings/email/validate-recipients', { params }).then(r => r.data)
+export const getEmailRecipientsDetail = (params) => api.get('/settings/email/recipients-detail', { params }).then(r => r.data)
+export const getEmailLists = () => api.get('/settings/email/lists').then(r => r.data)
+export const createEmailList = (data) => api.post('/settings/email/lists', data).then(r => r.data)
+export const deleteEmailList = (id) => api.delete(`/settings/email/lists/${id}`).then(r => r.data)
+export const getEmailListContacts = (id) => api.get(`/settings/email/lists/${id}/contacts`).then(r => r.data)
+export const deleteEmailListContact = (listId, contactId) => api.delete(`/settings/email/lists/${listId}/contacts/${contactId}`).then(r => r.data)
+export const addEmailListContact = (listId, data) => api.post(`/settings/email/lists/${listId}/contacts`, data).then(r => r.data)
+export const importEmailContactsToList = (listId, file) => {
+  const form = new FormData()
+  form.append('file', file)
+  if (listId) form.append('email_list_id', String(listId))
+  return api.post('/settings/email/import-contacts', form).then(r => r.data)
+}
+export const uploadTemplateAttachment = (templateKey, file) => {
+  const form = new FormData()
+  form.append('template_key', templateKey)
+  form.append('file', file)
+  return api.post('/settings/email/template-attachment', form).then(r => r.data)
+}
+
+export const toggleContactUnsubscribe = (prospectId) =>
+  api.patch(`/settings/email/contacts/${prospectId}/unsubscribe`).then(r => r.data)
+
+// Lead Hunter
+export const scoutLeads = (data) => api.post('/lead-hunter/scout', data).then(r => r.data)
+export const getLeadHunterLeads = (params) => api.get('/lead-hunter/leads', { params }).then(r => r.data)
+export const checkLead = (id) => api.post(`/lead-hunter/leads/${id}/check`).then(r => r.data)
+export const checkAllLeads = () => api.post('/lead-hunter/check-all').then(r => r.data)
+export const craftLeadMessage = (id) => api.post(`/lead-hunter/leads/${id}/craft`).then(r => r.data)
+export const craftAllLeads = () => api.post('/lead-hunter/craft-all').then(r => r.data)
+export const sendLeadMessage = (id, channel) => api.post(`/lead-hunter/leads/${id}/send`, { channel }).then(r => r.data)
+export const updateLeadHunt = (id, data) => api.patch(`/lead-hunter/leads/${id}`, data).then(r => r.data)
+export const deleteLeadHunt = (id) => api.delete(`/lead-hunter/leads/${id}`).then(r => r.data)
+export const deleteAllLeadHunts = () => api.delete('/lead-hunter/leads').then(r => r.data)
+
+export const getEmailStats = () => api.get('/stats/email').then(r => r.data)
+export const getEmailEvents = (eventType) =>
+  api.get('/stats/email/events', { params: eventType ? { event_type: eventType, limit: 2000 } : { limit: 2000 } }).then(r => r.data)
+export const getScheduledEmails = () => api.get('/settings/email/scheduled').then(r => r.data)
+export const cancelScheduledEmail = (id) => api.delete(`/settings/email/scheduled/${id}`).then(r => r.data)
+
 // Admin — CRM
 export const testCRMWebhook = (orgId) =>
   api.post(`/admin/organizations/${orgId}/crm/test`).then(r => r.data)
@@ -127,5 +191,23 @@ export const getTeam = () => api.get('/team').then(r => r.data)
 export const createTeamMember = (data) => api.post('/team', data).then(r => r.data)
 export const updateTeamMember = (id, data) => api.put(`/team/${id}`, data).then(r => r.data)
 export const deleteTeamMember = (id) => api.delete(`/team/${id}`).then(r => r.data)
+
+// Marketing IA
+export const generateImage = (data, imageFile = null) => {
+  const fd = new FormData()
+  Object.entries(data).forEach(([k, v]) => fd.append(k, v))
+  if (imageFile) fd.append('image', imageFile)
+  return api.post('/marketing/generate-image', fd, {
+    timeout: 120000,
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then(r => r.data)
+}
+export const generateVideo = (formData) =>
+  api.post('/marketing/generate-video', formData, {
+    timeout: 750000,
+    headers: { 'Content-Type': 'multipart/form-data' },
+  }).then(r => r.data)
+export const generateCopy = (data) => api.post('/marketing/generate-copy', data).then(r => r.data)
+export const generateCalendar = (data) => api.post('/marketing/generate-calendar', data).then(r => r.data)
 
 export default api

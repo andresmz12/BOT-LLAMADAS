@@ -5,7 +5,9 @@ import {
   UsersIcon, PhoneIcon, Cog6ToothIcon,
   KeyIcon, ArrowRightOnRectangleIcon,
   ChevronLeftIcon, ChevronRightIcon,
-  ChatBubbleLeftRightIcon, FireIcon,
+  ChatBubbleLeftRightIcon, FireIcon, EnvelopeIcon,
+  MagnifyingGlassIcon,
+  SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { logout } from '../api/client'
 
@@ -13,16 +15,20 @@ const NAV_BY_ROLE = {
   superadmin: [
     { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
     { to: '/admin', label: 'Admin Panel', Icon: KeyIcon },
+    { to: '/marketing', label: 'Marketing IA', Icon: SparklesIcon },
     { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
     { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
   ],
   admin: [
     { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
     { to: '/leads', label: 'Centro de Leads', Icon: FireIcon },
+    { to: '/lead-hunter', label: 'Lead Hunter', Icon: MagnifyingGlassIcon },
     { to: '/agents', label: 'Agentes de Voz', Icon: UserGroupIcon },
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
+    { to: '/email-marketing', label: 'Email Marketing', Icon: EnvelopeIcon },
+    { to: '/marketing', label: 'Marketing IA', Icon: SparklesIcon },
     { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
     { to: '/team', label: 'Asesores', Icon: UsersIcon },
     { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
@@ -30,9 +36,11 @@ const NAV_BY_ROLE = {
   agent: [
     { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
     { to: '/leads', label: 'Centro de Leads', Icon: FireIcon },
+    { to: '/lead-hunter', label: 'Lead Hunter', Icon: MagnifyingGlassIcon },
     { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
     { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
     { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
+    { to: '/email-marketing', label: 'Email Marketing', Icon: EnvelopeIcon },
     { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
   ],
   viewer: [
@@ -67,7 +75,9 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const role = user.role || 'viewer'
   const plan = user.plan || 'pro'
-  const baseItems = NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer
+  const marketingEnabled = user.marketing_enabled || false
+  const baseItems = (NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer)
+    .filter(item => item.to !== '/marketing' || role === 'superadmin' || marketingEnabled)
   const navItems = (role === 'admin' || role === 'agent')
     ? plan === 'free'
       ? [...baseItems.filter(i => i.to !== '/campaigns' && i.to !== '/prospects'),

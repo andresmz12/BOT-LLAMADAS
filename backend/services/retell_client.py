@@ -160,7 +160,7 @@ async def sync_to_retell(
         "backchannel_words": backchannel_words,
         "ambient_sound": "coffee-shop",
         "max_call_duration_ms": (agent_config.max_call_duration or 180) * 1000,
-        "end_call_after_silence_ms": 10000,
+        "end_call_after_silence_ms": 12000,
     }
 
     # ── OUTBOUND ─────────────────────────────────────────────────
@@ -181,7 +181,7 @@ async def sync_to_retell(
         "model": "claude-4.5-haiku",
         "general_prompt": outbound_prompt,
         "begin_message": outbound_begin,
-        "general_tools": [],
+        "general_tools": [{"type": "end_call", "name": "end_call", "description": "Termina la llamada."}],
         "temperature": agent_config.temperature if agent_config.temperature is not None else 0.4,
     }
     if agent_config.retell_knowledge_base_id:
@@ -218,7 +218,7 @@ async def sync_to_retell(
                 "model": "claude-4.5-haiku",
                 "general_prompt": inbound_prompt,
                 "begin_message": inbound_begin,
-                "general_tools": [],
+                "general_tools": [{"type": "end_call", "name": "end_call", "description": "Termina la llamada."}],
                 "temperature": agent_config.temperature if agent_config.temperature is not None else 0.4,
             }
             if agent_config.retell_knowledge_base_id:
@@ -328,6 +328,8 @@ async def create_call_direct(
             "company_name": prospect_company or "",
         },
     }
+    if voicemail_message:
+        payload["voicemail_message"] = voicemail_message
 
     headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=30) as client:

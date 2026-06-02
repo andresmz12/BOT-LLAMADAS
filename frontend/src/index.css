@@ -8,8 +8,8 @@
     color: #F1F5F9;
   }
 
-  /* Dark inputs/selects */
-  input, textarea, select {
+  /* Dark inputs/selects (override per component for light variants) */
+  input:not(.z-input-light):not([type="color"]), textarea:not(.z-input-light), select:not(.z-input-light) {
     color-scheme: dark;
   }
 }
@@ -29,5 +29,9 @@
   .z-btn-ghost {
     @apply px-4 py-2 text-slate-400 hover:text-slate-100 text-sm rounded-lg hover:bg-white/5
            transition-colors;
+  }
+  .z-input-light {
+    @apply w-full bg-white border border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-900
+           placeholder-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500;
   }
 }

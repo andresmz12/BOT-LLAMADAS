@@ -1,6 +1,6 @@
 import os
 from sqlmodel import SQLModel, create_engine, Session, select
-from models import AgentConfig, Organization, User, WebhookLog  # noqa: F401 — ensures table is registered
+from models import AgentConfig, Organization, User, WebhookLog, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, LeadHunt  # noqa: F401 — ensures table is registered
 
 _raw_url = os.getenv("DATABASE_URL", "sqlite:///./calls.db")
 # Railway PostgreSQL URLs start with "postgres://" but SQLAlchemy requires "postgresql://"
@@ -38,6 +38,9 @@ def run_migrations():
                 "inbound_retell_agent_id": "VARCHAR(255)",
                 "inbound_retell_llm_id": "VARCHAR(255)",
                 "voicemail_message": "TEXT",
+                "call_objective": "VARCHAR(100)",
+                "target_audience": "TEXT",
+                "custom_objections": "TEXT",
             }
             with engine.begin() as conn:
                 for col, col_type in new_cols.items():
@@ -45,12 +48,39 @@ def run_migrations():
                         conn.execute(text(f"ALTER TABLE agentconfig ADD COLUMN {col} {col_type}"))
                         log.info(f"Migration: added agentconfig.{col}")
 
+        is_pg = not DATABASE_URL.startswith("sqlite")
+
         if "prospect" in tables:
             prospect_cols = {c["name"] for c in insp.get_columns("prospect")}
+            prospect_new = {
+                "email": "VARCHAR(255)",
+                "website": "VARCHAR(500)",
+                "place_id": "VARCHAR(255)",
+                "last_review_at": "TIMESTAMP",
+                "quality_score": "INTEGER",
+                "email_unsubscribed": "BOOLEAN DEFAULT FALSE",
+                "last_email_sent_at": "TIMESTAMP",
+                "email_send_count": "INTEGER DEFAULT 0",
+                "email_list_id": "INTEGER",
+            }
             with engine.begin() as conn:
-                if "email" not in prospect_cols:
-                    conn.execute(text("ALTER TABLE prospect ADD COLUMN email VARCHAR(255)"))
-                    log.info("Migration: added prospect.email")
+                for col, col_type in prospect_new.items():
+                    if col not in prospect_cols:
+                        conn.execute(text(f"ALTER TABLE prospect ADD COLUMN {col} {col_type}"))
+                        log.info(f"Migration: added prospect.{col}")
+            # Make campaign_id and phone nullable (PostgreSQL only)
+            if is_pg:
+                with engine.begin() as conn:
+                    try:
+                        conn.execute(text("ALTER TABLE prospect ALTER COLUMN campaign_id DROP NOT NULL"))
+                        log.info("Migration: prospect.campaign_id is now nullable")
+                    except Exception:
+                        pass
+                    try:
+                        conn.execute(text("ALTER TABLE prospect ALTER COLUMN phone DROP NOT NULL"))
+                        log.info("Migration: prospect.phone is now nullable")
+                    except Exception:
+                        pass
 
         if "call" in tables:
             call_cols = {c["name"] for c in insp.get_columns("call")}
@@ -71,6 +101,9 @@ def run_migrations():
                 if "sequential_calls" not in camp_cols:
                     conn.execute(text("ALTER TABLE campaign ADD COLUMN sequential_calls BOOLEAN DEFAULT FALSE"))
                     log.info("Migration: added campaign.sequential_calls")
+                if "scheduled_start_at" not in camp_cols:
+                    conn.execute(text("ALTER TABLE campaign ADD COLUMN scheduled_start_at TIMESTAMP"))
+                    log.info("Migration: added campaign.scheduled_start_at")
 
         if "organization" in tables:
             org_cols = {c["name"] for c in insp.get_columns("organization")}
@@ -88,6 +121,21 @@ def run_migrations():
                 "whatsapp_access_token": "TEXT",
                 "whatsapp_verify_token": "VARCHAR(255)",
                 "whatsapp_enabled": "BOOLEAN DEFAULT FALSE",
+                "email_enabled": "BOOLEAN DEFAULT FALSE",
+                "sendgrid_api_key": "TEXT",
+                "email_from": "VARCHAR(255)",
+                "email_from_name": "VARCHAR(255)",
+                "email_send_on_interested": "BOOLEAN DEFAULT TRUE",
+                "email_send_on_callback": "BOOLEAN DEFAULT FALSE",
+                "email_send_on_voicemail": "BOOLEAN DEFAULT FALSE",
+                "email_send_on_not_interested": "BOOLEAN DEFAULT FALSE",
+                "email_templates": "TEXT",
+                "email_attachment": "BYTEA" if is_pg else "BLOB",
+                "email_attachment_name": "VARCHAR(255)",
+                "email_send_delay_ms": "INTEGER DEFAULT 0",
+                "marketing_enabled": "BOOLEAN DEFAULT FALSE",
+                "openai_api_key": "TEXT",
+                "google_api_key": "TEXT",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():
@@ -98,6 +146,22 @@ def run_migrations():
         # Migrate legacy "basic" plan → "pro"
         with engine.begin() as conn:
             conn.execute(text("UPDATE organization SET plan = 'pro' WHERE plan = 'basic'"))
+
+        if "emailsendlog" in tables:
+            log_cols = {c["name"] for c in insp.get_columns("emailsendlog")}
+            with engine.begin() as conn:
+                if "source_email_only" not in log_cols:
+                    conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN source_email_only BOOLEAN DEFAULT FALSE"))
+                    log.info("Migration: added emailsendlog.source_email_only")
+                if "source_email_list_id" not in log_cols:
+                    conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN source_email_list_id INTEGER"))
+                    log.info("Migration: added emailsendlog.source_email_list_id")
+                if "source_batch_size" not in log_cols:
+                    conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN source_batch_size INTEGER"))
+                    log.info("Migration: added emailsendlog.source_batch_size")
+                if "sent_details" not in log_cols:
+                    conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN sent_details TEXT"))
+                    log.info("Migration: added emailsendlog.sent_details")
 
         # Indexes for performance on frequently filtered columns
         is_pg = not DATABASE_URL.startswith("sqlite")

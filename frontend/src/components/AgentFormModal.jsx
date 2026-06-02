@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react'
-import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon, DocumentArrowUpIcon, ExclamationTriangleIcon } from '@heroicons/react/24/outline'
-import { createAgent, updateAgent, syncAgent, uploadKnowledgeBase } from '../api/client'
+import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon, DocumentArrowUpIcon, ExclamationTriangleIcon, EyeIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
+import { createAgent, updateAgent, syncAgent, uploadKnowledgeBase, getAgentPromptPreview } from '../api/client'
 
 const VOICES = [
   { value: 'retell-Andrea',    label: 'Andrea (Mexicana · Adulta)' },
@@ -22,6 +22,14 @@ const TEMPERATURES = [
 const ALLOWED_EXTS = ['.pdf', '.txt', '.docx', '.doc', '.md', '.csv']
 const MAX_MB = 10
 
+const CALL_OBJECTIVES = [
+  { value: '', label: 'Sin definir' },
+  { value: 'agendar_cita', label: 'Agendar una cita' },
+  { value: 'calificar_interes', label: 'Calificar interés' },
+  { value: 'cerrar_venta', label: 'Cerrar venta directa' },
+  { value: 'informar_promocion', label: 'Informar una promoción' },
+]
+
 const EMPTY = {
   name: '', agent_name: '', company_name: '', company_info: '',
   services: '', instructions: '', language: 'español',
@@ -34,6 +42,51 @@ const EMPTY = {
   inbound_enabled: false,
   inbound_system_prompt: '',
   inbound_first_message: '',
+  call_objective: '',
+  target_audience: '',
+  custom_objections: '',
+}
+
+function computeScore(form) {
+  let score = 15 // required fields always filled
+  const warnings = []
+  const infoLen = (form.company_info || '').length
+  if (infoLen > 100) score += 15
+  else if (infoLen > 20) { score += 7; warnings.push('Info de empresa muy corta — amplíala para darle más contexto al agente') }
+  else warnings.push('Falta información de la empresa')
+
+  const svcLen = (form.services || '').length
+  if (svcLen > 100) score += 15
+  else if (svcLen > 20) { score += 7; warnings.push('Descripción de servicios muy corta') }
+  else warnings.push('Falta descripción de servicios')
+
+  if (form.target_audience) score += 15
+  else warnings.push('Sin público objetivo — el agente no puede calificar prospectos')
+
+  if (form.call_objective) score += 15
+  else warnings.push('Sin objetivo de llamada — el agente no sabe cuándo intentar cerrar')
+
+  if (form.custom_objections) score += 10
+  else warnings.push('Sin objeciones personalizadas — usará respuestas genéricas')
+
+  if (form.voicemail_message) score += 5
+  else warnings.push('Sin mensaje de buzón de voz configurado')
+
+  if (form.outbound_first_message) score += 5
+
+  return { score: Math.min(score, 100), warnings }
+}
+
+function scoreColor(score) {
+  if (score >= 80) return 'bg-green-500'
+  if (score >= 50) return 'bg-yellow-500'
+  return 'bg-red-500'
+}
+
+function scoreLabel(score) {
+  if (score >= 80) return 'Agente bien configurado'
+  if (score >= 50) return 'Configuración básica'
+  return 'Configuración incompleta'
 }
 
 function formatBytes(bytes) {
@@ -49,6 +102,9 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
   const [syncStatus, setSyncStatus] = useState(null)
   const [syncError, setSyncError] = useState('')
   const [callTab, setCallTab] = useState('outbound')
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [previewData, setPreviewData] = useState(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
   // KB state
   const [kbFile, setKbFile] = useState(null)
@@ -59,6 +115,20 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
   const fileInputRef = useRef(null)
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const loadPreview = async () => {
+    if (!agent?.id) return
+    setPreviewLoading(true)
+    try {
+      const data = await getAgentPromptPreview(agent.id)
+      setPreviewData(data)
+      setPreviewOpen(true)
+    } catch (e) {
+      alert('No se pudo cargar la vista previa: ' + (e.response?.data?.detail || e.message))
+    } finally {
+      setPreviewLoading(false)
+    }
+  }
 
   const validateAndSetFile = (file) => {
     setKbFileError('')
@@ -165,6 +235,34 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
 
+          {/* Score bar */}
+          {(() => {
+            const { score, warnings } = computeScore(form)
+            return (
+              <div className="rounded-xl border border-z-border bg-black/20 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-slate-400">Completitud del agente</span>
+                  <span className={`text-xs font-bold ${score >= 80 ? 'text-green-400' : score >= 50 ? 'text-yellow-400' : 'text-red-400'}`}>
+                    {score}% — {scoreLabel(score)}
+                  </span>
+                </div>
+                <div className="h-1.5 w-full bg-white/10 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-500 ${scoreColor(score)}`} style={{ width: `${score}%` }} />
+                </div>
+                {warnings.length > 0 && (
+                  <ul className="space-y-0.5">
+                    {warnings.map((w, i) => (
+                      <li key={i} className="flex items-start gap-1.5 text-xs text-slate-500">
+                        <ExclamationTriangleIcon className="w-3 h-3 mt-0.5 text-yellow-600 flex-shrink-0" />
+                        {w}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )
+          })()}
+
           <div className="grid grid-cols-2 gap-4">
             <Field label="Nombre interno" value={form.name} onChange={v => set('name', v)} required />
             <Field label="Nombre en llamada" value={form.agent_name} onChange={v => set('agent_name', v)} required />
@@ -172,6 +270,37 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
           <Field label="Empresa" value={form.company_name} onChange={v => set('company_name', v)} required />
           <TextArea label="Info de la empresa" value={form.company_info} onChange={v => set('company_info', v)} placeholder="Historia, valores, a quién sirven..." rows={3} />
           <TextArea label="Servicios y precios" value={form.services} onChange={v => set('services', v)} placeholder="Lista servicios con precios..." rows={3} />
+
+          {/* Sales strategy section */}
+          <div className="border border-z-border rounded-xl overflow-hidden">
+            <div className="px-4 py-3 bg-black/20 border-b border-z-border">
+              <h3 className="text-sm font-medium text-slate-300">Estrategia de ventas</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Cuanto más completes esta sección, mejor actuará el agente en llamadas reales.</p>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Objetivo principal de la llamada</label>
+                <select className="z-input" value={form.call_objective || ''} onChange={e => set('call_objective', e.target.value)}>
+                  {CALL_OBJECTIVES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+                <p className="text-xs text-slate-500 mt-1">El agente ajustará su cierre según este objetivo.</p>
+              </div>
+              <TextArea
+                label="Público objetivo / cliente ideal"
+                value={form.target_audience || ''}
+                onChange={v => set('target_audience', v)}
+                placeholder="Ej: Dueños de PYMES de 5-50 empleados en México que buscan reducir costos operativos. Edad 35-55, toman decisiones de compra directamente."
+                rows={2}
+              />
+              <TextArea
+                label="Objeciones frecuentes y cómo responderlas"
+                value={form.custom_objections || ''}
+                onChange={v => set('custom_objections', v)}
+                placeholder={'Ej:\n- "Ya tenemos sistema propio": Qué bueno que invierten en tecnología. ¿Les gustaría ver cómo podemos integrarnos con lo que ya tienen?\n- "No tenemos presupuesto": Entiendo. ¿Puedo preguntarle qué pasaría si este problema no se resuelve?'}
+                rows={4}
+              />
+            </div>
+          </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -396,6 +525,39 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
               </span>
             )}
           </div>
+
+          {/* Prompt preview */}
+          {agent?.id && (
+            <div className="border border-z-border rounded-xl overflow-hidden">
+              <button
+                type="button"
+                onClick={() => previewOpen ? setPreviewOpen(false) : loadPreview()}
+                className="w-full flex items-center justify-between px-4 py-3 bg-black/20 hover:bg-white/[0.03] transition-colors"
+              >
+                <span className="flex items-center gap-2 text-sm font-medium text-slate-300">
+                  <EyeIcon className="w-4 h-4" />
+                  Ver prompt generado
+                </span>
+                {previewLoading
+                  ? <span className="text-xs text-slate-500">Cargando...</span>
+                  : previewOpen ? <ChevronUpIcon className="w-4 h-4 text-slate-500" /> : <ChevronDownIcon className="w-4 h-4 text-slate-500" />
+                }
+              </button>
+              {previewOpen && previewData && (
+                <div className="p-4 space-y-3 border-t border-z-border">
+                  <p className="text-xs text-slate-500">
+                    Este es el texto exacto que recibe el agente. Guarda y sincroniza para que los cambios se reflejen aquí.
+                  </p>
+                  <textarea
+                    readOnly
+                    value={previewData.prompt}
+                    rows={12}
+                    className="z-input resize-none text-xs font-mono text-slate-300 bg-black/30"
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="z-btn-ghost">Cancelar</button>

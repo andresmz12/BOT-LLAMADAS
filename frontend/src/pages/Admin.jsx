@@ -303,18 +303,28 @@ function OrgModal({ org, onClose, onSaved }) {
       try { return org.crm_extra_config ? JSON.parse(org.crm_extra_config) : null }
       catch { return null }
     })(),
+    marketing_enabled: org.marketing_enabled || false,
     whatsapp_enabled: org.whatsapp_enabled || false,
     whatsapp_phone_number_id: org.whatsapp_phone_number_id || '',
     whatsapp_access_token: org.whatsapp_access_token || '',
     whatsapp_verify_token: org.whatsapp_verify_token || '',
+    email_enabled: org.email_enabled || false,
+    sendgrid_api_key: org.sendgrid_api_key || '',
+    email_from: org.email_from || '',
+    email_from_name: org.email_from_name || '',
   } : {
     name: '', plan: 'pro', retell_api_key: '', retell_phone_number: '',
     anthropic_api_key: '', is_active: true,
     crm_type: 'none', crm_webhook_url: '', crm_webhook_enabled: false,
     crm_webhook_secret: '', crm_events: '["call_ended","interested"]',
     crm_api_key: '', crm_board_or_list_id: '', crm_extra_config: null,
+    marketing_enabled: false,
     whatsapp_enabled: false, whatsapp_phone_number_id: '',
     whatsapp_access_token: '', whatsapp_verify_token: '',
+    email_enabled: false,
+    sendgrid_api_key: '',
+    email_from: '',
+    email_from_name: '',
   })
   const [loading, setLoading] = useState(false)
   const [crmAccordionOpen, setCrmAccordionOpen] = useState(false)
@@ -430,6 +440,16 @@ function OrgModal({ org, onClose, onSaved }) {
             <span className="text-sm text-slate-300">Organización activa</span>
           </label>
 
+          {/* ── Marketing IA ────────────────────────────────────────────────── */}
+          <div className="border-t border-z-border pt-4 space-y-2">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Marketing IA</h3>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input type="checkbox" checked={!!form.marketing_enabled} onChange={e => set('marketing_enabled', e.target.checked)} className="w-4 h-4 accent-blue-500" />
+              <span className="text-sm text-slate-300">Activar módulo de Marketing IA para esta organización</span>
+            </label>
+            <p className="text-xs text-slate-600">Permite a los usuarios de esta org generar imágenes, videos y copy con IA.</p>
+          </div>
+
           {/* ── WhatsApp Bot ─────────────────────────────────────────────────── */}
           <div className="border-t border-z-border pt-4 space-y-4">
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">WhatsApp Bot</h3>
@@ -451,6 +471,48 @@ function OrgModal({ org, onClose, onSaved }) {
               <input value={form.whatsapp_verify_token || ''} onChange={e => set('whatsapp_verify_token', e.target.value)}
                 placeholder="zyra-wa-secreto-2025" className="z-input font-mono" />
               <p className="text-xs text-slate-600 mt-1">String secreto que eliges tú — úsalo al registrar el webhook en Meta</p>
+            </div>
+          </div>
+
+          {/* ── Email Marketing ─────────────────────────────────────────────── */}
+          <div className="border-t border-z-border pt-4 space-y-3">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Email Marketing</h3>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={!!form.email_enabled}
+                onChange={e => set('email_enabled', e.target.checked)}
+                className="w-4 h-4 accent-blue-500"
+              />
+              <span className="text-sm text-slate-300">Activar envío de emails post-llamada</span>
+            </label>
+            <SecretInput
+              label="SendGrid API Key"
+              value={form.sendgrid_api_key || ''}
+              onChange={e => set('sendgrid_api_key', e.target.value)}
+              placeholder="SG.••••••••"
+            />
+            <p className="text-xs text-slate-500 -mt-1">
+              Clave privada de SendGrid — solo visible para superadmins, nunca expuesta al cliente.
+            </p>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Email remitente</label>
+              <input
+                value={form.email_from || ''}
+                onChange={e => set('email_from', e.target.value)}
+                placeholder="info@empresa.com"
+                type="email"
+                className="z-input"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">Nombre remitente</label>
+              <input
+                value={form.email_from_name || ''}
+                onChange={e => set('email_from_name', e.target.value)}
+                placeholder="Isabella - Mi Empresa"
+                className="z-input"
+              />
             </div>
           </div>
 

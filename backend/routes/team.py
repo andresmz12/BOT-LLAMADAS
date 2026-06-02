@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlmodel import Session, select
 from typing import Optional
 from database import get_session
@@ -17,6 +17,22 @@ class TeamMemberCreate(BaseModel):
     password: str
     full_name: str
     role: str = "agent"
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres")
+        if len(v) > 128:
+            raise ValueError("Contraseña demasiado larga")
+        return v
+
+    @field_validator("email")
+    @classmethod
+    def email_length(cls, v: str) -> str:
+        if len(v) > 254:
+            raise ValueError("Email demasiado largo")
+        return v.strip().lower()
 
 
 class TeamMemberUpdate(BaseModel):

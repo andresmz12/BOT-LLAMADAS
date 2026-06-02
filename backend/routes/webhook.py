@@ -24,6 +24,7 @@ async def _bg_analyze_and_sync(
     org_id: int | None,
     prospect_id: int | None,
     campaign_id: int | None,
+    duration_seconds: int = 0,
 ):
     """Background task: Claude analysis + DB update + CRM dispatch.
     Runs AFTER Retell already received 200, preventing duplicate retries."""
@@ -54,7 +55,7 @@ async def _bg_analyze_and_sync(
         elif transcript.strip():
             logger.info(f"[BG] call_id={call_id} analyzing {len(transcript)} chars with Claude...")
             try:
-                analysis = await summary_generator.analyze_transcript(transcript, api_key=org_api_key)
+                analysis = await summary_generator.analyze_transcript(transcript, api_key=org_api_key, duration_seconds=duration_seconds)
                 logger.info(f"[BG] call_id={call_id} outcome={analysis.get('outcome')} sentiment={analysis.get('sentiment')}")
                 call.client_said = json.dumps(analysis.get("client_said", []))
                 call.agent_said = json.dumps(analysis.get("agent_said", []))
@@ -82,7 +83,8 @@ async def _bg_analyze_and_sync(
                 outcome = call.outcome or "no_answer"
                 if outcome == "voicemail":
                     prospect.status = "voicemail"
-                elif outcome in ("interested", "callback_requested", "appointment_scheduled", "not_interested"):
+                elif outcome in ("interested", "callback_requested", "appointment_scheduled",
+                                 "not_interested", "wrong_number"):
                     prospect.status = "answered"
                 elif outcome == "no_answer":
                     prospect.status = "no_answer"
@@ -100,12 +102,13 @@ async def _bg_analyze_and_sync(
                 elif outcome == "interested":
                     campaign.interested += 1
                     campaign.answered += 1
-                elif outcome in ("not_interested", "callback_requested"):
+                elif outcome in ("not_interested", "callback_requested", "wrong_number"):
                     campaign.answered += 1
                 elif outcome == "appointment_scheduled":
                     campaign.appointments_scheduled += 1
                     campaign.answered += 1
-                # no_answer and anything else: just total_calls, no failed counter
+                elif outcome in ("failed", "no_answer"):
+                    campaign.failed += 1
                 s.add(campaign)
 
         s.commit()
@@ -134,6 +137,23 @@ async def _bg_analyze_and_sync(
             except Exception as e:
                 logger.error(f"[BG] CRM sync failed: {e}", exc_info=True)
 
+        # Email marketing — fire-and-forget, never fails the webhook
+        try:
+            from services.sendgrid_service import send_post_call_email
+            if org and call.outcome:
+                email_prospect = s.get(Prospect, prospect_id) if prospect_id else None
+                email_camp = s.get(Campaign, campaign_id) if campaign_id else None
+                email_agent = s.get(AgentConfig, email_camp.agent_config_id) if email_camp else None
+                await send_post_call_email(
+                    org,
+                    email_prospect,
+                    call.outcome,
+                    call.notes,
+                    email_agent.agent_name if email_agent else "Isabella",
+                )
+        except Exception as e:
+            logger.error(f"[BG] Email dispatch failed: {e}", exc_info=True)
+
         if ws_manager and campaign_id:
             try:
                 await ws_manager.broadcast(campaign_id, {
@@ -149,8 +169,11 @@ async def _bg_analyze_and_sync(
 async def _verify_retell_signature(request: Request, raw_body: bytes):
     secret = os.getenv("RETELL_WEBHOOK_SECRET", "")
     if not secret:
+        logger.warning("RETELL_WEBHOOK_SECRET not set — webhook signature verification skipped!")
         return
     sig = request.headers.get("x-retell-signature", "")
+    if not sig:
+        raise HTTPException(status_code=401, detail="Missing webhook signature")
     expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
     if not hmac.compare_digest(sig, expected):
         raise HTTPException(status_code=401, detail="Invalid webhook signature")
@@ -279,7 +302,7 @@ async def retell_webhook(request: Request, background_tasks: BackgroundTasks, se
         background_tasks.add_task(
             _bg_analyze_and_sync,
             call.id, transcript, in_voicemail, call.organization_id,
-            call.prospect_id, call.campaign_id,
+            call.prospect_id, call.campaign_id, call.duration_seconds or 0,
         )
 
         if ws_manager and call.campaign_id:
@@ -304,6 +327,12 @@ async def retell_webhook(request: Request, background_tasks: BackgroundTasks, se
             if prospect:
                 prospect.status = "no_answer"
                 session.add(prospect)
+        if call.campaign_id:
+            campaign = session.get(Campaign, call.campaign_id)
+            if campaign:
+                campaign.total_calls += 1
+                campaign.failed += 1
+                session.add(campaign)
         session.commit()
 
     return {"ok": True}
