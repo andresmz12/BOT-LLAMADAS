@@ -166,6 +166,8 @@ export const deleteLeadHunt = (id) => api.delete(`/lead-hunter/leads/${id}`).the
 export const deleteAllLeadHunts = () => api.delete('/lead-hunter/leads').then(r => r.data)
 
 export const getEmailStats = () => api.get('/stats/email').then(r => r.data)
+export const getEmailEvents = (eventType) =>
+  api.get('/stats/email/events', { params: eventType ? { event_type: eventType, limit: 2000 } : { limit: 2000 } }).then(r => r.data)
 export const getScheduledEmails = () => api.get('/settings/email/scheduled').then(r => r.data)
 export const cancelScheduledEmail = (id) => api.delete(`/settings/email/scheduled/${id}`).then(r => r.data)
 

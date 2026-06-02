@@ -331,3 +331,37 @@ def campaign_stats(
     }
 
 
+@router.get("/email/events")
+def get_email_events(
+    event_type: Optional[str] = Query(None),
+    limit: int = Query(500, le=2000),
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Return individual email tracking events for the current org."""
+    if not current_user.organization_id:
+        return {"events": [], "total": 0}
+
+    org_id = current_user.organization_id
+    query = select(EmailEvent).where(EmailEvent.organization_id == org_id)
+    if event_type:
+        query = query.where(EmailEvent.event_type == event_type)
+    query = query.order_by(EmailEvent.timestamp.desc()).limit(limit)
+
+    events = session.exec(query).all()
+    return {
+        "events": [
+            {
+                "id": e.id,
+                "email": e.prospect_email,
+                "event_type": e.event_type,
+                "template_key": e.template_key,
+                "url": e.url,
+                "timestamp": e.timestamp.isoformat() if e.timestamp else None,
+            }
+            for e in events
+        ],
+        "total": len(events),
+    }
+
+
