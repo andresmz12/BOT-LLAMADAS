@@ -3,7 +3,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieC
 import { UserGroupIcon, StarIcon, CalendarIcon, XCircleIcon, ClockIcon, PhoneArrowDownLeftIcon, ArrowPathIcon, EnvelopeIcon, CursorArrowRaysIcon, ArrowTrendingUpIcon, NoSymbolIcon } from '@heroicons/react/24/outline'
 import { WaveformIcon } from '../components/Sidebar'
 import StatusBadge from '../components/StatusBadge'
-import { getStats, getCampaigns, getOrganizations, getEmailStats } from '../api/client'
+import { getStats, getCampaigns, getOrganizations, getEmailStats, getEmailEvents } from '../api/client'
+import { ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import { fmtDate } from '../utils/date'
 
 const PIE_COLORS = ['#2563EB', '#10b981', '#8b5cf6', '#ef4444', '#f97316', '#3b82f6']
@@ -52,10 +53,33 @@ function TabButton({ active, onClick, children }) {
 
 function EmailDashboard({ selectedOrg }) {
   const [es, setEs] = useState(null)
+  const [trackingTab, setTrackingTab] = useState('all')
+  const [trackingEvents, setTrackingEvents] = useState(null)
+  const [trackingLoading, setTrackingLoading] = useState(false)
 
   useEffect(() => {
     getEmailStats().then(setEs).catch(() => {})
   }, [selectedOrg])
+
+  const loadTracking = async () => {
+    setTrackingLoading(true)
+    try { const r = await getEmailEvents(); setTrackingEvents(r.events || []) }
+    catch (_) { setTrackingEvents([]) }
+    finally { setTrackingLoading(false) }
+  }
+
+  const exportTracking = () => {
+    if (!trackingEvents?.length) return
+    const LABEL = { delivered: 'Entregado', open: 'Abierto', click: 'Click', bounce: 'Rebotado', dropped: 'Descartado', unsubscribe: 'Desuscrito', spamreport: 'Spam' }
+    const rows = (trackingTab === 'all' ? trackingEvents : trackingEvents.filter(e => e.event_type === trackingTab))
+      .map(e => ({ 'Email': e.email, 'Evento': LABEL[e.event_type] || e.event_type, 'Plantilla': e.template_key || '', 'URL': e.url || '', 'Fecha': e.timestamp ? new Date(e.timestamp).toLocaleString('es') : '' }))
+    import('xlsx').then(XLSX => {
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(wb, ws, 'Tracking')
+      XLSX.writeFile(wb, `email-tracking-${new Date().toISOString().slice(0,10)}.xlsx`)
+    })
+  }
 
   const noData = !es || es.total_sent === 0
 
@@ -164,6 +188,112 @@ function EmailDashboard({ selectedOrg }) {
           </div>
         </>
       )}
+
+      {/* ── Seguimiento individual de emails ── */}
+      <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
+        <div className="px-5 py-4 border-b border-z-border flex items-center justify-between flex-wrap gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-200">Seguimiento de emails</h2>
+            <p className="text-xs text-slate-500 mt-0.5">Quién abrió, hizo click, rebotó o se desuscribió</p>
+          </div>
+          <div className="flex items-center gap-2">
+            {trackingEvents !== null && (
+              <button onClick={exportTracking} disabled={!trackingEvents.length}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-400 border border-green-400/30 rounded-lg hover:bg-green-400/10 transition-colors disabled:opacity-40">
+                <ArrowDownTrayIcon className="w-3.5 h-3.5" /> Exportar Excel
+              </button>
+            )}
+            {trackingEvents === null ? (
+              <button onClick={loadTracking} disabled={trackingLoading}
+                className="px-3 py-1.5 text-xs font-medium text-blue-400 border border-blue-400/30 rounded-lg hover:bg-blue-400/10 transition-colors disabled:opacity-50">
+                {trackingLoading ? 'Cargando...' : 'Cargar eventos'}
+              </button>
+            ) : (
+              <button onClick={loadTracking} disabled={trackingLoading}
+                className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
+                {trackingLoading ? '...' : '↻'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {trackingEvents !== null && (
+          <>
+            {/* Tabs */}
+            {(() => {
+              const TABS = [
+                { key: 'all', label: 'Todos' },
+                { key: 'delivered', label: 'Entregados', color: 'text-green-400' },
+                { key: 'open', label: 'Abiertos', color: 'text-blue-400' },
+                { key: 'click', label: 'Clicks', color: 'text-purple-400' },
+                { key: 'bounce', label: 'Rebotados', color: 'text-red-400' },
+                { key: 'unsubscribe', label: 'Desuscritos', color: 'text-amber-400' },
+              ]
+              const counts = {}
+              trackingEvents.forEach(e => { counts[e.event_type] = (counts[e.event_type] || 0) + 1 })
+              const LABEL = { delivered: 'Entregado', open: 'Abierto', click: 'Click', bounce: 'Rebotado', dropped: 'Descartado', unsubscribe: 'Desuscrito', spamreport: 'Spam' }
+              const BADGE = { delivered: 'bg-green-500/15 text-green-400', open: 'bg-blue-500/15 text-blue-400', click: 'bg-purple-500/15 text-purple-400', bounce: 'bg-red-500/15 text-red-400', dropped: 'bg-red-500/15 text-red-400', unsubscribe: 'bg-amber-500/15 text-amber-400', spamreport: 'bg-orange-500/15 text-orange-400' }
+              const filtered = trackingTab === 'all' ? trackingEvents : trackingEvents.filter(e => e.event_type === trackingTab)
+              return (
+                <>
+                  <div className="flex gap-1 px-4 py-3 border-b border-z-border flex-wrap">
+                    {TABS.map(t => {
+                      const count = t.key === 'all' ? trackingEvents.length : (counts[t.key] || 0)
+                      return (
+                        <button key={t.key} onClick={() => setTrackingTab(t.key)}
+                          className={`px-3 py-1 text-xs rounded-lg border transition-colors ${trackingTab === t.key ? 'bg-white/10 border-slate-500/60 text-slate-200' : 'border-z-border text-slate-500 hover:bg-white/5'}`}>
+                          {t.label}
+                          {count > 0 && <span className={`ml-1.5 font-bold ${trackingTab === t.key ? 'text-slate-300' : (t.color || 'text-slate-400')}`}>{count}</span>}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {filtered.length === 0 ? (
+                    <p className="text-center text-slate-600 text-sm py-10">
+                      {trackingTab === 'all' ? 'Sin eventos aún. Los eventos aparecen cuando SendGrid reporta aperturas, clicks, etc.' : 'Sin eventos de este tipo.'}
+                    </p>
+                  ) : (
+                    <div className="overflow-x-auto max-h-80 overflow-y-auto">
+                      <table className="w-full text-xs">
+                        <thead className="bg-black/20 sticky top-0">
+                          <tr>
+                            {['Email', 'Evento', 'Plantilla', 'URL (click)', 'Fecha y hora'].map(h => (
+                              <th key={h} className="px-4 py-2.5 text-left font-medium text-slate-500 uppercase tracking-wide">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-z-border">
+                          {filtered.map(ev => (
+                            <tr key={ev.id} className="hover:bg-white/[0.02]">
+                              <td className="px-4 py-2 font-mono text-slate-300 max-w-[180px] truncate">{ev.email}</td>
+                              <td className="px-4 py-2">
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${BADGE[ev.event_type] || 'bg-slate-500/15 text-slate-400'}`}>
+                                  {LABEL[ev.event_type] || ev.event_type}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2 text-slate-500">{ev.template_key || '—'}</td>
+                              <td className="px-4 py-2 max-w-[180px] truncate">
+                                {ev.url ? <a href={ev.url} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">{ev.url}</a> : <span className="text-slate-700">—</span>}
+                              </td>
+                              <td className="px-4 py-2 text-slate-500 whitespace-nowrap">
+                                {ev.timestamp ? new Date(ev.timestamp).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
+              )
+            })()}
+          </>
+        )}
+
+        {trackingEvents === null && !trackingLoading && (
+          <p className="text-center text-slate-600 text-xs py-6">Haz clic en "Cargar eventos" para ver el detalle de aperturas, clicks y más.</p>
+        )}
+      </div>
     </div>
   )
 }
