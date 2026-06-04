@@ -64,6 +64,7 @@ async def _run_scheduled_email(job_id: int):
         with _S(engine) as s:
             job = s.get(_EmailJob, job_id)
             if not job or job.status != "running":
+                logger.info(f"[Scheduler] Email job {job_id} skipped — status={job.status if job else 'not found'}")
                 return
             org = s.get(_Org, job.organization_id)
             if not org:
@@ -207,9 +208,19 @@ async def _campaign_scheduler():
                     )
                 ).all()
                 for job in due_emails:
-                    job.status = "running"
-                    s.add(job)
+                    # Atomic claim: only proceed if we can change status from pending→running
+                    # This prevents double-execution when two backend instances overlap during deploy
+                    from sqlalchemy import update as _upd
+                    result = s.execute(
+                        _upd(_EmailJob)
+                        .where(_EmailJob.id == job.id, _EmailJob.status == "pending")
+                        .values(status="running")
+                    )
                     s.commit()
+                    if result.rowcount == 0:
+                        # Another instance already claimed this job
+                        logger.info(f"[Scheduler] Email job {job.id} already claimed by another instance, skipping")
+                        continue
                     _asyncio.create_task(_run_scheduled_email(job.id))
                     logger.info(f"[Scheduler] Firing email job {job.id} org={job.organization_id}")
         except Exception as e:
