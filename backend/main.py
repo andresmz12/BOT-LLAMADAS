@@ -146,11 +146,20 @@ async def _run_scheduled_email(job_id: int):
                     skipped += 1
 
             s.commit()
+            campaign_name = None
+            if job.campaign_id:
+                from models import Campaign as _Campaign
+                _camp = s.get(_Campaign, job.campaign_id)
+                campaign_name = _camp.name if _camp else None
+            template_subject = tmpl.get("subject") or DEFAULT_SUBJECT.get(job.template_key, "")
+            sent_details_list = [{"name": p.name or "", "email": p.email} for p in prospects if p.email]
             log_entry = _Log(
                 organization_id=job.organization_id, template_key=job.template_key,
-                campaign_id=job.campaign_id, total_sent=sent, total_skipped=skipped,
+                template_subject=template_subject, campaign_id=job.campaign_id,
+                campaign_name=campaign_name, total_sent=sent, total_skipped=skipped,
                 total_errors=len(errors), error_details=json.dumps(errors) if errors else None,
-                initiated_by=job.initiated_by,
+                initiated_by=job.initiated_by, source_email_only=job.email_only,
+                sent_details=json.dumps(sent_details_list) if sent_details_list else None,
             )
             s.add(log_entry)
             job.status = "done"

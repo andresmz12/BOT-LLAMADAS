@@ -100,17 +100,6 @@ def global_stats(
             if call.outcome in _CONTACTED_OUTCOMES:
                 hour_data[h]["contacted"] += 1
 
-    calls_by_hour = [
-        {
-            "hour": h,
-            "calls": v["calls"],
-            "contacted": v["contacted"],
-            "contact_rate": round(v["contacted"] / v["calls"] * 100, 1) if v["calls"] else 0,
-        }
-        for h, v in sorted(hour_data.items())
-    ]
-
-    # Calls by hour of day (optimal call time)
     from collections import defaultdict
     hour_buckets: dict = defaultdict(lambda: {"calls": 0, "contacted": 0})
     for c in session.exec(select(Call).where(base & Call.started_at.is_not(None))).all():
