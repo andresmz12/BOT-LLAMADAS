@@ -119,6 +119,12 @@ async def import_file(
         raise HTTPException(status_code=400, detail="Solo se permiten archivos CSV, XLS o XLSX")
     rows = []
 
+    if current_user.role != "superadmin" and current_user.organization_id:
+        from models import Campaign as _Campaign
+        _camp = session.get(_Campaign, campaign_id)
+        if not _camp or _camp.organization_id != current_user.organization_id:
+            raise HTTPException(status_code=403, detail="Campaña no encontrada o sin acceso")
+
     if filename.endswith(".xlsx") or filename.endswith(".xls"):
         import openpyxl
         wb = openpyxl.load_workbook(io.BytesIO(content), read_only=True, data_only=True)

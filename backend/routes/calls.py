@@ -24,6 +24,8 @@ async def demo_call(
     agent = session.get(AgentConfig, req.agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agente no encontrado")
+    if current_user.role != "superadmin" and agent.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Agente no encontrado")
 
     org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
     api_key = (org.retell_api_key if org else "") or ""
@@ -65,6 +67,9 @@ async def demo_call(
         organization_id=current_user.organization_id,
     )
     session.add(call)
+    if org:
+        org.demo_calls_used = (org.demo_calls_used or 0) + 1
+        session.add(org)
     session.commit()
     session.refresh(call)
 

@@ -93,23 +93,22 @@ async def _bg_analyze_and_sync(
                 s.add(prospect)
 
         if campaign_id:
-            campaign = s.get(Campaign, campaign_id)
-            if campaign:
-                campaign.total_calls += 1
-                outcome = call.outcome or "no_answer"
-                if outcome == "voicemail":
-                    campaign.voicemail += 1
-                elif outcome == "interested":
-                    campaign.interested += 1
-                    campaign.answered += 1
-                elif outcome in ("not_interested", "callback_requested", "wrong_number"):
-                    campaign.answered += 1
-                elif outcome == "appointment_scheduled":
-                    campaign.appointments_scheduled += 1
-                    campaign.answered += 1
-                elif outcome in ("failed", "no_answer"):
-                    campaign.failed += 1
-                s.add(campaign)
+            from sqlalchemy import update as _sql_update
+            outcome = call.outcome or "no_answer"
+            extra: dict = {"total_calls": Campaign.total_calls + 1}
+            if outcome == "voicemail":
+                extra["voicemail"] = Campaign.voicemail + 1
+            elif outcome == "interested":
+                extra["interested"] = Campaign.interested + 1
+                extra["answered"] = Campaign.answered + 1
+            elif outcome in ("not_interested", "callback_requested", "wrong_number"):
+                extra["answered"] = Campaign.answered + 1
+            elif outcome == "appointment_scheduled":
+                extra["appointments_scheduled"] = Campaign.appointments_scheduled + 1
+                extra["answered"] = Campaign.answered + 1
+            elif outcome in ("failed", "no_answer"):
+                extra["failed"] = Campaign.failed + 1
+            s.execute(_sql_update(Campaign).where(Campaign.id == campaign_id).values(**extra))
 
         s.commit()
         logger.info(f"[BG] Saved call_id={call_id}: outcome={call.outcome} sentiment={call.sentiment}")
@@ -120,7 +119,7 @@ async def _bg_analyze_and_sync(
                 from services.crm_service import send_call_to_crm
                 crm_prospect = s.get(Prospect, prospect_id) if prospect_id else None
                 crm_camp = s.get(Campaign, campaign_id) if campaign_id else None
-                crm_agent = s.get(AgentConfig, crm_camp.agent_config_id) if crm_camp else None
+                crm_agent = s.get(AgentConfig, crm_camp.agent_config_id) if crm_camp and crm_camp.agent_config_id else None
                 call_data_crm = {
                     "phone": crm_prospect.phone if crm_prospect else None,
                     "prospect_name": crm_prospect.name if crm_prospect else None,
