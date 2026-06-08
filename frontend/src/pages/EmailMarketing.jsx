@@ -363,14 +363,15 @@ export default function EmailMarketing() {
     } catch (e) { setListContacts({ id: null, contacts: [], loading: false }) }
   }
 
-  const handleDeleteContact = async (listId, contactId) => {
+  const handleDeleteContact = async (listId, contactId, email) => {
+    if (!confirm(`¿Quitar "${email || 'este contacto'}" de la lista? Podrás volver a agregarlo después.`)) return
     try {
       await deleteEmailListContact(listId, contactId)
       setListContacts(prev => ({ ...prev, contacts: prev.contacts.filter(c => c.id !== contactId) }))
       setEmailLists(prev => prev.map(l =>
-        l.id === listId ? { ...l, total: l.total - 1, with_email: l.with_email - 1 } : l
+        l.id === listId ? { ...l, total: Math.max(0, l.total - 1), with_email: Math.max(0, l.with_email - 1) } : l
       ))
-    } catch (e) { alert('Error al eliminar contacto') }
+    } catch (e) { alert('Error al quitar contacto') }
   }
 
   const handleUnsubscribeAndDelete = async (listId, contactId) => {
@@ -734,17 +735,20 @@ export default function EmailMarketing() {
                                   <td className="px-3 py-2 text-right">
                                     <div className="flex items-center justify-end gap-1">
                                       <button
+                                        onClick={() => handleDeleteContact(list.id, c.id, c.email)}
+                                        className="flex items-center gap-1 px-2 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 rounded transition-colors"
+                                        title="Quitar de esta lista (puede volver a agregarse)"
+                                      >
+                                        <TrashIcon className="w-3.5 h-3.5" />
+                                        Quitar
+                                      </button>
+                                      <button
                                         onClick={() => handleUnsubscribeAndDelete(list.id, c.id)}
                                         className="flex items-center gap-1 px-2 py-1 text-xs text-amber-500 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors"
-                                        title="Bloquear: nunca volverá a recibir correos aunque sea reimportado"
+                                        title="Bloquear permanentemente: nunca recibirá correos aunque sea reimportado"
                                       >
                                         <UserMinusIcon className="w-3.5 h-3.5" />
-                                        Desuscribir
-                                      </button>
-                                      <button onClick={() => handleDeleteContact(list.id, c.id)}
-                                        className="text-slate-600 hover:text-red-400 transition-colors p-1.5"
-                                        title="Eliminar contacto">
-                                        <TrashIcon className="w-3.5 h-3.5" />
+                                        Bloquear
                                       </button>
                                     </div>
                                   </td>
