@@ -153,6 +153,9 @@ export const uploadTemplateAttachment = (templateKey, file) => {
 export const toggleContactUnsubscribe = (prospectId) =>
   api.patch(`/settings/email/contacts/${prospectId}/unsubscribe`).then(r => r.data)
 
+export const blockContactEmail = (prospectId) =>
+  api.post(`/settings/email/contacts/${prospectId}/block`).then(r => r.data)
+
 // Lead Hunter
 export const scoutLeads = (data) => api.post('/lead-hunter/scout', data).then(r => r.data)
 export const getLeadHunterLeads = (params) => api.get('/lead-hunter/leads', { params }).then(r => r.data)

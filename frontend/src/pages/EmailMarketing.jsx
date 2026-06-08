@@ -12,7 +12,7 @@ import {
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
   getEmailLists, createEmailList, deleteEmailList,
   getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList,
-  getScheduledEmails, cancelScheduledEmail, toggleContactUnsubscribe, getEmailEvents,
+  getScheduledEmails, cancelScheduledEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents,
 } from '../api/client'
 
 const FIXED_TEMPLATES = [
@@ -374,15 +374,14 @@ export default function EmailMarketing() {
   }
 
   const handleUnsubscribeAndDelete = async (listId, contactId) => {
-    if (!confirm('¿Desuscribir y eliminar este contacto de la lista? Esta acción no se puede deshacer.')) return
+    if (!confirm('¿Bloquear este email permanentemente? Ya no recibirá correos aunque sea reimportado en el futuro.')) return
     try {
-      await toggleContactUnsubscribe(contactId)
-      await deleteEmailListContact(listId, contactId)
+      await blockContactEmail(contactId)
       setListContacts(prev => ({ ...prev, contacts: prev.contacts.filter(c => c.id !== contactId) }))
       setEmailLists(prev => prev.map(l =>
-        l.id === listId ? { ...l, total: l.total - 1, with_email: l.with_email - 1 } : l
+        l.id === listId ? { ...l, total: Math.max(0, l.total - 1), with_email: Math.max(0, l.with_email - 1) } : l
       ))
-    } catch (e) { alert('Error al desuscribir') }
+    } catch (e) { alert('Error al bloquear el contacto') }
   }
 
   const handleAddContact = async () => {
@@ -737,7 +736,7 @@ export default function EmailMarketing() {
                                       <button
                                         onClick={() => handleUnsubscribeAndDelete(list.id, c.id)}
                                         className="flex items-center gap-1 px-2 py-1 text-xs text-amber-500 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors"
-                                        title="Desuscribir y eliminar de la lista"
+                                        title="Bloquear: nunca volverá a recibir correos aunque sea reimportado"
                                       >
                                         <UserMinusIcon className="w-3.5 h-3.5" />
                                         Desuscribir

@@ -722,6 +722,25 @@ def toggle_contact_unsubscribe(
     return {"email_unsubscribed": prospect.email_unsubscribed}
 
 
+@router.post("/email/contacts/{prospect_id}/block")
+def block_contact_email(
+    prospect_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    """Mark email as permanently blocked and remove from any list, without deleting the record.
+    This ensures the email can never be re-imported and accidentally receive emails again."""
+    prospect = session.get(Prospect, prospect_id)
+    if not prospect or (current_user.role != "superadmin" and prospect.organization_id != current_user.organization_id):
+        raise HTTPException(status_code=404, detail="Contacto no encontrado")
+    prospect.email_unsubscribed = True
+    prospect.email_list_id = None   # detach from list so it won't appear in list views
+    prospect.campaign_id = None
+    session.add(prospect)
+    session.commit()
+    return {"ok": True, "email_unsubscribed": True}
+
+
 @router.get("/email/validate-recipients")
 def validate_email_recipients(
     campaign_id: Optional[int] = None,
@@ -960,6 +979,18 @@ async def import_email_contacts(
         reader_obj = csv.DictReader(io.StringIO(text))
         rows = [{k.strip().lower(): v for k, v in r.items()} for r in reader_obj]
 
+    # Emails blocked org-wide (unsubscribed) — never import these regardless of list
+    blocked_emails: set[str] = {
+        (p.email or "").lower()
+        for p in session.exec(
+            select(Prospect).where(
+                Prospect.organization_id == current_user.organization_id,
+                Prospect.email_unsubscribed == True,  # noqa: E712
+            )
+        ).all()
+        if p.email
+    }
+
     # Fetch existing emails to deduplicate — scope to the list if one is specified,
     # otherwise check org-wide to avoid cross-campaign duplicates.
     if email_list_id:
@@ -978,6 +1009,7 @@ async def import_email_contacts(
             ).all()
             if p.email
         }
+    existing |= blocked_emails  # always skip blocked emails
 
     imported = 0
     skipped = 0
