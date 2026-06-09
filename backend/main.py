@@ -169,6 +169,7 @@ async def _run_scheduled_email(job_id: int):
                 campaign_name=campaign_name, total_sent=sent, total_skipped=skipped,
                 total_errors=len(errors), error_details=json.dumps(errors) if errors else None,
                 initiated_by=job.initiated_by, source_email_only=job.email_only,
+                source_email_list_id=job.email_list_id,
                 sent_details=json.dumps(sent_details_list) if sent_details_list else None,
             )
             s.add(log_entry)
