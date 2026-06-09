@@ -18,9 +18,16 @@ logger = logging.getLogger(__name__)
 # ── Request schemas ────────────────────────────────────────────────────────────
 
 class ScoutRequest(BaseModel):
-    city: str
-    query: Optional[str] = None
     limit: int = 17
+
+
+class LHConfigRequest(BaseModel):
+    lh_target_description: Optional[str] = None
+    lh_offer_description: Optional[str] = None
+    lh_cities: Optional[str] = None
+    lh_language: Optional[str] = "es"
+    lh_channel: Optional[str] = "whatsapp"
+    lh_active: bool = False
 
 
 class LeadPatchRequest(BaseModel):
@@ -62,6 +69,17 @@ def _lead_dict(lead: LeadHunt) -> dict:
     }
 
 
+def _config_dict(org: Organization) -> dict:
+    return {
+        "lh_target_description": org.lh_target_description,
+        "lh_offer_description": org.lh_offer_description,
+        "lh_cities": org.lh_cities,
+        "lh_language": org.lh_language or "es",
+        "lh_channel": org.lh_channel or "whatsapp",
+        "lh_active": org.lh_active,
+    }
+
+
 def _get_org(user: User, session: Session) -> Organization:
     if not user.organization_id:
         raise HTTPException(status_code=400, detail="Usuario sin organización")
@@ -82,6 +100,36 @@ def _get_lead(lead_id: int, user: User, session: Session) -> LeadHunt:
 
 # ── Endpoints ──────────────────────────────────────────────────────────────────
 
+@router.get("/config")
+def get_lh_config(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Get Lead Hunter config for the current org."""
+    org = _get_org(current_user, session)
+    return _config_dict(org)
+
+
+@router.post("/config")
+def save_lh_config(
+    data: LHConfigRequest,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    """Save Lead Hunter config for the current org."""
+    org = _get_org(current_user, session)
+    org.lh_target_description = (data.lh_target_description or "").strip() or None
+    org.lh_offer_description = (data.lh_offer_description or "").strip() or None
+    org.lh_cities = (data.lh_cities or "").strip() or None
+    org.lh_language = data.lh_language or "es"
+    org.lh_channel = data.lh_channel or "whatsapp"
+    org.lh_active = data.lh_active
+    session.add(org)
+    session.commit()
+    session.refresh(org)
+    return _config_dict(org)
+
+
 @router.post("/scout")
 def scout_leads(
     data: ScoutRequest,
@@ -89,23 +137,18 @@ def scout_leads(
     session: Session = Depends(get_session),
 ):
     """Search Google Maps via Outscraper and store matching businesses as LeadHunt records."""
-    city = data.city.strip()
-    if not city:
-        raise HTTPException(status_code=400, detail="Ciudad es obligatoria")
     if not (1 <= data.limit <= 50):
         raise HTTPException(status_code=400, detail="El límite debe estar entre 1 y 50")
 
     from services.lead_hunter_service import scout
     try:
         leads = scout(
-            city=city,
             limit=data.limit,
             org_id=current_user.organization_id,
             session=session,
-            query=data.query.strip() if data.query else None,
         )
     except ValueError as e:
-        raise HTTPException(status_code=503, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 

@@ -43,6 +43,13 @@ class Organization(SQLModel, table=True):
     marketing_enabled: bool = Field(default=False)
     openai_api_key: Optional[str] = None
     google_api_key: Optional[str] = None
+    # Lead Hunter config
+    lh_target_description: Optional[str] = None
+    lh_offer_description: Optional[str] = None
+    lh_cities: Optional[str] = None
+    lh_language: Optional[str] = Field(default="es")
+    lh_channel: Optional[str] = Field(default="whatsapp")
+    lh_active: bool = Field(default=False)
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")

@@ -136,6 +136,12 @@ def run_migrations():
                 "marketing_enabled": "BOOLEAN DEFAULT FALSE",
                 "openai_api_key": "TEXT",
                 "google_api_key": "TEXT",
+                "lh_target_description": "TEXT",
+                "lh_offer_description": "TEXT",
+                "lh_cities": "TEXT",
+                "lh_language": "VARCHAR(10) DEFAULT 'es'",
+                "lh_channel": "VARCHAR(50) DEFAULT 'whatsapp'",
+                "lh_active": "BOOLEAN DEFAULT FALSE",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():

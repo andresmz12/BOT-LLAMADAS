@@ -1,12 +1,11 @@
 import json
 import logging
 import os
-import random
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
-from anthropic import AsyncAnthropic
+from anthropic import Anthropic, AsyncAnthropic
 from outscraper import ApiClient
 from sqlmodel import Session, select
 
@@ -14,21 +13,16 @@ from models import LeadHunt, Organization
 
 logger = logging.getLogger(__name__)
 
-LATINO_QUERIES = [
-    "pupusería", "taquería", "frutería", "panadería latina",
-    "carnicería hispana", "tienda latina", "restaurante mexicano",
-    "restaurante salvadoreño", "restaurante colombiano", "restaurante cubano",
-    "barbería latina", "salón de belleza hispano", "uñas latina",
-    "lavandería hispana", "ferretería latina", "tortillería",
-    "dulcería mexicana", "joyería latina", "envíos de dinero",
-    "notaría latina"
-]
-
 CHAIN_BLACKLIST = [
     "MCDONALD", "SUBWAY", "WALMART", "BURGER KING", "WENDY", "TACO BELL",
     "DOMINO", "PIZZA HUT", "STARBUCKS", "CHIPOTLE", "POPEYES", "KFC",
     "DUNKIN", "SEVEN ELEVEN", "7-ELEVEN", "CIRCLE K", "CHEVRON", "SHELL",
     "EXXON", "BP"
+]
+
+FALLBACK_QUERIES = [
+    "taquería", "panadería latina", "barbería hispana", "tienda latina",
+    "envíos de dinero", "notaría latina", "carnicería hispana", "frutería",
 ]
 
 MIN_RATING = 3.0
@@ -53,26 +47,77 @@ def _fetch_query(client: ApiClient, query: str, city: str, fetch_limit: int) -> 
         return []
 
 
-def scout(city: str, limit: int = 17, org_id: int = None, session: Session = None, query: str = None) -> list:
+def _generate_queries_sync(org: Organization, api_key: str) -> list[str]:
+    """Call Claude (sync) to generate Google Maps search queries from org config."""
+    prompt = (
+        "Eres un experto en generación de leads locales en USA para negocios hispanos.\n\n"
+        f"La empresa busca este tipo de clientes: {org.lh_target_description}\n"
+        f"Lo que ofrece: {org.lh_offer_description or 'servicios profesionales'}\n"
+        f"Ciudades objetivo: {org.lh_cities or 'Miami FL'}\n\n"
+        "Genera exactamente 8 queries de búsqueda para Google Maps que encuentren "
+        "estos negocios. Las queries deben:\n"
+        "- Estar en español\n"
+        "- Ser términos específicos que use la comunidad latina (NO términos genéricos en inglés)\n"
+        "- Evitar cadenas y franquicias\n"
+        "- Cada query debe ser solo 2-3 palabras máximo\n\n"
+        'Responde SOLO con un JSON array de strings, sin explicación, sin markdown:\n'
+        '["query1", "query2", ...]'
+    )
+    try:
+        client = Anthropic(api_key=api_key)
+        resp = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=300,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = "".join(b.text for b in resp.content if getattr(b, "type", "") == "text").strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```(?:json)?\s*|\s*```$", "", text).strip()
+        result = json.loads(text)
+        if isinstance(result, list):
+            queries = [str(q).strip() for q in result if q][:10]
+            if queries:
+                logger.info(f"[LeadHunter] Claude generated {len(queries)} queries: {queries}")
+                return queries
+    except Exception as e:
+        logger.warning(f"[LeadHunter] Failed to generate queries with Claude: {e}")
+    return FALLBACK_QUERIES[:8]
+
+
+def scout(limit: int = 17, org_id: int = None, session: Session = None) -> list:
     """
-    Search Google Maps via Outscraper for small Latino businesses in city.
-    Filters: rating 3.0–4.6, reviews 5–80, has phone, not a chain.
-    Runs up to `limit` queries in parallel (ThreadPoolExecutor).
-    Deduplicates against existing LeadHunt records for the org.
-    Saves results to DB when session is provided.
+    Search Google Maps via Outscraper using the org's Lead Hunter config.
+    Requires lh_active=True and lh_target_description to be set.
+    Uses Claude to generate search queries dynamically.
+    Runs all (query, city) pairs in parallel via ThreadPoolExecutor.
     """
     api_key = os.getenv("OUTSCRAPER_API_KEY", "").strip()
     if not api_key:
         raise ValueError("OUTSCRAPER_API_KEY no configurada")
 
-    client = ApiClient(api_key=api_key)
-    if query:
-        queries = [query]
-        fetch_limit = max(limit * 3, 20)
-    else:
-        queries = random.sample(LATINO_QUERIES, min(len(LATINO_QUERIES), limit))
-        fetch_limit = max(limit * 2, 10)
+    # Load org config
+    org = session.get(Organization, org_id) if (session and org_id) else None
+    if not org:
+        raise ValueError("Organización no encontrada")
+    if not org.lh_active:
+        raise ValueError("Lead Hunter no está activado para esta organización. Actívalo en Configuración → Lead Hunter.")
+    if not (org.lh_target_description or "").strip():
+        raise ValueError("Configura primero tu perfil de Lead Hunter: ¿A quién le vendes?")
 
+    # Parse cities
+    cities_raw = (org.lh_cities or "").strip()
+    cities = [c.strip() for c in cities_raw.split(",") if c.strip()] if cities_raw else []
+    if not cities:
+        raise ValueError("Configura al menos una ciudad en tu perfil de Lead Hunter")
+    cities = cities[:3]  # Cap to 3 cities to avoid too many API calls
+
+    # Generate queries via Claude
+    anthropic_key = (org.anthropic_api_key or "").strip() or os.getenv("ANTHROPIC_API_KEY", "").strip()
+    if not anthropic_key:
+        raise ValueError("Anthropic API key no configurada — necesaria para generar queries inteligentes")
+    queries = _generate_queries_sync(org, anthropic_key)
+
+    # Dedup against existing leads
     existing_phones: set[str] = set()
     existing_names: set[str] = set()
     if session and org_id:
@@ -85,61 +130,66 @@ def scout(city: str, limit: int = 17, org_id: int = None, session: Session = Non
             if name:
                 existing_names.add(name.lower().strip())
 
-    # Run all queries in parallel — Outscraper calls are blocking HTTP
-    raw_results: dict[str, list] = {}
-    with ThreadPoolExecutor(max_workers=min(len(queries), 5)) as pool:
+    client = ApiClient(api_key=api_key)
+    fetch_limit = max(limit * 2, 10)
+
+    # Build (query, city) task list and run in parallel
+    task_pairs = [(q, city) for city in cities for q in queries]
+    raw_results: dict = {}
+    with ThreadPoolExecutor(max_workers=min(len(task_pairs), 8)) as pool:
         futures = {
-            pool.submit(_fetch_query, client, q, city, fetch_limit): q
-            for q in queries
+            pool.submit(_fetch_query, client, q, city, fetch_limit): (q, city)
+            for q, city in task_pairs
         }
         for future in as_completed(futures):
-            query = futures[future]
-            raw_results[query] = future.result()
+            key = futures[future]
+            raw_results[key] = future.result()
 
+    # Collect, filter, dedup
     collected: list[LeadHunt] = []
-
-    for query in queries:
-        if len(collected) >= limit:
-            break
-        for item in raw_results.get(query, []):
+    for city in cities:
+        for q in queries:
             if len(collected) >= limit:
                 break
+            for item in raw_results.get((q, city), []):
+                if len(collected) >= limit:
+                    break
 
-            rating = float(item.get("rating") or 0)
-            reviews = int(item.get("reviews_count") or item.get("reviews") or 0)
-            phone = (item.get("phone") or "").strip()
-            name = (item.get("name") or "").strip()
-            name_upper = name.upper()
+                rating = float(item.get("rating") or 0)
+                reviews = int(item.get("reviews_count") or item.get("reviews") or 0)
+                phone = (item.get("phone") or "").strip()
+                name = (item.get("name") or "").strip()
+                name_upper = name.upper()
 
-            if not (MIN_RATING <= rating <= MAX_RATING):
-                continue
-            if not (MIN_REVIEWS <= reviews <= MAX_REVIEWS):
-                continue
-            if not phone:
-                continue
-            if any(chain in name_upper for chain in CHAIN_BLACKLIST):
-                continue
-            if item.get("is_chain") or item.get("chain"):
-                continue
-            if phone in existing_phones:
-                continue
-            if name.lower().strip() in existing_names:
-                continue
+                if not (MIN_RATING <= rating <= MAX_RATING):
+                    continue
+                if not (MIN_REVIEWS <= reviews <= MAX_REVIEWS):
+                    continue
+                if not phone:
+                    continue
+                if any(chain in name_upper for chain in CHAIN_BLACKLIST):
+                    continue
+                if item.get("is_chain") or item.get("chain"):
+                    continue
+                if phone in existing_phones:
+                    continue
+                if name.lower().strip() in existing_names:
+                    continue
 
-            existing_phones.add(phone)
-            existing_names.add(name.lower().strip())
-            website = (item.get("site") or item.get("website") or "").strip()
-            collected.append(LeadHunt(
-                name=name,
-                phone=phone,
-                city=city,
-                category=query,
-                reviews_count=reviews,
-                rating=rating,
-                has_website=bool(website),
-                website_url=website or None,
-                org_id=org_id,
-            ))
+                existing_phones.add(phone)
+                existing_names.add(name.lower().strip())
+                website = (item.get("site") or item.get("website") or "").strip()
+                collected.append(LeadHunt(
+                    name=name,
+                    phone=phone,
+                    city=city,
+                    category=q,
+                    reviews_count=reviews,
+                    rating=rating,
+                    has_website=bool(website),
+                    website_url=website or None,
+                    org_id=org_id,
+                ))
 
     leads = collected[:limit]
 
@@ -151,18 +201,14 @@ def scout(city: str, limit: int = 17, org_id: int = None, session: Session = Non
             session.refresh(lead)
 
     logger.info(
-        f"[LeadHunter] scout org={org_id} city={city!r} "
+        f"[LeadHunter] scout org={org_id} cities={cities} "
         f"queries={len(queries)} collected={len(leads)}"
     )
     return leads
 
 
 def checker(leads: list, session=None) -> list:
-    """
-    Quality-check each lead in-place.
-    Passes when: has phone AND MIN_RATING ≤ rating ≤ MAX_RATING AND MIN_REVIEWS ≤ reviews ≤ MAX_REVIEWS.
-    Sets passed_checks (bool) and check_reason (str | None).
-    """
+    """Quality-check each lead in-place."""
     for lead in leads:
         if not lead.phone:
             lead.passed_checks = False
@@ -187,16 +233,26 @@ def checker(leads: list, session=None) -> list:
 
 async def craft_messages(lead: LeadHunt, org: Organization, session=None) -> LeadHunt:
     """
-    Use Claude Haiku to generate:
-    - pain_point: one-sentence problem this type of business typically faces
-    - message_es: WhatsApp outreach in Spanish (max 3 sentences)
-    - message_en: same in English
+    Use Claude Sonnet to generate pain_point + personalized outreach messages.
+    Uses org.lh_offer_description and org.lh_language to tailor the message.
     """
     api_key = (org.anthropic_api_key or "").strip() or os.getenv("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
         raise ValueError("Anthropic API key no configurada para esta organización")
 
-    website_info = f"Sí ({lead.website_url})" if lead.has_website and lead.website_url else ("Sí" if lead.has_website else "No")
+    offer = (org.lh_offer_description or "").strip() or "servicios profesionales"
+    lang = (org.lh_language or "es").lower()
+    website_info = (
+        f"Sí ({lead.website_url})" if lead.has_website and lead.website_url
+        else ("Sí" if lead.has_website else "No")
+    )
+
+    lang_map = {
+        "es":   "SOLO en español",
+        "en":   "ONLY in English",
+        "both": "en español Y también en inglés",
+    }
+    lang_instruction = lang_map.get(lang, "en español")
 
     prompt = (
         f"Analiza este negocio real y genera un mensaje de prospección de ventas.\n\n"
@@ -204,19 +260,23 @@ async def craft_messages(lead: LeadHunt, org: Organization, session=None) -> Lea
         f"Categoría: {lead.category}\n"
         f"Ciudad: {lead.city}\n"
         f"Rating: {lead.rating:.1f} estrellas ({lead.reviews_count} reseñas en Google)\n"
-        f"Tiene sitio web: {website_info}\n\n"
+        f"Tiene sitio web: {website_info}\n"
+        f"Lo que ofrecemos: {offer}\n\n"
         f"Tareas:\n"
         f"1. Identifica el pain point principal de este tipo de negocio en UNA oración corta.\n"
-        f"2. Escribe un mensaje de WhatsApp en español (máx. 3 oraciones, tono humano y directo, "
-        f"menciona el nombre del negocio y algo específico de su situación).\n"
-        f"3. Escribe el mismo mensaje en inglés (máx. 3 oraciones).\n\n"
-        f"Responde ÚNICAMENTE con este JSON (sin texto extra, sin markdown):\n"
+        f"2. Escribe un mensaje de WhatsApp {lang_instruction} (máx. 3 oraciones, tono humano y directo, "
+        f"menciona el nombre del negocio, algo específico de su situación y brevemente lo que ofrecemos).\n"
+        + (
+            f"3. Escribe el mismo mensaje en inglés (máx. 3 oraciones).\n\n"
+            if lang == "both" else "\n"
+        )
+        + f"Responde ÚNICAMENTE con este JSON (sin texto extra, sin markdown):\n"
         f'{{"pain_point": "...", "message_es": "...", "message_en": "..."}}'
     )
 
     client = AsyncAnthropic(api_key=api_key)
     resp = await client.messages.create(
-        model="claude-haiku-4-5-20251001",
+        model="claude-sonnet-4-6",
         max_tokens=600,
         messages=[{"role": "user", "content": prompt}],
     )
@@ -243,11 +303,7 @@ async def craft_messages(lead: LeadHunt, org: Organization, session=None) -> Lea
 
 
 async def dispatch(lead: LeadHunt, org: Organization, channel: str, session=None) -> LeadHunt:
-    """
-    Send the outreach message via the specified channel.
-    channel: "whatsapp" only (email requires an email address not stored in this model).
-    Updates lead.sent, lead.sent_at, lead.channel.
-    """
+    """Send the outreach message via the specified channel."""
     message = (lead.message_es or lead.message_en or "").strip()
     if not message:
         raise ValueError("No hay mensaje generado. Ejecuta 'Generar mensaje' antes de enviar.")

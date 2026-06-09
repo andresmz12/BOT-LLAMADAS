@@ -167,6 +167,8 @@ export const sendLeadMessage = (id, channel) => api.post(`/lead-hunter/leads/${i
 export const updateLeadHunt = (id, data) => api.patch(`/lead-hunter/leads/${id}`, data).then(r => r.data)
 export const deleteLeadHunt = (id) => api.delete(`/lead-hunter/leads/${id}`).then(r => r.data)
 export const deleteAllLeadHunts = () => api.delete('/lead-hunter/leads').then(r => r.data)
+export const getLeadHunterConfig = () => api.get('/lead-hunter/config').then(r => r.data)
+export const saveLeadHunterConfig = (data) => api.post('/lead-hunter/config', data).then(r => r.data)
 
 export const getEmailStats = () => api.get('/stats/email').then(r => r.data)
 export const getEmailEvents = (eventType) =>

@@ -9,7 +9,9 @@ import {
   scoutLeads, getLeadHunterLeads, checkLead, checkAllLeads,
   craftLeadMessage, craftAllLeads, sendLeadMessage,
   updateLeadHunt, deleteLeadHunt, deleteAllLeadHunts,
+  getLeadHunterConfig,
 } from '../api/client'
+import { Link } from 'react-router-dom'
 import { exportToCsv } from '../utils/exportCsv'
 
 const FILTER_TABS = [
@@ -55,8 +57,9 @@ export default function LeadHunter() {
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(false)
   const [scouting, setScouting] = useState(false)
-  const [scoutForm, setScoutForm] = useState({ city: '', query: '', limit: 17 })
+  const [scoutForm, setScoutForm] = useState({ limit: 17 })
   const [scoutMsg, setScoutMsg] = useState(null)
+  const [lhConfig, setLhConfig] = useState(null)
   const [expanded, setExpanded] = useState(null)
   const [actingId, setActingId] = useState(null)   // id of lead being processed
   const [bulkMsg, setBulkMsg] = useState(null)
@@ -73,14 +76,13 @@ export default function LeadHunter() {
   }
 
   useEffect(() => { loadLeads(filter) }, [filter])
+  useEffect(() => { getLeadHunterConfig().then(setLhConfig).catch(() => {}) }, [])
 
   const handleScout = async () => {
-    const { city, limit } = scoutForm
-    if (!city.trim()) return
+    const { limit } = scoutForm
     setScouting(true); setScoutMsg(null)
     try {
-      const { query } = scoutForm
-      const r = await scoutLeads({ city: city.trim(), query: query.trim() || undefined, limit: Number(limit) || 17 })
+      const r = await scoutLeads({ limit: Number(limit) || 17 })
       setScoutMsg({ ok: true, text: `${r.found} leads encontrados y guardados` })
       setFilter('all')
       loadLeads('all')
@@ -218,49 +220,47 @@ export default function LeadHunter() {
         </div>
       </div>
 
+      {/* Config banner */}
+      {lhConfig && (
+        <div className={`rounded-xl border p-4 flex items-start justify-between gap-3 ${lhConfig.lh_active ? 'bg-blue-500/5 border-blue-500/20' : 'bg-amber-500/5 border-amber-500/20'}`}>
+          <div className="text-xs space-y-0.5 min-w-0">
+            {lhConfig.lh_active ? (
+              <>
+                <p className="text-slate-300 font-medium">
+                  Buscando: <span className="text-blue-400">{lhConfig.lh_target_description || '—'}</span>
+                </p>
+                <p className="text-slate-500">
+                  Ciudades: {lhConfig.lh_cities || '—'} · Idioma: {lhConfig.lh_language === 'both' ? 'ES + EN' : (lhConfig.lh_language || 'es').toUpperCase()}
+                </p>
+              </>
+            ) : (
+              <p className="text-amber-400 font-medium">Lead Hunter inactivo — actívalo en Configuración para poder buscar</p>
+            )}
+          </div>
+          <Link to="/lead-hunter/config"
+            className="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-z-border text-slate-400 hover:bg-white/5 transition-colors whitespace-nowrap">
+            ⚙ Configurar
+          </Link>
+        </div>
+      )}
+
       {/* Scout form */}
       <div className="bg-z-card rounded-xl border border-z-border p-5 space-y-4">
         <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
           <MagnifyingGlassIcon className="w-4 h-4 text-blue-400" /> Buscar negocios
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div>
-            <label className="text-xs text-slate-500 mb-1 block">Ciudad / Estado</label>
-            <input
-              type="text" value={scoutForm.city} placeholder="Miami, FL"
-              onChange={e => setScoutForm(p => ({ ...p, city: e.target.value }))}
-              onKeyDown={e => e.key === 'Enter' && handleScout()}
-              className="z-input w-full text-sm"
-            />
-          </div>
-          <div>
-            <label className="text-xs text-slate-500 mb-1 block">Límite de resultados</label>
-            <input
-              type="number" min={1} max={50} value={scoutForm.limit}
-              onChange={e => setScoutForm(p => ({ ...p, limit: e.target.value }))}
-              className="z-input w-full text-sm"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="text-xs text-slate-500 mb-1 block">
-            ¿Qué tipo de negocio? <span className="text-slate-700">(opcional)</span>
-          </label>
+        <div className="max-w-xs">
+          <label className="text-xs text-slate-500 mb-1 block">Límite de resultados</label>
           <input
-            type="text" value={scoutForm.query}
-            placeholder="ej: dentista, taller de carros, abogado, restaurante chino..."
-            onChange={e => setScoutForm(p => ({ ...p, query: e.target.value }))}
-            onKeyDown={e => e.key === 'Enter' && handleScout()}
+            type="number" min={1} max={50} value={scoutForm.limit}
+            onChange={e => setScoutForm(p => ({ ...p, limit: e.target.value }))}
             className="z-input w-full text-sm"
           />
-          <p className="text-xs text-slate-700 mt-1">
-            Si lo dejas vacío, buscará automáticamente negocios latinos (taquerías, barberías, etc.)
-          </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <button
             onClick={handleScout}
-            disabled={scouting || !scoutForm.city.trim()}
+            disabled={scouting || !lhConfig?.lh_active}
             className="z-btn-primary flex items-center gap-2 disabled:opacity-50"
           >
             {scouting
@@ -268,7 +268,10 @@ export default function LeadHunter() {
               : <><MagnifyingGlassIcon className="w-4 h-4" /> Buscar leads</>
             }
           </button>
-          {scouting && <p className="text-xs text-slate-500 animate-pulse">Buscando negocios en Google Maps, puede tomar unos segundos...</p>}
+          {!lhConfig?.lh_active && !scouting && (
+            <p className="text-xs text-amber-400">Activa Lead Hunter en <Link to="/lead-hunter/config" className="underline">Configuración</Link> primero</p>
+          )}
+          {scouting && <p className="text-xs text-slate-500 animate-pulse">Buscando negocios en Google Maps con IA, puede tomar 15–30 segundos...</p>}
           {scoutMsg && (
             <p className={`text-xs font-medium ${scoutMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
               {scoutMsg.ok ? '✓' : '✗'} {scoutMsg.text}
@@ -276,7 +279,7 @@ export default function LeadHunter() {
           )}
         </div>
         <p className="text-xs text-slate-600">
-          Busca automáticamente negocios latinos (taquerías, panaderías, barberías...) con rating 3.0–4.6 ⭐ y entre 5–80 reseñas — el sweet spot donde tu propuesta tiene más impacto.
+          La IA genera automáticamente las búsquedas según tu perfil de Lead Hunter. Filtra negocios con rating 3.0–4.6 ⭐ y 5–80 reseñas.
         </p>
       </div>
 

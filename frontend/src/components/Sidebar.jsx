@@ -113,23 +113,39 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
 
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
         {navItems.map(({ to, label, Icon }) => (
-          <NavLink
-            key={to + label}
-            to={to}
-            end={to === '/dashboard'}
-            title={collapsed ? label : undefined}
-            onClick={onClose}
-            className={({ isActive }) =>
-              `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                isActive
-                  ? 'bg-z-blue/15 text-z-blue-light'
-                  : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'
-              }`
-            }
-          >
-            <Icon className="w-5 h-5 flex-shrink-0" />
-            {!collapsed && label}
-          </NavLink>
+          <div key={to + label}>
+            <NavLink
+              to={to}
+              end={to === '/dashboard'}
+              title={collapsed ? label : undefined}
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  isActive
+                    ? 'bg-z-blue/15 text-z-blue-light'
+                    : 'text-slate-400 hover:text-slate-100 hover:bg-white/5'
+                }`
+              }
+            >
+              <Icon className="w-5 h-5 flex-shrink-0" />
+              {!collapsed && label}
+            </NavLink>
+            {to === '/lead-hunter' && !collapsed && (role === 'admin' || role === 'superadmin') && (
+              <NavLink
+                to="/lead-hunter/config"
+                onClick={onClose}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 pl-11 pr-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    isActive
+                      ? 'text-z-blue-light'
+                      : 'text-slate-600 hover:text-slate-300 hover:bg-white/5'
+                  }`
+                }
+              >
+                <Cog6ToothIcon className="w-3.5 h-3.5 flex-shrink-0" /> Configuración
+              </NavLink>
+            )}
+          </div>
         ))}
       </nav>
 
