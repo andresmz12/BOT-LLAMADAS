@@ -147,6 +147,13 @@ def run_migrations():
         with engine.begin() as conn:
             conn.execute(text("UPDATE organization SET plan = 'pro' WHERE plan = 'basic'"))
 
+        if "scheduledemailsend" in tables:
+            sched_cols = {c["name"] for c in insp.get_columns("scheduledemailsend")}
+            with engine.begin() as conn:
+                if "email_list_id" not in sched_cols:
+                    conn.execute(text("ALTER TABLE scheduledemailsend ADD COLUMN email_list_id INTEGER"))
+                    log.info("Migration: added scheduledemailsend.email_list_id")
+
         if "emailsendlog" in tables:
             log_cols = {c["name"] for c in insp.get_columns("emailsendlog")}
             with engine.begin() as conn:

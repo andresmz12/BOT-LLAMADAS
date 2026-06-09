@@ -465,6 +465,7 @@ async def bulk_send_email(
             job = ScheduledEmailSend(
                 organization_id=current_user.organization_id,
                 campaign_id=data.campaign_id,
+                email_list_id=data.email_list_id,
                 template_key=data.template_key,
                 email_only=data.email_only,
                 scheduled_at=scheduled_dt,

@@ -237,6 +237,7 @@ class ScheduledEmailSend(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     organization_id: int = Field(index=True)
     campaign_id: Optional[int] = None
+    email_list_id: Optional[int] = None
     template_key: str = Field(default="general")
     email_only: bool = Field(default=False)
     scheduled_at: datetime = Field(index=True)

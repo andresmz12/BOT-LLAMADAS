@@ -90,11 +90,21 @@ async def _run_scheduled_email(job_id: int):
                 _Prospect.email != "",
                 _Prospect.email_unsubscribed == False,  # noqa: E712
             )
-            if job.email_only:
+            if job.email_list_id:
+                query = query.where(_Prospect.email_list_id == job.email_list_id)
+            elif job.email_only:
                 query = query.where(_Prospect.campaign_id == None)  # noqa: E711
             elif job.campaign_id:
                 query = query.where(_Prospect.campaign_id == job.campaign_id)
-            prospects = s.exec(query).all()
+            all_prospects = s.exec(query).all()
+            # Deduplicate by email (same as immediate send)
+            seen_emails: set[str] = set()
+            prospects = []
+            for p in all_prospects:
+                key = (p.email or "").strip().lower()
+                if key and key not in seen_emails:
+                    seen_emails.add(key)
+                    prospects.append(p)
 
             templates = {}
             if org.email_templates:
