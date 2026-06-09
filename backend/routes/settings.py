@@ -52,6 +52,7 @@ def _unsub_url(prospect_id: int, org_id: int, base: str = "") -> str:
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 _bulk_jobs: dict = {}
+_last_send: dict = {}  # org_id -> timestamp of last bulk send (idempotency guard)
 
 SECRET_FIELDS = {"retell_api_key", "anthropic_api_key", "openai_api_key", "google_api_key"}
 CREDENTIAL_FIELDS = {"retell_api_key", "retell_phone_number", "anthropic_api_key", "openai_api_key", "google_api_key"}
@@ -441,6 +442,15 @@ async def bulk_send_email(
     api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "")
     if not api_key:
         raise HTTPException(status_code=400, detail="SendGrid no configurado. Pide al administrador que configure la API key.")
+
+    # Idempotency guard: reject duplicate requests within 15 seconds for same org+template+target
+    import time as _time
+    _send_key = (current_user.organization_id, data.template_key, data.campaign_id, data.email_list_id, data.email_only)
+    _now = _time.monotonic()
+    if _send_key in _last_send and _now - _last_send[_send_key] < 15:
+        raise HTTPException(status_code=429, detail="Envío duplicado detectado. Espera unos segundos antes de intentar de nuevo.")
+    if not data.scheduled_at:
+        _last_send[_send_key] = _now
 
     # If scheduled for the future, store the job and return early
     if data.scheduled_at:

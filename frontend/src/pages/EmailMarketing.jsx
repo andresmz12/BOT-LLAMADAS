@@ -931,7 +931,7 @@ export default function EmailMarketing() {
                 )}
               </div>
               <div className="px-4 py-3 border-t border-z-border flex gap-2">
-                <button onClick={sendBulk} disabled={(bulkBatchSize ? recipientStats?.will_receive_this_batch : recipientStats?.will_receive) === 0 || (scheduleMode && !scheduleAt)}
+                <button onClick={sendBulk} disabled={bulkLoading || (bulkBatchSize ? recipientStats?.will_receive_this_batch : recipientStats?.will_receive) === 0 || (scheduleMode && !scheduleAt)}
                   className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
                   {scheduleMode && scheduleAt
                     ? `Programar para ${new Date(scheduleAt).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })}`
