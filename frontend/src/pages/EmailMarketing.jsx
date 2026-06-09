@@ -154,6 +154,7 @@ export default function EmailMarketing() {
   const [showNewListInput, setShowNewListInput] = useState(false)
   const [creatingList, setCreatingList] = useState(false)
   const [listContacts, setListContacts] = useState({ id: null, contacts: [], loading: false })
+  const [contactSearch, setContactSearch] = useState('')
   const [addContactForm, setAddContactForm] = useState({ listId: null, name: '', email: '', company: '', saving: false, error: '' })
   const listImportRefs = useRef({})
 
@@ -713,6 +714,16 @@ export default function EmailMarketing() {
                       ) : listContacts.contacts.length === 0 ? (
                         <p className="text-center text-slate-600 text-sm py-6">Sin contactos. Importa un CSV para comenzar.</p>
                       ) : (
+                        <div>
+                          <div className="px-3 py-2 border-b border-z-border">
+                            <input
+                              type="text"
+                              placeholder="Buscar por nombre, email o empresa..."
+                              value={contactSearch}
+                              onChange={e => setContactSearch(e.target.value)}
+                              className="w-full bg-black/30 border border-z-border rounded px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-z-blue"
+                            />
+                          </div>
                         <div className="overflow-x-auto max-h-72 overflow-y-auto">
                           <table className="w-full text-xs min-w-[480px]">
                             <thead className="bg-black/20 sticky top-0">
@@ -723,7 +734,13 @@ export default function EmailMarketing() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-z-border">
-                              {listContacts.contacts.map(c => (
+                              {listContacts.contacts.filter(c => {
+                                if (!contactSearch.trim()) return true
+                                const q = contactSearch.toLowerCase()
+                                return (c.name || '').toLowerCase().includes(q) ||
+                                  (c.email || '').toLowerCase().includes(q) ||
+                                  (c.company || '').toLowerCase().includes(q)
+                              }).map(c => (
                                 <tr key={c.id} className="hover:bg-white/[0.02]">
                                   <td className="px-3 py-2 text-slate-200 font-medium max-w-[120px] truncate">{c.name || '—'}</td>
                                   <td className="px-3 py-2 font-mono text-slate-300 max-w-[180px] truncate">
@@ -756,6 +773,7 @@ export default function EmailMarketing() {
                               ))}
                             </tbody>
                           </table>
+                        </div>
                         </div>
                       )}
                     </div>
