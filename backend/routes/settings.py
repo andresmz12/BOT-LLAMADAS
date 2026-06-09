@@ -972,15 +972,26 @@ async def import_email_contacts(
     # Parse rows from CSV or Excel
     rows = []
     if filename.endswith(".xlsx") or filename.endswith(".xls"):
-        import openpyxl
-        wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
-        ws = wb.active
-        headers = None
-        for excel_row in ws.iter_rows(values_only=True):
-            if headers is None:
-                headers = [str(c).strip().lower() if c is not None else "" for c in excel_row]
-            else:
-                rows.append({headers[j]: (str(v).strip() if v is not None else "") for j, v in enumerate(excel_row) if j < len(headers)})
+        try:
+            import openpyxl
+        except ImportError:
+            raise HTTPException(status_code=400, detail="El servidor no soporta Excel (.xlsx). Sube el archivo como CSV.")
+        try:
+            wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
+            ws = wb.active
+            headers = None
+            for excel_row in ws.iter_rows(values_only=True):
+                if headers is None:
+                    headers = [str(c).strip().lower() if c is not None else "" for c in excel_row]
+                else:
+                    row_dict = {}
+                    for j, v in enumerate(excel_row):
+                        if j < len(headers):
+                            row_dict[headers[j]] = str(v).strip() if v is not None else ""
+                    if any(val for val in row_dict.values()):
+                        rows.append(row_dict)
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=f"Error leyendo Excel: {exc}")
     else:
         try:
             text = contents.decode("utf-8-sig")
