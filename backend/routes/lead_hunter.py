@@ -231,6 +231,8 @@ async def send_lead_message(
 ):
     """Dispatch the outreach message via the specified channel."""
     lead = _get_lead(lead_id, current_user, session)
+    if lead.sent:
+        raise HTTPException(status_code=400, detail="Este lead ya fue enviado anteriormente")
     org = _get_org(current_user, session)
     from services.lead_hunter_service import dispatch
     try:
@@ -277,7 +279,7 @@ def delete_all_leads(
     session: Session = Depends(get_session),
 ):
     """Delete all Lead Hunter records for the org."""
-    result = session.exec(
+    result = session.execute(
         sa_delete(LeadHunt).where(LeadHunt.org_id == current_user.organization_id)
     )
     session.commit()
