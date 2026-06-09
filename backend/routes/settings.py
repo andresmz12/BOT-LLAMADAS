@@ -449,8 +449,7 @@ async def bulk_send_email(
     _now = _time.monotonic()
     if _send_key in _last_send and _now - _last_send[_send_key] < 15:
         raise HTTPException(status_code=429, detail="Envío duplicado detectado. Espera unos segundos antes de intentar de nuevo.")
-    if not data.scheduled_at:
-        _last_send[_send_key] = _now
+    _last_send[_send_key] = _now
 
     # If scheduled for the future, store the job and return early
     if data.scheduled_at:
