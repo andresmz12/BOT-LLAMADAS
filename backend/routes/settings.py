@@ -969,36 +969,60 @@ async def import_email_contacts(
                     return (row[rk] or "").strip()
         return ""
 
-    # Parse rows from CSV or Excel
+    def _parse_xlsx(data: bytes) -> list:
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(data), read_only=True, data_only=True)
+        ws = wb.active
+        result = []
+        headers = None
+        for excel_row in ws.iter_rows(values_only=True):
+            if headers is None:
+                headers = [str(c).strip().lower() if c is not None else "" for c in excel_row]
+            else:
+                row_dict = {
+                    headers[j]: (str(v).strip() if v is not None else "")
+                    for j, v in enumerate(excel_row) if j < len(headers)
+                }
+                if any(val for val in row_dict.values()):
+                    result.append(row_dict)
+        return result
+
+    def _parse_csv(data: bytes) -> list:
+        for enc in ("utf-8-sig", "utf-8", "latin-1"):
+            try:
+                text = data.decode(enc)
+                reader_obj = csv.DictReader(io.StringIO(text))
+                rows_out = [{k.strip().lower(): (v or "").strip() for k, v in r.items()} for r in reader_obj]
+                if rows_out:
+                    return rows_out
+            except Exception:
+                continue
+        return []
+
+    # Parse rows from CSV or Excel — try by extension first, then fallback
     rows = []
-    if filename.endswith(".xlsx") or filename.endswith(".xls"):
+    is_excel = filename.endswith(".xlsx") or filename.endswith(".xls")
+    try:
+        import openpyxl as _opxl_check  # noqa: check availability
+        openpyxl_available = True
+    except ImportError:
+        openpyxl_available = False
+
+    if is_excel and openpyxl_available:
         try:
-            import openpyxl
-        except ImportError:
-            raise HTTPException(status_code=400, detail="El servidor no soporta Excel (.xlsx). Sube el archivo como CSV.")
-        try:
-            wb = openpyxl.load_workbook(io.BytesIO(contents), read_only=True, data_only=True)
-            ws = wb.active
-            headers = None
-            for excel_row in ws.iter_rows(values_only=True):
-                if headers is None:
-                    headers = [str(c).strip().lower() if c is not None else "" for c in excel_row]
-                else:
-                    row_dict = {}
-                    for j, v in enumerate(excel_row):
-                        if j < len(headers):
-                            row_dict[headers[j]] = str(v).strip() if v is not None else ""
-                    if any(val for val in row_dict.values()):
-                        rows.append(row_dict)
+            rows = _parse_xlsx(contents)
         except Exception as exc:
             raise HTTPException(status_code=400, detail=f"Error leyendo Excel: {exc}")
+    elif is_excel and not openpyxl_available:
+        raise HTTPException(status_code=400, detail="El servidor no soporta .xlsx. Sube el archivo como CSV.")
     else:
-        try:
-            text = contents.decode("utf-8-sig")
-        except UnicodeDecodeError:
-            text = contents.decode("latin-1")
-        reader_obj = csv.DictReader(io.StringIO(text))
-        rows = [{k.strip().lower(): v for k, v in r.items()} for r in reader_obj]
+        rows = _parse_csv(contents)
+        # If CSV parsing yielded nothing, try openpyxl as fallback (file may be xlsx renamed)
+        if not rows and openpyxl_available:
+            try:
+                rows = _parse_xlsx(contents)
+            except Exception:
+                pass
 
     # Emails blocked org-wide (unsubscribed) — never import these regardless of list
     blocked_emails: set[str] = {
@@ -1037,7 +1061,7 @@ async def import_email_contacts(
     errors = []
 
     for i, row in enumerate(rows, start=2):
-        raw_email_field = _find(row, "email", "correo", "e-mail", "mail")
+        raw_email_field = _find(row, "email", "correo", "e-mail", "mail", "email address", "correo electronico", "correo electrónico", "e mail")
         # Split by semicolons to handle multiple emails per cell
         email_candidates = [e.strip() for e in raw_email_field.replace(",", ";").split(";") if e.strip()]
 
