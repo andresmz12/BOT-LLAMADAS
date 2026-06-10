@@ -1,4 +1,27 @@
 import { useState, useEffect, useRef } from 'react'
+
+// All times are stored/sent as UTC. The system operates at UTC-5.
+const UTC_OFFSET = -5
+const toUTC5Display = (isoUtc) => {
+  if (!isoUtc) return ''
+  const d = new Date(isoUtc)
+  d.setHours(d.getHours() + UTC_OFFSET)
+  return d.toISOString().slice(0, 16)  // "YYYY-MM-DDTHH:MM" in UTC-5
+}
+const fromUTC5ToISO = (localStr) => {
+  // localStr is "YYYY-MM-DDTHH:MM" interpreted as UTC-5, convert to UTC ISO
+  if (!localStr) return ''
+  const d = new Date(localStr + ':00Z')
+  d.setHours(d.getHours() - UTC_OFFSET)
+  return d.toISOString()
+}
+const displayUTC5 = (isoUtc) => {
+  if (!isoUtc) return ''
+  const d = new Date(isoUtc)
+  d.setHours(d.getHours() + UTC_OFFSET)
+  return d.toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })
+}
+
 import {
   CheckCircleIcon, EnvelopeIcon, PaperClipIcon, ChevronDownIcon,
   PencilSquareIcon, SparklesIcon, PlusIcon, TrashIcon, EyeIcon,
@@ -437,7 +460,7 @@ export default function EmailMarketing() {
       const payload = {
         ...target,
         template_key: bulkTmpl,
-        ...(scheduleMode && scheduleAt ? { scheduled_at: new Date(scheduleAt).toISOString() } : {}),
+        ...(scheduleMode && scheduleAt ? { scheduled_at: fromUTC5ToISO(scheduleAt) } : {}),
       }
       const r = await bulkSendEmail(payload)
       if (r.scheduled) {
@@ -935,7 +958,7 @@ export default function EmailMarketing() {
                 <button onClick={sendBulk} disabled={bulkLoading || (bulkBatchSize ? recipientStats?.will_receive_this_batch : recipientStats?.will_receive) === 0 || (scheduleMode && !scheduleAt)}
                   className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
                   {scheduleMode && scheduleAt
-                    ? `Programar para ${new Date(scheduleAt).toLocaleString('es', { dateStyle: 'short', timeStyle: 'short' })}`
+                    ? `Programar para ${displayUTC5(fromUTC5ToISO(scheduleAt))}`
                     : `Confirmar envío${recipientStats ? ` (${bulkBatchSize ? recipientStats.will_receive_this_batch : recipientStats.will_receive})` : ''}`}
                 </button>
                 <button onClick={() => { setConfirmStep(false); setScheduleMode(false); setScheduleAt('') }}
@@ -1048,7 +1071,7 @@ export default function EmailMarketing() {
                   </p>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {bulkResult.error ? bulkResult.error
-                      : bulkResult.scheduled ? `Se enviará el ${new Date(bulkResult.scheduled_at).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })}`
+                      : bulkResult.scheduled ? `Se enviará el ${displayUTC5(bulkResult.scheduled_at)} (UTC-5)`
                       : bulkResult.skipped ? `${bulkResult.skipped} no pudieron enviarse` : 'Todos los emails fueron entregados'}
                   </p>
                 </div>
@@ -1393,12 +1416,12 @@ export default function EmailMarketing() {
                     <span className="ml-2 text-xs text-slate-500 font-normal">· plantilla: {j.template_key}</span>
                   </p>
                   <p className="text-xs text-blue-300 mt-0.5">
-                    {new Date(j.scheduled_at).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })}
+                    {displayUTC5(j.scheduled_at)} <span className="text-slate-600">(UTC-5)</span>
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
-                    onClick={() => setRescheduleModal({ id: j.id, scheduled_at: j.scheduled_at.slice(0, 16) })}
+                    onClick={() => setRescheduleModal({ id: j.id, scheduled_at: toUTC5Display(j.scheduled_at) })}
                     className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:bg-blue-500/10 px-3 py-1 rounded-lg transition-colors"
                   >
                     Reprogramar
@@ -1435,7 +1458,7 @@ export default function EmailMarketing() {
               <button
                 onClick={async () => {
                   try {
-                    await rescheduleEmail(rescheduleModal.id, new Date(rescheduleModal.scheduled_at).toISOString())
+                    await rescheduleEmail(rescheduleModal.id, fromUTC5ToISO(rescheduleModal.scheduled_at))
                     setRescheduleModal(null)
                     loadScheduled()
                   } catch (e) { alert(e.response?.data?.detail || 'Error al reprogramar') }
