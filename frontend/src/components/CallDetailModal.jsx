@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { XMarkIcon, ChevronDownIcon, PlayIcon } from '@heroicons/react/24/outline'
 import StatusBadge from './StatusBadge'
 import { fmtDate } from '../utils/date'
@@ -7,6 +7,13 @@ const SENTIMENT_EMOJI = { positive: '😊', neutral: '😐', negative: '😞' }
 
 export default function CallDetailModal({ call, onClose }) {
   const [transcriptOpen, setTranscriptOpen] = useState(false)
+
+  useEffect(() => {
+    const handleKey = (e) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [onClose])
+
   if (!call) return null
 
   let clientSaid = [], agentSaid = [], servicesMentioned = []

@@ -6,6 +6,7 @@ import { getCalls, getCallDetail, getCampaigns, deleteCalls, callProspect } from
 import { fmtDate } from '../utils/date'
 
 const OUTCOMES = ['', 'interested', 'not_interested', 'callback_requested', 'appointment_scheduled', 'voicemail', 'no_answer', 'wrong_number']
+const RECALLABLE_OUTCOMES = ['', null, 'no_answer', 'voicemail', 'callback_requested']
 const SENTIMENT_EMOJI = { positive: '😊', neutral: '😐', negative: '😞' }
 
 export default function Calls() {
@@ -40,8 +41,15 @@ export default function Calls() {
   }
 
   const openDetail = async (call) => {
-    try { const detail = await getCallDetail(call.id); setSelectedCall(detail) }
-    catch { setSelectedCall(call) }
+    const targetId = call.id
+    setSelectedCall(call) // show immediately with list data while fetching
+    try {
+      const detail = await getCallDetail(targetId)
+      // Only update if user hasn't opened a different call in the meantime
+      setSelectedCall(prev => prev?.id === targetId ? detail : prev)
+    } catch {
+      // keep the list data already shown
+    }
   }
 
   const handleDeleteSelected = async () => {
@@ -63,7 +71,7 @@ export default function Calls() {
 
   // Cola secuencial
   const startQueue = () => {
-    const items = calls.filter(c => c.prospect_id && !c.is_demo)
+    const items = calls.filter(c => c.prospect_id && !c.is_demo && RECALLABLE_OUTCOMES.includes(c.outcome))
     if (!items.length) return
     setQueue({ items, index: 0, calling: false })
   }
@@ -111,11 +119,11 @@ export default function Calls() {
         <h1 className="text-2xl font-bold text-slate-100">Llamadas</h1>
         {calls.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {calls.some(c => c.prospect_id && !c.is_demo) && (
+            {calls.some(c => c.prospect_id && !c.is_demo && RECALLABLE_OUTCOMES.includes(c.outcome)) && (
               <button onClick={startQueue}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-green-400 border border-green-500/30 hover:bg-green-500/10 rounded-lg transition-colors">
                 <PhoneArrowUpRightIcon className="w-3.5 h-3.5" />
-                Llamar en orden ({calls.filter(c => c.prospect_id && !c.is_demo).length})
+                Llamar en orden ({calls.filter(c => c.prospect_id && !c.is_demo && RECALLABLE_OUTCOMES.includes(c.outcome)).length})
               </button>
             )}
             {selected.size > 0 && (

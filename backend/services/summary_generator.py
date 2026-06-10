@@ -90,6 +90,12 @@ async def analyze_transcript(transcript: str, api_key: str = "", duration_second
             messages=[{"role": "user", "content": content}],
         )
         text = message.content[0].text.strip()
+        # Strip markdown code fences if Claude wraps the JSON
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+            text = text.strip()
         return json.loads(text)
     except Exception as e:
         logger.error(f"Error analyzing transcript: {e}")
