@@ -83,7 +83,11 @@ export default function Agents() {
             <p className="text-xs text-slate-500 mb-4">
               <span className="bg-slate-800 px-2 py-0.5 rounded-full">{agent.language}</span>
               {' • '}
-              <span className="bg-slate-800 px-2 py-0.5 rounded-full">{(agent.voice_id || 'retell-Andrea').replace(/^retell-/, '')}</span>
+              <span className="bg-slate-800 px-2 py-0.5 rounded-full">{
+                agent.voice_id === 'custom_voice_a34b86b65a31f267214f0c19d6'
+                  ? '🎙 Andrés M'
+                  : (agent.voice_id || 'retell-Andrea').replace(/^retell-/, '')
+              }</span>
               {' • '}max {agent.max_call_duration}s
             </p>
 

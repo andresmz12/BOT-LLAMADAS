@@ -11,6 +11,7 @@ const VOICES = [
   { value: 'retell-Chloe',     label: 'Chloe (Americana · Joven)' },
   { value: 'retell-Grace',     label: 'Grace (Americana · Adulta)' },
   { value: 'retell-Rita',      label: 'Rita (Americana · Joven)' },
+  { value: 'custom_voice_a34b86b65a31f267214f0c19d6', label: '🎙 Andrés M (Voz personalizada)' },
 ]
 
 const TEMPERATURES = [
