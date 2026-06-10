@@ -142,6 +142,9 @@ def run_migrations():
                 "lh_language": "VARCHAR(10) DEFAULT 'es'",
                 "lh_channel": "VARCHAR(50) DEFAULT 'whatsapp'",
                 "lh_active": "BOOLEAN DEFAULT FALSE",
+                "minutes_limit": "INTEGER",
+                "minutes_used_month": "INTEGER DEFAULT 0",
+                "minutes_reset_at": "TIMESTAMP",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():

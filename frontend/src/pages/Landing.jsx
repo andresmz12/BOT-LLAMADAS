@@ -62,7 +62,7 @@ export default function Landing() {
           <div className="hidden md:flex items-center gap-8 text-sm text-slate-400">
             <button onClick={() => scrollTo('features')} className="hover:text-white transition-colors">Características</button>
             <button onClick={() => scrollTo('how')} className="hover:text-white transition-colors">Cómo funciona</button>
-            <button onClick={() => scrollTo('pricing')} className="hover:text-white transition-colors">Precios</button>
+            <button onClick={() => scrollTo('planes')} className="hover:text-white transition-colors">Planes</button>
           </div>
           <div className="hidden md:flex items-center gap-3">
             <Link to="/login" className="text-sm text-slate-300 hover:text-white transition-colors px-3 py-2">
@@ -84,7 +84,7 @@ export default function Landing() {
           <div className="md:hidden bg-[#0F1117] border-b border-white/10 px-4 py-4 space-y-3">
             <button onClick={() => scrollTo('features')} className="block w-full text-left text-sm text-slate-300 py-2">Características</button>
             <button onClick={() => scrollTo('how')} className="block w-full text-left text-sm text-slate-300 py-2">Cómo funciona</button>
-            <button onClick={() => scrollTo('pricing')} className="block w-full text-left text-sm text-slate-300 py-2">Precios</button>
+            <button onClick={() => scrollTo('planes')} className="block w-full text-left text-sm text-slate-300 py-2">Planes</button>
             <div className="flex gap-3 pt-2">
               <Link to="/login" className="flex-1 text-center border border-white/20 text-sm text-slate-300 py-2 rounded-lg">Iniciar sesión</Link>
               <Link to="/register" className="flex-1 text-center bg-[#2563EB] text-white text-sm font-semibold py-2 rounded-lg">Probar gratis</Link>
@@ -257,28 +257,29 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── PRECIOS ────────────────────────────────────────────────────── */}
-      <section id="pricing" className="py-20 px-4 sm:px-6 bg-white/[0.015] border-y border-white/5">
-        <div className="max-w-4xl mx-auto">
+      {/* ── PLANES ─────────────────────────────────────────────────────── */}
+      <section id="planes" className="py-20 px-4 sm:px-6 bg-white/[0.015] border-y border-white/5">
+        <div className="max-w-6xl mx-auto">
           <div className="text-center mb-14">
-            <h2 className="text-3xl sm:text-4xl font-black mb-3">Precios simples y transparentes</h2>
-            <p className="text-slate-400">Empieza gratis, escala cuando estés listo</p>
+            <h2 className="text-3xl sm:text-4xl font-black mb-3">Un plan a la medida de tu operación</h2>
+            <p className="text-slate-400">Precios personalizados según tu volumen y necesidades</p>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-start">
 
-            {/* Plan Free */}
+            {/* Starter */}
             <div className="bg-[#161B27] border border-white/10 rounded-2xl p-8">
               <div className="mb-7">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Free</div>
-                <div className="text-5xl font-black mb-1">$0</div>
-                <p className="text-sm text-slate-400 mt-1">Para explorar la plataforma</p>
+                <div className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-2">Starter</div>
+                <div className="text-3xl font-black mb-1">Personalizado</div>
+                <p className="text-sm text-slate-400 mt-1">según tus necesidades</p>
               </div>
+              <p className="text-xs text-slate-500 mb-4">Para empezar a automatizar tu prospección con agentes de voz IA.</p>
               <ul className="space-y-3 mb-8">
                 {[
-                  '10 llamadas demo dentro de la app',
-                  '1 agente configurable',
-                  'Dashboard básico',
-                  'Soporte por email',
+                  'Llamadas con agente de voz IA',
+                  '1 agente de voz',
+                  'CRM e importación CSV',
+                  'Email marketing',
                 ].map(f => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
                     <span className="text-green-400 mt-0.5 flex-shrink-0">✓</span>
@@ -286,31 +287,33 @@ export default function Landing() {
                   </li>
                 ))}
               </ul>
-              <Link
-                to="/register"
+              <a
+                href={ISM_WHATSAPP}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="block text-center border border-white/20 hover:border-white/40 text-slate-200 hover:text-white font-semibold py-3 rounded-xl transition-colors text-sm"
               >
-                Empezar gratis
-              </Link>
+                Solicitar cotización
+              </a>
             </div>
 
-            {/* Plan Pro */}
+            {/* Pro */}
             <div className="bg-[#161B27] border-2 border-[#2563EB]/60 rounded-2xl p-8 relative shadow-lg shadow-blue-950/50">
               <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-[#2563EB] text-white text-xs font-bold px-4 py-1 rounded-full">
                 Más popular
               </div>
               <div className="mb-7">
                 <div className="text-xs font-bold text-[#60A5FA] uppercase tracking-widest mb-2">Pro</div>
-                <div className="text-5xl font-black mb-1">A medida</div>
-                <p className="text-sm text-slate-400 mt-1">Según volumen y necesidades</p>
+                <div className="text-3xl font-black mb-1">Personalizado</div>
+                <p className="text-sm text-slate-400 mt-1">según tus necesidades</p>
               </div>
+              <p className="text-xs text-slate-400 mb-4">Para equipos de ventas que quieren prospectar en automático y a escala.</p>
               <ul className="space-y-3 mb-8">
                 {[
-                  'Llamadas según plan contratado',
-                  'Múltiples agentes de voz',
-                  'CRM nativo (Monday, HubSpot, GHL y más)',
-                  'Campañas masivas de llamadas',
-                  'Prospectos ilimitados',
+                  'Agentes de voz ilimitados',
+                  'Lead Hunter y campañas programadas',
+                  'Email marketing avanzado',
+                  'Reportes y KPIs en tiempo real',
                   'Soporte prioritario',
                 ].map(f => (
                   <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
@@ -325,9 +328,42 @@ export default function Landing() {
                 rel="noopener noreferrer"
                 className="block text-center bg-[#2563EB] hover:bg-blue-700 text-white font-semibold py-3 rounded-xl transition-colors text-sm shadow-md shadow-blue-900/40"
               >
-                Contactar a ventas
+                Solicitar cotización
               </a>
             </div>
+
+            {/* Enterprise */}
+            <div className="bg-[#161B27] border border-white/10 rounded-2xl p-8">
+              <div className="mb-7">
+                <div className="text-xs font-bold text-purple-400 uppercase tracking-widest mb-2">Enterprise</div>
+                <div className="text-3xl font-black mb-1">Personalizado</div>
+                <p className="text-sm text-slate-400 mt-1">según tus necesidades</p>
+              </div>
+              <p className="text-xs text-slate-500 mb-4">Para agencias y empresas con varias marcas y necesidades a medida.</p>
+              <ul className="space-y-3 mb-8">
+                {[
+                  'Volumen de llamadas a medida',
+                  'Multi-organización y roles avanzados',
+                  'Números propios y voces personalizadas',
+                  'Integraciones y API dedicada',
+                  'Gerente de cuenta y soporte prioritario',
+                ].map(f => (
+                  <li key={f} className="flex items-start gap-2.5 text-sm text-slate-300">
+                    <span className="text-purple-400 mt-0.5 flex-shrink-0">✓</span>
+                    {f}
+                  </li>
+                ))}
+              </ul>
+              <a
+                href={ISM_WHATSAPP}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center border border-purple-500/40 hover:border-purple-400 text-purple-300 hover:text-purple-200 font-semibold py-3 rounded-xl transition-colors text-sm"
+              >
+                Contactar ventas
+              </a>
+            </div>
+
           </div>
         </div>
       </section>
@@ -337,17 +373,19 @@ export default function Landing() {
         <div className="absolute inset-0 bg-gradient-radial from-[#2563EB]/10 to-transparent" />
         <div className="relative max-w-2xl mx-auto">
           <h2 className="text-3xl sm:text-4xl font-black mb-4 leading-tight">
-            Empieza hoy gratis.<br />Sin tarjeta de crédito.
+            ¿Listo para automatizar<br />tu prospección?
           </h2>
           <p className="text-slate-400 mb-10 text-lg">
-            Configura tu primer agente en minutos y lanza tu primera campaña.
+            Habla con nuestro equipo y configura el plan ideal para tu negocio.
           </p>
-          <Link
-            to="/register"
+          <a
+            href={ISM_WHATSAPP}
+            target="_blank"
+            rel="noopener noreferrer"
             className="inline-block bg-[#2563EB] hover:bg-blue-700 text-white font-bold text-lg px-10 py-4 rounded-xl transition-colors shadow-xl shadow-blue-900/50"
           >
-            Crear mi cuenta gratis
-          </Link>
+            Solicitar demo
+          </a>
         </div>
       </section>
 

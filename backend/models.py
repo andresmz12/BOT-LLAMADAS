@@ -8,7 +8,7 @@ class Organization(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str
     logo_url: Optional[str] = None
-    plan: str = Field(default="pro")  # free/pro
+    plan: str = Field(default="pro")  # free/starter/pro/enterprise
     retell_api_key: str = Field(default="")
     retell_phone_number: str = Field(default="")
     anthropic_api_key: str = Field(default="")
@@ -50,6 +50,10 @@ class Organization(SQLModel, table=True):
     lh_language: Optional[str] = Field(default="es")
     lh_channel: Optional[str] = Field(default="whatsapp")
     lh_active: bool = Field(default=False)
+    # Usage limits
+    minutes_limit: Optional[int] = None        # None = unlimited
+    minutes_used_month: int = Field(default=0) # cumulative minutes this billing month
+    minutes_reset_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")

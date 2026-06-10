@@ -200,6 +200,14 @@ async def _run_campaign_loop(campaign_id: int):
                 session.commit()
                 break
 
+            # Check minute limit
+            if org and org.minutes_limit and (org.minutes_used_month or 0) >= org.minutes_limit:
+                logger.warning(f"[Campaign {campaign_id}] Org {org.id} reached minute limit {org.minutes_limit}/{org.minutes_used_month} — pausing")
+                campaign.status = "paused"
+                session.add(campaign)
+                session.commit()
+                break
+
             # Get ONE pending prospect
             prospect = session.exec(
                 select(Prospect).where(

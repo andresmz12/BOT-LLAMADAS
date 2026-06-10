@@ -377,6 +377,27 @@ export default function Dashboard() {
               iconColor="text-slate-400" sub="llamadas contestadas" />
           </div>
 
+          {/* Minutes usage widget — only shown when limit is set */}
+          {stats?.minutes_limit && (
+            <div className="bg-z-card rounded-xl border border-z-border p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">Minutos usados este mes</span>
+                <span className={`text-xs font-bold ${stats.minutes_used_month >= stats.minutes_limit ? 'text-red-400' : 'text-slate-300'}`}>
+                  {stats.minutes_used_month} / {stats.minutes_limit} min
+                </span>
+              </div>
+              <div className="w-full bg-slate-800 rounded-full h-2">
+                <div
+                  className={`h-2 rounded-full transition-all ${stats.minutes_used_month >= stats.minutes_limit ? 'bg-red-500' : stats.minutes_used_month >= stats.minutes_limit * 0.8 ? 'bg-amber-400' : 'bg-blue-500'}`}
+                  style={{ width: `${Math.min(100, Math.round((stats.minutes_used_month / stats.minutes_limit) * 100))}%` }}
+                />
+              </div>
+              {stats.minutes_used_month >= stats.minutes_limit && (
+                <p className="text-xs text-red-400 mt-1.5">⚠ Límite alcanzado — las campañas están pausadas. Contacta soporte.</p>
+              )}
+            </div>
+          )}
+
           {/* Chart — 3 series */}
           <div className="bg-z-card rounded-xl p-5 border border-z-border">
             <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wide">Llamadas últimos 7 días</h2>

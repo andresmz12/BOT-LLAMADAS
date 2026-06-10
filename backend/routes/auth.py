@@ -125,13 +125,14 @@ def require_pro_plan(
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ) -> User:
+    """Blocks free and starter plans — requires pro or enterprise."""
     if current_user.role == "superadmin":
         return current_user
     org = session.get(Organization, current_user.organization_id)
-    if org and org.plan == "free":
+    if org and org.plan in ("free", "starter"):
         raise HTTPException(
             status_code=403,
-            detail="PLAN_FREE: Esta función requiere el plan Pro. Contacta soporte para activar."
+            detail="PLAN_UPGRADE: Esta función requiere el plan Pro o Enterprise. Contacta soporte para activar."
         )
     return current_user
 

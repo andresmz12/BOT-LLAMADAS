@@ -9,8 +9,8 @@ export default function UpgradeBanner({ demosUsed = 0, demosTotal = 10, compact 
       <div className="flex items-center gap-3 px-4 py-3 bg-amber-500/10 border border-amber-500/30 rounded-xl text-sm">
         <LockClosedIcon className="w-4 h-4 text-amber-400 flex-shrink-0" />
         <p className="text-amber-300 flex-1">
-          <span className="font-semibold">Plan gratuito</span> — {demosUsed}/{demosTotal} demos usadas.
-          Esta función requiere el plan Pro.
+          <span className="font-semibold">Plan limitado</span> — {demosUsed}/{demosTotal} demos usadas.
+          Esta función requiere el plan Pro o Enterprise.
         </p>
         <div className="flex gap-2 flex-shrink-0">
           <a
@@ -37,9 +37,9 @@ export default function UpgradeBanner({ demosUsed = 0, demosTotal = 10, compact 
       <div className="w-16 h-16 bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center mb-4">
         <LockClosedIcon className="w-8 h-8 text-amber-400" />
       </div>
-      <h2 className="text-xl font-bold text-slate-100 mb-2">Función disponible en el plan Pro</h2>
+      <h2 className="text-xl font-bold text-slate-100 mb-2">Función disponible en el plan Pro o Enterprise</h2>
       <p className="text-slate-400 text-sm max-w-md mb-2">
-        Estás en el plan gratuito ({demosUsed}/{demosTotal} demos usadas).
+        Tu plan actual no incluye esta función ({demosUsed}/{demosTotal} demos usadas).
         Para desbloquear llamadas reales, campañas y prospectos, contacta a soporte.
       </p>
       <div className="flex gap-3 mt-4">

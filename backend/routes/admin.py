@@ -54,6 +54,7 @@ class OrgCreate(BaseModel):
     email_from: Optional[str] = None
     email_from_name: Optional[str] = None
     marketing_enabled: bool = False
+    minutes_limit: Optional[int] = None
 
 
 class UserCreate(BaseModel):
@@ -162,17 +163,25 @@ def debug_org_crm(
         return {"error": str(e)}
 
 
+class UpgradePlanRequest(BaseModel):
+    plan: str = "pro"
+
+
 @router.post("/organizations/{org_id}/upgrade")
 def upgrade_org(
     org_id: int,
+    data: UpgradePlanRequest = UpgradePlanRequest(),
     _: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
 ):
-    """Upgrade an organization from free to pro plan."""
+    """Change an organization's plan."""
+    valid_plans = {"free", "starter", "pro", "enterprise"}
+    if data.plan not in valid_plans:
+        raise HTTPException(status_code=400, detail=f"Plan inválido. Opciones: {', '.join(valid_plans)}")
     org = session.get(Organization, org_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
-    org.plan = "pro"
+    org.plan = data.plan
     session.add(org)
     session.commit()
     return {"ok": True, "plan": org.plan}

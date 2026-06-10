@@ -263,6 +263,20 @@ async def retell_webhook(request: Request, background_tasks: BackgroundTasks, se
         if duration_ms:
             call.duration_seconds = int(duration_ms / 1000)
         session.add(call)
+
+        # Accumulate minutes toward org's monthly usage
+        if call.organization_id and duration_ms:
+            org_usage = session.get(Organization, call.organization_id)
+            if org_usage:
+                now = datetime.utcnow()
+                minutes_elapsed = max(1, round(int(duration_ms / 1000) / 60))
+                if not org_usage.minutes_reset_at or org_usage.minutes_reset_at.month != now.month or org_usage.minutes_reset_at.year != now.year:
+                    org_usage.minutes_used_month = minutes_elapsed
+                    org_usage.minutes_reset_at = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+                else:
+                    org_usage.minutes_used_month = (org_usage.minutes_used_month or 0) + minutes_elapsed
+                session.add(org_usage)
+
         session.commit()
         logger.info(f"[WEBHOOK] call_ended saved call_id={call.id}")
 

@@ -8,7 +8,7 @@ import {
 import SecretInput from '../components/SecretInput'
 
 const ROLES = ['superadmin', 'admin', 'agent']
-const PLANS = ['free', 'pro']
+const PLANS = ['free', 'starter', 'pro', 'enterprise']
 
 const CRM_TYPES = [
   { value: 'none', label: 'Sin integración' },
@@ -126,8 +126,9 @@ export default function Admin() {
   }
 
   const handleUpgrade = async (org) => {
-    if (!confirm(`¿Actualizar "${org.name}" a plan Pro?`)) return
-    try { await upgradeOrg(org.id); loadOrgs() }
+    const plan = prompt(`Plan para "${org.name}" (free / starter / pro / enterprise):`, org.plan || 'pro')
+    if (!plan) return
+    try { await upgradeOrg(org.id, plan.trim().toLowerCase()); loadOrgs() }
     catch (err) { alert(err.response?.data?.detail || 'Error') }
   }
 
@@ -171,7 +172,10 @@ export default function Admin() {
                     <td className="px-6 py-3 font-medium text-slate-200">{org.name}</td>
                     <td className="px-6 py-3">
                       <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
-                        org.plan === 'free' ? 'bg-amber-500/15 text-amber-400' : 'bg-green-500/15 text-green-400'
+                        org.plan === 'free' ? 'bg-slate-700/60 text-slate-400'
+                        : org.plan === 'starter' ? 'bg-blue-500/15 text-blue-400'
+                        : org.plan === 'enterprise' ? 'bg-purple-500/15 text-purple-400'
+                        : 'bg-green-500/15 text-green-400'
                       }`}>{org.plan}</span>
                     </td>
                     <td className="px-6 py-3 text-slate-400 text-xs">
@@ -195,10 +199,10 @@ export default function Admin() {
                     </td>
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2">
-                        {org.plan === 'free' && (
+                        {org.plan !== 'enterprise' && (
                           <button onClick={() => handleUpgrade(org)}
                             className="px-2 py-0.5 bg-green-500/15 hover:bg-green-500/25 text-green-400 text-xs font-medium rounded-lg transition-colors">
-                            ⬆ Pro
+                            ✎ Plan
                           </button>
                         )}
                         <button onClick={() => setModal({ type: 'org', data: org })}
@@ -325,6 +329,7 @@ function OrgModal({ org, onClose, onSaved }) {
     sendgrid_api_key: '',
     email_from: '',
     email_from_name: '',
+    minutes_limit: null,
   })
   const [loading, setLoading] = useState(false)
   const [crmAccordionOpen, setCrmAccordionOpen] = useState(false)
@@ -427,6 +432,18 @@ function OrgModal({ org, onClose, onSaved }) {
             <select value={form.plan} onChange={e => set('plan', e.target.value)} className="z-input">
               {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1">Límite de minutos/mes</label>
+            <input
+              type="number"
+              min="0"
+              value={form.minutes_limit ?? ''}
+              onChange={e => set('minutes_limit', e.target.value ? parseInt(e.target.value) : null)}
+              placeholder="Vacío = ilimitado"
+              className="z-input"
+            />
+            <p className="text-xs text-slate-500 mt-1">Minutos de llamada permitidos por mes. Vacío = sin límite.</p>
           </div>
           <SecretInput label="Retell API Key" value={form.retell_api_key} onChange={e => set('retell_api_key', e.target.value)} />
           <div>

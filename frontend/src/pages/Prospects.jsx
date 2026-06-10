@@ -168,7 +168,7 @@ export default function Prospects() {
   const [callingId, setCallingId] = useState(null)
   const [historyProspect, setHistoryProspect] = useState(null)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
-  const isFree = user.plan === 'free'
+  const isFree = user.plan === 'free' || user.plan === 'starter'
   const [demoStatus, setDemoStatus] = useState(null)
 
   const handleCall = async (p) => {

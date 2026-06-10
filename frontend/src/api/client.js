@@ -48,7 +48,7 @@ export const getUsers = () => api.get('/admin/users').then(r => r.data)
 export const createUser = (data) => api.post('/admin/users', data).then(r => r.data)
 export const updateUser = (id, data) => api.put(`/admin/users/${id}`, data).then(r => r.data)
 export const deleteUser = (id) => api.delete(`/admin/users/${id}`).then(r => r.data)
-export const upgradeOrg = (id) => api.post(`/admin/organizations/${id}/upgrade`).then(r => r.data)
+export const upgradeOrg = (id, plan) => api.post(`/admin/organizations/${id}/upgrade`, { plan: plan || 'pro' }).then(r => r.data)
 
 // Agents
 export const getAgents = () => api.get('/agents').then(r => r.data)

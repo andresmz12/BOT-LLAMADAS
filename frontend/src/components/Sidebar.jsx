@@ -78,11 +78,11 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const marketingEnabled = user.marketing_enabled || false
   const baseItems = (NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer)
     .filter(item => item.to !== '/marketing' || role === 'superadmin' || marketingEnabled)
+  const isLimitedPlan = plan === 'free' || plan === 'starter'
   const navItems = (role === 'admin' || role === 'agent')
-    ? plan === 'free'
-      ? [...baseItems.filter(i => i.to !== '/campaigns' && i.to !== '/prospects'),
-         { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon },
-         ...baseItems.filter(i => i.to === '/campaigns' || i.to === '/prospects')]
+    ? isLimitedPlan
+      ? [...baseItems.filter(i => i.to !== '/campaigns' && i.to !== '/lead-hunter' && i.to !== '/prospects'),
+         { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon }]
       : [...baseItems, { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon }]
     : baseItems
   const initials = (user.full_name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()

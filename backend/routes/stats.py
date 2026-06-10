@@ -3,13 +3,25 @@ from fastapi import APIRouter, Depends, Query
 from sqlmodel import Session, select, func
 from sqlalchemy import true as sql_true
 from database import get_session, engine as db_engine
-from models import Call, Campaign, Prospect, User, EmailSendLog, EmailEvent
+from models import Call, Campaign, Prospect, User, EmailSendLog, EmailEvent, Organization
 from routes.auth import get_current_user
 from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/stats", tags=["stats"])
 
 _CONTACTED_OUTCOMES = ("interested", "not_interested", "callback_requested", "appointment_scheduled", "wrong_number")
+
+
+def _minutes_usage(user: User, session: Session) -> dict:
+    if not user.organization_id:
+        return {"minutes_used_month": 0, "minutes_limit": None}
+    org = session.get(Organization, user.organization_id)
+    if not org:
+        return {"minutes_used_month": 0, "minutes_limit": None}
+    return {
+        "minutes_used_month": org.minutes_used_month or 0,
+        "minutes_limit": org.minutes_limit,
+    }
 
 
 @router.get("")
@@ -160,6 +172,7 @@ def global_stats(
         "outcome_distribution": [{"name": k, "value": v} for k, v in outcomes.items()],
         "calls_by_hour": calls_by_hour,
         "recent_interested": recent_interested,
+        **_minutes_usage(current_user, session),
     }
 
 
