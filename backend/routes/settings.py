@@ -414,7 +414,16 @@ async def test_email(
     except Exception as e:
         import logging as _log
         _log.getLogger(__name__).error(f"Test email failed: {e}", exc_info=True)
-        raise HTTPException(status_code=400, detail="Error al enviar el correo de prueba. Verifica la configuración de SendGrid.")
+        err_str = str(e)
+        if "401" in err_str or "Unauthorized" in err_str:
+            detail = "SendGrid rechazó la API key (401 Unauthorized). Ve a SendGrid → Settings → API Keys y verifica que la key sea válida y tenga permiso 'Mail Send'. Luego actualízala en el Admin Panel."
+        elif "403" in err_str or "Forbidden" in err_str:
+            detail = "SendGrid rechazó el remitente (403 Forbidden). Verifica que el email remitente esté verificado en SendGrid (Sender Authentication)."
+        elif "from" in err_str.lower() or "sender" in err_str.lower():
+            detail = "Email remitente inválido o no verificado en SendGrid. Configura un remitente verificado."
+        else:
+            detail = f"Error al enviar el correo de prueba: {err_str[:200]}"
+        raise HTTPException(status_code=400, detail=detail)
 
 
 class BulkEmailRequest(BaseModel):
