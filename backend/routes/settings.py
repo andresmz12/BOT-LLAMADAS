@@ -1297,6 +1297,32 @@ def cancel_scheduled_email(
     return {"ok": True}
 
 
+class RescheduleRequest(BaseModel):
+    scheduled_at: str  # ISO datetime string
+
+
+@router.patch("/email/scheduled/{job_id}")
+def reschedule_email(
+    job_id: int,
+    data: RescheduleRequest,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    job = session.get(ScheduledEmailSend, job_id)
+    if not job or job.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404, detail="Trabajo no encontrado")
+    if job.status != "pending":
+        raise HTTPException(status_code=400, detail="Solo se pueden reprogramar trabajos pendientes")
+    try:
+        new_dt = datetime.fromisoformat(data.scheduled_at.replace("Z", "+00:00")).replace(tzinfo=None)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Fecha inválida")
+    job.scheduled_at = new_dt
+    session.add(job)
+    session.commit()
+    return {"ok": True, "scheduled_at": job.scheduled_at.isoformat()}
+
+
 @router.post("/email/events")
 async def sendgrid_events(
     request: Request,

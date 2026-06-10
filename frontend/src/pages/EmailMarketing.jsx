@@ -12,7 +12,7 @@ import {
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
   getEmailLists, createEmailList, deleteEmailList,
   getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList,
-  getScheduledEmails, cancelScheduledEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents,
+  getScheduledEmails, cancelScheduledEmail, rescheduleEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents,
 } from '../api/client'
 
 const FIXED_TEMPLATES = [
@@ -208,6 +208,7 @@ export default function EmailMarketing() {
   const [importLoading, setImportLoading] = useState(false)
   const [importResult, setImportResult] = useState(null)
   const [scheduledJobs, setScheduledJobs] = useState([])
+  const [rescheduleModal, setRescheduleModal] = useState(null) // { id, scheduled_at }
   const [scheduleMode, setScheduleMode] = useState(false)
 
   // Tracking events
@@ -1395,14 +1396,55 @@ export default function EmailMarketing() {
                     {new Date(j.scheduled_at).toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })}
                   </p>
                 </div>
-                <button
-                  onClick={async () => { await cancelScheduledEmail(j.id); loadScheduled() }}
-                  className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 px-3 py-1 rounded-lg transition-colors flex-shrink-0"
-                >
-                  Cancelar
-                </button>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <button
+                    onClick={() => setRescheduleModal({ id: j.id, scheduled_at: j.scheduled_at.slice(0, 16) })}
+                    className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:bg-blue-500/10 px-3 py-1 rounded-lg transition-colors"
+                  >
+                    Reprogramar
+                  </button>
+                  <button
+                    onClick={async () => { await cancelScheduledEmail(j.id); loadScheduled() }}
+                    className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 px-3 py-1 rounded-lg transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Modal reprogramar */}
+      {rescheduleModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="bg-z-card border border-z-border rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-xl">
+            <h3 className="text-base font-semibold text-slate-100">Reprogramar envío</h3>
+            <div>
+              <label className="text-xs text-slate-400 mb-1.5 block">Nueva fecha y hora</label>
+              <input
+                type="datetime-local"
+                value={rescheduleModal.scheduled_at}
+                onChange={e => setRescheduleModal(p => ({ ...p, scheduled_at: e.target.value }))}
+                className="z-input w-full text-sm"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <button onClick={() => setRescheduleModal(null)} className="z-btn-ghost text-xs">Cancelar</button>
+              <button
+                onClick={async () => {
+                  try {
+                    await rescheduleEmail(rescheduleModal.id, new Date(rescheduleModal.scheduled_at).toISOString())
+                    setRescheduleModal(null)
+                    loadScheduled()
+                  } catch (e) { alert(e.response?.data?.detail || 'Error al reprogramar') }
+                }}
+                className="z-btn-primary text-xs"
+              >
+                Guardar
+              </button>
+            </div>
           </div>
         </div>
       )}

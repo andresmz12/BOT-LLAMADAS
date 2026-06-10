@@ -175,6 +175,7 @@ export const getEmailEvents = (eventType) =>
   api.get('/stats/email/events', { params: eventType ? { event_type: eventType, limit: 2000 } : { limit: 2000 } }).then(r => r.data)
 export const getScheduledEmails = () => api.get('/settings/email/scheduled').then(r => r.data)
 export const cancelScheduledEmail = (id) => api.delete(`/settings/email/scheduled/${id}`).then(r => r.data)
+export const rescheduleEmail = (id, scheduled_at) => api.patch(`/settings/email/scheduled/${id}`, { scheduled_at }).then(r => r.data)
 
 // Admin — CRM
 export const testCRMWebhook = (orgId) =>
