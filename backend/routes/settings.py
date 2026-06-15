@@ -433,6 +433,7 @@ class BulkEmailRequest(BaseModel):
     email_list_id: Optional[int] = None
     batch_size: Optional[int] = None
     scheduled_at: Optional[str] = None  # ISO datetime string; if set and in the future, store job
+    skip_labeled: bool = True  # skip contacts already classified (interested/not_interested/converted/do_not_contact)
 
 
 @router.post("/email/bulk-send")
@@ -499,6 +500,8 @@ async def bulk_send_email(
         query = query.where(Prospect.campaign_id == None)  # noqa: E711
     elif data.campaign_id:
         query = query.where(Prospect.campaign_id == data.campaign_id)
+    if data.skip_labeled:
+        query = query.where(Prospect.email_label.is_(None))
     query = query.order_by(nulls_first(Prospect.last_email_sent_at.asc()))
     all_prospects = session.exec(query).all()
 
@@ -760,12 +763,50 @@ def block_contact_email(
     return {"ok": True, "email_unsubscribed": True}
 
 
+class LabelContactRequest(BaseModel):
+    label: Optional[str] = None  # interested / not_interested / converted / do_not_contact / None (clear)
+    move_to_list_id: Optional[int] = None   # move to a different email list
+    unsubscribe: Optional[bool] = None      # also mark as unsubscribed (default: True when do_not_contact)
+
+
+@router.patch("/email/contacts/{prospect_id}/label")
+def label_contact(
+    prospect_id: int,
+    data: LabelContactRequest,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    """Classify a contact (interested/not_interested/converted/do_not_contact) and optionally move to another list."""
+    VALID_LABELS = {None, "interested", "not_interested", "converted", "do_not_contact"}
+    if data.label not in VALID_LABELS:
+        raise HTTPException(status_code=400, detail=f"Label inválido. Opciones: {', '.join(str(l) for l in VALID_LABELS if l)}")
+    prospect = session.get(Prospect, prospect_id)
+    if not prospect or (current_user.role != "superadmin" and prospect.organization_id != current_user.organization_id):
+        raise HTTPException(status_code=404, detail="Contacto no encontrado")
+    prospect.email_label = data.label
+    if data.move_to_list_id is not None:
+        prospect.email_list_id = data.move_to_list_id if data.move_to_list_id > 0 else None
+    if data.unsubscribe is not None:
+        prospect.email_unsubscribed = data.unsubscribe
+    elif data.label == "do_not_contact":
+        prospect.email_unsubscribed = True
+    session.add(prospect)
+    session.commit()
+    return {
+        "id": prospect.id,
+        "email_label": prospect.email_label,
+        "email_unsubscribed": prospect.email_unsubscribed,
+        "email_list_id": prospect.email_list_id,
+    }
+
+
 @router.get("/email/validate-recipients")
 def validate_email_recipients(
     campaign_id: Optional[int] = None,
     email_only: bool = False,
     email_list_id: Optional[int] = None,
     batch_size: Optional[int] = None,
+    skip_labeled: bool = True,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -798,7 +839,8 @@ def validate_email_recipients(
     with_email = len(unique_prospects)
     without_email = no_email_count
     unsubscribed = sum(1 for p in unique_prospects if p.email_unsubscribed)
-    will_receive = with_email - unsubscribed
+    labeled = sum(1 for p in unique_prospects if not p.email_unsubscribed and p.email_label and skip_labeled)
+    will_receive = with_email - unsubscribed - labeled
 
     # Batch info: how many would be sent in this run vs total available
     will_receive_this_batch = min(will_receive, batch_size) if batch_size and batch_size > 0 else will_receive
@@ -808,6 +850,7 @@ def validate_email_recipients(
         "with_email": with_email,
         "without_email": without_email,
         "unsubscribed": unsubscribed,
+        "labeled": labeled,
         "will_receive": will_receive,
         "will_receive_this_batch": will_receive_this_batch,
         "batch_size": batch_size,

@@ -35,7 +35,7 @@ import {
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
   getEmailLists, createEmailList, deleteEmailList,
   getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList,
-  getScheduledEmails, cancelScheduledEmail, rescheduleEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents,
+  getScheduledEmails, cancelScheduledEmail, rescheduleEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents, labelContact,
 } from '../api/client'
 
 const FIXED_TEMPLATES = [
@@ -410,6 +410,28 @@ export default function EmailMarketing() {
     } catch (e) { alert('Error al bloquear el contacto') }
   }
 
+  const LABEL_OPTIONS = [
+    { value: null, label: 'Sin clasificar', color: 'text-slate-400', bg: 'bg-slate-700/40' },
+    { value: 'interested', label: '🟢 Interesado', color: 'text-green-400', bg: 'bg-green-500/15' },
+    { value: 'not_interested', label: '🔴 No interesado', color: 'text-red-400', bg: 'bg-red-500/15' },
+    { value: 'converted', label: '⭐ Convertido', color: 'text-yellow-400', bg: 'bg-yellow-500/15' },
+    { value: 'do_not_contact', label: '🚫 No contactar', color: 'text-slate-500', bg: 'bg-slate-800' },
+  ]
+
+  const getLabelMeta = (label) => LABEL_OPTIONS.find(o => o.value === label) || LABEL_OPTIONS[0]
+
+  const handleLabelContact = async (contactId, label) => {
+    try {
+      const result = await labelContact(contactId, label, null)
+      setListContacts(prev => ({
+        ...prev,
+        contacts: prev.contacts.map(c =>
+          c.id === contactId ? { ...c, email_label: result.email_label, unsubscribed: result.email_unsubscribed } : c
+        )
+      }))
+    } catch (e) { alert('Error al clasificar el contacto') }
+  }
+
   const handleAddContact = async () => {
     const { listId, name, email, company } = addContactForm
     if (!email.trim()) return
@@ -460,6 +482,7 @@ export default function EmailMarketing() {
       const payload = {
         ...target,
         template_key: bulkTmpl,
+        skip_labeled: true,
         ...(scheduleMode && scheduleAt ? { scheduled_at: fromUTC5ToISO(scheduleAt) } : {}),
       }
       const r = await bulkSendEmail(payload)
@@ -480,7 +503,7 @@ export default function EmailMarketing() {
               setBulkLoading(false); loadHistory()
               if (status.status === 'done') {
                 try {
-                  const freshStats = await validateEmailRecipients(parseBulkTarget())
+                  const freshStats = await validateEmailRecipients({ ...parseBulkTarget(), skip_labeled: true })
                   setRecipientStats(freshStats)
                 } catch (_) {}
               }
@@ -506,7 +529,7 @@ export default function EmailMarketing() {
     setConfirmStep(true); setBulkResult(null); setRecipientStats(null)
     setRecipientDetail(null); setRecipientDetailOpen(false); setRecipientLoading(true)
     try {
-      const stats = await validateEmailRecipients(parseBulkTarget())
+      const stats = await validateEmailRecipients({ ...parseBulkTarget(), skip_labeled: true })
       setRecipientStats(stats)
     } catch (e) { /* non-critical */ }
     finally { setRecipientLoading(false) }
@@ -752,7 +775,7 @@ export default function EmailMarketing() {
                           <table className="w-full text-xs min-w-[480px]">
                             <thead className="bg-black/20 sticky top-0">
                               <tr>
-                                {['Nombre', 'Email', 'Empresa', ''].map(h => (
+                                {['Nombre', 'Email', 'Estado', 'Empresa', ''].map(h => (
                                   <th key={h} className="px-3 py-2 text-left font-medium text-slate-500 uppercase">{h}</th>
                                 ))}
                               </tr>
@@ -767,12 +790,25 @@ export default function EmailMarketing() {
                               }).map(c => (
                                 <tr key={c.id} className="hover:bg-white/[0.02]">
                                   <td className="px-3 py-2 text-slate-200 font-medium max-w-[120px] truncate">{c.name || '—'}</td>
-                                  <td className="px-3 py-2 font-mono text-slate-300 max-w-[180px] truncate">
+                                  <td className="px-3 py-2 font-mono text-slate-300 max-w-[160px] truncate">
                                     {c.unsubscribed
                                       ? <span className="text-red-400">{c.email} <span className="text-xs">(desuscrito)</span></span>
                                       : c.email || <span className="text-slate-600 italic">sin email</span>}
                                   </td>
-                                  <td className="px-3 py-2 text-slate-500 max-w-[120px] truncate">{c.company || '—'}</td>
+                                  <td className="px-3 py-2">
+                                    {/* Classification dropdown */}
+                                    <select
+                                      value={c.email_label || ''}
+                                      onChange={e => handleLabelContact(c.id, e.target.value || null)}
+                                      className={`text-xs rounded px-2 py-1 border-0 outline-none cursor-pointer ${getLabelMeta(c.email_label || null).bg} ${getLabelMeta(c.email_label || null).color}`}
+                                      title="Clasificar contacto"
+                                    >
+                                      {LABEL_OPTIONS.map(o => (
+                                        <option key={o.value || ''} value={o.value || ''}>{o.label}</option>
+                                      ))}
+                                    </select>
+                                  </td>
+                                  <td className="px-3 py-2 text-slate-500 max-w-[100px] truncate">{c.company || '—'}</td>
                                   <td className="px-3 py-2 text-right">
                                     <div className="flex items-center justify-end gap-1">
                                       <button
@@ -928,6 +964,9 @@ export default function EmailMarketing() {
                     )}
                     {recipientStats.unsubscribed > 0 && (
                       <div className="flex justify-between text-xs text-slate-500"><span>Desuscritos</span><span>{recipientStats.unsubscribed}</span></div>
+                    )}
+                    {recipientStats.labeled > 0 && (
+                      <div className="flex justify-between text-xs text-slate-500"><span>Clasificados (excluidos)</span><span>{recipientStats.labeled}</span></div>
                     )}
                     {(bulkBatchSize ? recipientStats.will_receive_this_batch : recipientStats.will_receive) === 0 && <p className="text-xs text-amber-400">⚠ No hay destinatarios válidos.</p>}
                     <button onClick={loadRecipientDetail} disabled={recipientDetailLoading}

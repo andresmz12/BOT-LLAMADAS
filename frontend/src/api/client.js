@@ -156,6 +156,12 @@ export const toggleContactUnsubscribe = (prospectId) =>
 export const blockContactEmail = (prospectId) =>
   api.post(`/settings/email/contacts/${prospectId}/block`).then(r => r.data)
 
+export const labelContact = (prospectId, label, moveToListId) =>
+  api.patch(`/settings/email/contacts/${prospectId}/label`, {
+    label: label || null,
+    move_to_list_id: moveToListId || null,
+  }).then(r => r.data)
+
 // Lead Hunter
 export const scoutLeads = (data) => api.post('/lead-hunter/scout', data).then(r => r.data)
 export const getLeadHunterLeads = (params) => api.get('/lead-hunter/leads', { params }).then(r => r.data)

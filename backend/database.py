@@ -179,6 +179,13 @@ def run_migrations():
                     conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN sent_details TEXT"))
                     log.info("Migration: added emailsendlog.sent_details")
 
+        if "prospect" in tables:
+            prospect_cols = {c["name"] for c in insp.get_columns("prospect")}
+            with engine.begin() as conn:
+                if "email_label" not in prospect_cols:
+                    conn.execute(text("ALTER TABLE prospect ADD COLUMN email_label VARCHAR"))
+                    log.info("Migration: added prospect.email_label")
+
         # Indexes for performance on frequently filtered columns
         is_pg = not DATABASE_URL.startswith("sqlite")
         if is_pg:
