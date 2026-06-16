@@ -1245,6 +1245,7 @@ def get_email_list_contacts(
         {
             "id": p.id, "name": p.name, "email": p.email,
             "company": p.company, "unsubscribed": p.email_unsubscribed,
+            "email_label": p.email_label,
         }
         for p in prospects
     ]

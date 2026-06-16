@@ -179,6 +179,7 @@ export default function EmailMarketing() {
   const [creatingList, setCreatingList] = useState(false)
   const [listContacts, setListContacts] = useState({ id: null, contacts: [], loading: false })
   const [contactSearch, setContactSearch] = useState('')
+  const [contactLabelFilter, setContactLabelFilter] = useState('all')
   const [addContactForm, setAddContactForm] = useState({ listId: null, name: '', email: '', company: '', saving: false, error: '' })
   const listImportRefs = useRef({})
 
@@ -828,14 +829,25 @@ export default function EmailMarketing() {
                         <p className="text-center text-slate-600 text-sm py-6">Sin contactos. Importa un CSV para comenzar.</p>
                       ) : (
                         <div>
-                          <div className="px-3 py-2 border-b border-z-border">
+                          <div className="px-3 py-2 border-b border-z-border flex gap-2">
                             <input
                               type="text"
                               placeholder="Buscar por nombre, email o empresa..."
                               value={contactSearch}
                               onChange={e => setContactSearch(e.target.value)}
-                              className="w-full bg-black/30 border border-z-border rounded px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-z-blue"
+                              className="flex-1 bg-black/30 border border-z-border rounded px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-z-blue"
                             />
+                            <select
+                              value={contactLabelFilter}
+                              onChange={e => setContactLabelFilter(e.target.value)}
+                              className="bg-black/30 border border-z-border rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-z-blue cursor-pointer"
+                              title="Filtrar por clasificación"
+                            >
+                              <option value="all">Todos</option>
+                              {LABEL_OPTIONS.map(o => (
+                                <option key={o.value || 'none'} value={o.value || 'none'}>{o.label}</option>
+                              ))}
+                            </select>
                           </div>
                         <div className="overflow-x-auto max-h-72 overflow-y-auto">
                           <table className="w-full text-xs min-w-[480px]">
@@ -848,6 +860,10 @@ export default function EmailMarketing() {
                             </thead>
                             <tbody className="divide-y divide-z-border">
                               {listContacts.contacts.filter(c => {
+                                if (contactLabelFilter !== 'all') {
+                                  const labelKey = c.email_label || 'none'
+                                  if (labelKey !== contactLabelFilter) return false
+                                }
                                 if (!contactSearch.trim()) return true
                                 const q = contactSearch.toLowerCase()
                                 return (c.name || '').toLowerCase().includes(q) ||
