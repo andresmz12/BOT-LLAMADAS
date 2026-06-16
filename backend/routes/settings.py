@@ -583,6 +583,7 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
         email_only = row.email_only
         email_list_id = row.email_list_id
         batch_size = row.batch_size
+        base_url = row.base_url
         prospects_data = json.loads(row.remaining or "[]")
         sent_list = json.loads(row.sent_list or "[]")
         failed_list = json.loads(row.failed_list or "[]")
