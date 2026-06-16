@@ -13,7 +13,7 @@ from typing import Optional
 from sqlmodel import Session, select
 from sqlalchemy import desc, func
 from database import get_session
-from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend
+from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, EmailSequence
 from routes.auth import get_current_user, require_write_access, require_superadmin
 
 APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")
@@ -1297,6 +1297,242 @@ def delete_email_list_contact(
     if not p or p.organization_id != current_user.organization_id or p.email_list_id != list_id:
         raise HTTPException(status_code=404)
     session.delete(p)
+    session.commit()
+    return {"ok": True}
+
+
+# ── Email sequences (drip campaigns) ────────────────────────────────────────────
+
+class SequenceGenerateRequest(BaseModel):
+    email_list_id: int
+    objective: str
+    tone: str = "Profesional"
+    language: str = "Español"
+    dates: list[str]  # ISO date strings, one per email
+
+
+@router.post("/email/sequences/generate")
+async def generate_email_sequence(
+    data: SequenceGenerateRequest,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    org = session.get(Organization, current_user.organization_id)
+    api_key = ((org.anthropic_api_key if org else "") or "").strip() or os.getenv("ANTHROPIC_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Anthropic API key no configurada.")
+    if not data.dates:
+        raise HTTPException(status_code=400, detail="Debes indicar al menos una fecha")
+
+    lang_hint = {
+        "Español": "Escribe en español.",
+        "Inglés": "Write in English.",
+        "Spanglish": "Mix Spanish and English naturally, as spoken by US Latinos.",
+    }.get(data.language, "Escribe en español.")
+
+    n = len(data.dates)
+    dates_list = "\n".join(f"{i+1}. {d}" for i, d in enumerate(data.dates))
+    prompt = (
+        f"Eres un experto en email marketing para negocios hispanos en Estados Unidos.\n"
+        f"{lang_hint}\n\n"
+        f"Crea una secuencia de {n} correos electrónicos para enviar en estas fechas:\n{dates_list}\n\n"
+        f"Objetivo de la secuencia: {data.objective}\n"
+        f"Tono: {data.tone}\n\n"
+        f"Cada correo debe avanzar lógicamente respecto al anterior (ej: el primero presenta, "
+        f"los intermedios refuerzan el valor, el último cierra con urgencia o llamado a la acción claro). "
+        f"No repitas el mismo mensaje en cada correo.\n\n"
+        f"Puedes usar las variables {{{{nombre}}}}, {{{{empresa}}}} dentro del cuerpo si tiene sentido, se reemplazarán automáticamente.\n\n"
+        f"Responde ÚNICAMENTE con un JSON array de {n} objetos, sin texto adicional, con esta forma exacta:\n"
+        f'[{{"subject": "...", "body": "..."}}, ...]\n'
+        f"El campo body debe ser texto plano con saltos de línea (no HTML)."
+    )
+
+    try:
+        from anthropic import AsyncAnthropic
+        client = AsyncAnthropic(api_key=api_key)
+        msg = await client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=4096,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        raw = msg.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.strip("`")
+            if raw.startswith("json"):
+                raw = raw[4:]
+        emails = json.loads(raw)
+        if not isinstance(emails, list):
+            raise ValueError("Respuesta no es una lista")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Error generando la secuencia con Claude: {str(e)[:200]}")
+
+    result = []
+    for i, d in enumerate(data.dates):
+        item = emails[i] if i < len(emails) else {"subject": "", "body": ""}
+        result.append({"date": d, "subject": item.get("subject", ""), "body": item.get("body", "")})
+    return {"emails": result}
+
+
+class SequenceEmailItem(BaseModel):
+    date: str
+    subject: str
+    body: str
+
+
+class SequenceCreateRequest(BaseModel):
+    name: str
+    email_list_id: int
+    objective: str
+    tone: str = "Profesional"
+    language: str = "Español"
+    emails: list[SequenceEmailItem]
+
+
+@router.post("/email/sequences")
+def create_email_sequence(
+    data: SequenceCreateRequest,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    if not data.emails:
+        raise HTTPException(status_code=400, detail="La secuencia necesita al menos un correo")
+
+    sequence = EmailSequence(
+        organization_id=current_user.organization_id,
+        name=data.name,
+        email_list_id=data.email_list_id,
+        objective=data.objective,
+        tone=data.tone,
+        language=data.language,
+        status="scheduled",
+        created_by=current_user.email,
+    )
+    session.add(sequence)
+    session.commit()
+    session.refresh(sequence)
+
+    for i, item in enumerate(data.emails):
+        try:
+            scheduled_dt = datetime.fromisoformat(item.date.replace("Z", "+00:00"))
+            if scheduled_dt.tzinfo is not None:
+                from datetime import timezone
+                scheduled_dt = scheduled_dt.astimezone(timezone.utc).replace(tzinfo=None)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Fecha inválida: {item.date}")
+        job = ScheduledEmailSend(
+            organization_id=current_user.organization_id,
+            email_list_id=data.email_list_id,
+            template_key="general",
+            scheduled_at=scheduled_dt,
+            initiated_by=current_user.email,
+            sequence_id=sequence.id,
+            sequence_step=i + 1,
+            subject_override=item.subject,
+            body_override=item.body,
+        )
+        session.add(job)
+    session.commit()
+    return {"ok": True, "sequence_id": sequence.id}
+
+
+@router.get("/email/sequences")
+def list_email_sequences(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        return []
+    sequences = session.exec(
+        select(EmailSequence)
+        .where(EmailSequence.organization_id == current_user.organization_id)
+        .order_by(EmailSequence.created_at.desc())
+    ).all()
+    result = []
+    for seq in sequences:
+        steps = session.exec(
+            select(ScheduledEmailSend)
+            .where(ScheduledEmailSend.sequence_id == seq.id)
+            .order_by(ScheduledEmailSend.sequence_step)
+        ).all()
+        result.append({
+            "id": seq.id,
+            "name": seq.name,
+            "email_list_id": seq.email_list_id,
+            "objective": seq.objective,
+            "status": seq.status,
+            "created_at": seq.created_at.isoformat(),
+            "steps": [
+                {
+                    "job_id": s.id,
+                    "step": s.sequence_step,
+                    "subject": s.subject_override,
+                    "body": s.body_override,
+                    "scheduled_at": s.scheduled_at.isoformat(),
+                    "status": s.status,
+                    "error": s.error,
+                }
+                for s in steps
+            ],
+        })
+    return result
+
+
+class SequenceStepUpdate(BaseModel):
+    subject: Optional[str] = None
+    body: Optional[str] = None
+    scheduled_at: Optional[str] = None
+
+
+@router.patch("/email/sequences/{sequence_id}/steps/{job_id}")
+def update_sequence_step(
+    sequence_id: int,
+    job_id: int,
+    data: SequenceStepUpdate,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    job = session.get(ScheduledEmailSend, job_id)
+    if not job or job.organization_id != current_user.organization_id or job.sequence_id != sequence_id:
+        raise HTTPException(status_code=404, detail="Paso no encontrado")
+    if job.status != "pending":
+        raise HTTPException(status_code=400, detail="Solo se pueden editar pasos pendientes")
+    if data.subject is not None:
+        job.subject_override = data.subject
+    if data.body is not None:
+        job.body_override = data.body
+    if data.scheduled_at is not None:
+        try:
+            new_dt = datetime.fromisoformat(data.scheduled_at.replace("Z", "+00:00")).replace(tzinfo=None)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Fecha inválida")
+        job.scheduled_at = new_dt
+    session.add(job)
+    session.commit()
+    return {"ok": True}
+
+
+@router.delete("/email/sequences/{sequence_id}")
+def delete_email_sequence(
+    sequence_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    seq = session.get(EmailSequence, sequence_id)
+    if not seq or seq.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404, detail="Secuencia no encontrada")
+    steps = session.exec(
+        select(ScheduledEmailSend).where(ScheduledEmailSend.sequence_id == sequence_id)
+    ).all()
+    for s in steps:
+        if s.status == "pending":
+            s.status = "cancelled"
+            session.add(s)
+    seq.status = "cancelled"
+    session.add(seq)
     session.commit()
     return {"ok": True}
 

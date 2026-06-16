@@ -36,6 +36,7 @@ import {
   getEmailLists, createEmailList, deleteEmailList,
   getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList,
   getScheduledEmails, cancelScheduledEmail, rescheduleEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents, labelContact,
+  generateEmailSequence, createEmailSequence, getEmailSequences, updateSequenceStep, deleteEmailSequence,
 } from '../api/client'
 
 const FIXED_TEMPLATES = [
@@ -234,6 +235,15 @@ export default function EmailMarketing() {
   const [rescheduleModal, setRescheduleModal] = useState(null) // { id, scheduled_at }
   const [scheduleMode, setScheduleMode] = useState(false)
 
+  // Email sequences (drip campaigns)
+  const [sequences, setSequences] = useState([])
+  const [seqForm, setSeqForm] = useState({ name: '', email_list_id: '', objective: '', tone: 'Profesional', language: 'Español' })
+  const [seqDates, setSeqDates] = useState([''])
+  const [seqGenerating, setSeqGenerating] = useState(false)
+  const [seqGenerated, setSeqGenerated] = useState(null) // [{date, subject, body}]
+  const [seqCreating, setSeqCreating] = useState(false)
+  const [seqError, setSeqError] = useState(null)
+
   // Tracking events
   const [trackingTab, setTrackingTab] = useState('all')
   const [trackingEvents, setTrackingEvents] = useState(null) // null = not loaded
@@ -274,6 +284,7 @@ export default function EmailMarketing() {
     })
   }
   const loadScheduled = () => getScheduledEmails().then(setScheduledJobs).catch(() => {})
+  const loadSequences = () => getEmailSequences().then(setSequences).catch(() => {})
   const loadEmailContactsCount = () => getEmailContactsCount().then(setEmailContactsCount).catch(() => {})
   const loadEmailLists = () => getEmailLists().then(setEmailLists).catch(() => {})
 
@@ -294,6 +305,7 @@ export default function EmailMarketing() {
     loadEmailContactsCount()
     loadEmailLists()
     loadScheduled()
+    loadSequences()
   }, [])
 
   // Template helpers
@@ -613,6 +625,55 @@ export default function EmailMarketing() {
       setAttachMsg({ ok: true, text: r.filename })
     } catch (e) { setAttachMsg({ ok: false, text: 'Error al subir' }) }
     finally { setAttachLoading(false) }
+  }
+
+  const addSeqDate = () => setSeqDates(p => [...p, ''])
+  const removeSeqDate = (i) => setSeqDates(p => p.filter((_, idx) => idx !== i))
+  const updateSeqDate = (i, v) => setSeqDates(p => p.map((d, idx) => idx === i ? v : d))
+
+  const handleGenerateSequence = async () => {
+    const dates = seqDates.filter(Boolean)
+    if (!seqForm.email_list_id || !seqForm.objective || dates.length === 0) {
+      setSeqError('Completa la lista, el objetivo y al menos una fecha'); return
+    }
+    setSeqError(null); setSeqGenerating(true)
+    try {
+      const r = await generateEmailSequence({
+        email_list_id: Number(seqForm.email_list_id), objective: seqForm.objective,
+        tone: seqForm.tone, language: seqForm.language, dates,
+      })
+      setSeqGenerated(r.emails)
+    } catch (e) { setSeqError(e.response?.data?.detail || 'Error generando la secuencia') }
+    finally { setSeqGenerating(false) }
+  }
+
+  const updateGeneratedEmail = (i, field, value) =>
+    setSeqGenerated(p => p.map((e, idx) => idx === i ? { ...e, [field]: value } : e))
+
+  const handleConfirmSequence = async () => {
+    if (!seqForm.name || !seqGenerated?.length) return
+    setSeqCreating(true); setSeqError(null)
+    try {
+      await createEmailSequence({
+        name: seqForm.name, email_list_id: Number(seqForm.email_list_id),
+        objective: seqForm.objective, tone: seqForm.tone, language: seqForm.language,
+        emails: seqGenerated,
+      })
+      setSeqGenerated(null); setSeqForm({ name: '', email_list_id: '', objective: '', tone: 'Profesional', language: 'Español' }); setSeqDates([''])
+      loadSequences()
+    } catch (e) { setSeqError(e.response?.data?.detail || 'Error al programar la secuencia') }
+    finally { setSeqCreating(false) }
+  }
+
+  const handleCancelSequence = async (id) => {
+    if (!confirm('¿Cancelar esta secuencia? Los correos pendientes no se enviarán.')) return
+    await deleteEmailSequence(id)
+    loadSequences()
+  }
+
+  const handleUpdateSequenceStep = async (seqId, jobId, field, value) => {
+    await updateSequenceStep(seqId, jobId, { [field]: value })
+    loadSequences()
   }
 
   const editingData = editingTmpl ? getTmpl(editingTmpl) : null
@@ -1477,6 +1538,128 @@ export default function EmailMarketing() {
           </div>
         </div>
       )}
+
+      {/* ── Secuencias de correo (drip campaigns) ── */}
+      <Section id="secuencias" label="Secuencias de correo" icon={SparklesIcon}
+        badge={sequences.length > 0 ? `${sequences.length} secuencia${sequences.length !== 1 ? 's' : ''}` : undefined}
+        openSections={openSections} toggle={toggle}>
+        <div className="p-5 space-y-5">
+          <p className="text-xs text-slate-500">
+            Define las fechas de envío y el objetivo, y la IA generará todos los correos de la secuencia de una sola vez.
+            Podrás revisarlos y editarlos antes de programarlos.
+          </p>
+
+          {!seqGenerated && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <input type="text" placeholder="Nombre de la secuencia" value={seqForm.name}
+                  onChange={e => setSeqForm(p => ({ ...p, name: e.target.value }))}
+                  className="z-input-light text-sm" />
+                <select value={seqForm.email_list_id}
+                  onChange={e => setSeqForm(p => ({ ...p, email_list_id: e.target.value }))}
+                  className="z-input-light text-sm">
+                  <option value="">Selecciona una lista...</option>
+                  {emailLists.map(l => <option key={l.id} value={l.id}>{l.name} ({l.with_email})</option>)}
+                </select>
+              </div>
+              <textarea placeholder="Objetivo de la secuencia (ej: presentar el servicio y conseguir una llamada en 3 correos)"
+                value={seqForm.objective} onChange={e => setSeqForm(p => ({ ...p, objective: e.target.value }))}
+                rows={2} className="z-input-light text-sm w-full" />
+              <div className="grid grid-cols-2 gap-3">
+                <select value={seqForm.tone} onChange={e => setSeqForm(p => ({ ...p, tone: e.target.value }))} className="z-input-light text-sm">
+                  {['Profesional', 'Cercano', 'Persuasivo', 'Urgente'].map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <select value={seqForm.language} onChange={e => setSeqForm(p => ({ ...p, language: e.target.value }))} className="z-input-light text-sm">
+                  {['Español', 'Inglés', 'Spanglish'].map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-xs text-slate-400">Fechas de envío</label>
+                {seqDates.map((d, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <input type="date" value={d} onChange={e => updateSeqDate(i, e.target.value)} className="z-input-light text-sm" />
+                    {seqDates.length > 1 && (
+                      <button onClick={() => removeSeqDate(i)} className="text-red-400 hover:text-red-300">
+                        <TrashIcon className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button onClick={addSeqDate} className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300">
+                  <PlusIcon className="w-3.5 h-3.5" /> Agregar fecha
+                </button>
+              </div>
+
+              {seqError && <p className="text-xs text-red-400">{seqError}</p>}
+              <button onClick={handleGenerateSequence} disabled={seqGenerating}
+                className="z-btn-primary disabled:opacity-50 flex items-center gap-1.5">
+                <SparklesIcon className="w-4 h-4" /> {seqGenerating ? 'Generando con IA...' : 'Generar con IA'}
+              </button>
+            </div>
+          )}
+
+          {seqGenerated && (
+            <div className="space-y-3">
+              <p className="text-xs text-slate-400">Revisa y edita cada correo antes de programar la secuencia.</p>
+              {seqGenerated.map((em, i) => (
+                <div key={i} className="border border-z-border rounded-lg p-3 space-y-2">
+                  <p className="text-xs text-blue-300">Correo {i + 1} · {em.date}</p>
+                  <input type="text" value={em.subject} onChange={e => updateGeneratedEmail(i, 'subject', e.target.value)}
+                    className="z-input-light text-sm w-full" placeholder="Asunto" />
+                  <textarea value={em.body} onChange={e => updateGeneratedEmail(i, 'body', e.target.value)}
+                    rows={4} className="z-input-light text-sm w-full" placeholder="Cuerpo del correo" />
+                </div>
+              ))}
+              {seqError && <p className="text-xs text-red-400">{seqError}</p>}
+              <div className="flex gap-2">
+                <button onClick={handleConfirmSequence} disabled={seqCreating || !seqForm.name}
+                  className="z-btn-primary disabled:opacity-50">
+                  {seqCreating ? 'Programando...' : 'Confirmar y programar'}
+                </button>
+                <button onClick={() => setSeqGenerated(null)} className="z-btn-ghost text-xs">Descartar</button>
+              </div>
+            </div>
+          )}
+
+          {sequences.length > 0 && (
+            <div className="space-y-3 pt-3 border-t border-z-border">
+              {sequences.map(seq => (
+                <div key={seq.id} className="border border-z-border rounded-lg overflow-hidden">
+                  <div className="px-4 py-3 flex items-center justify-between bg-white/5">
+                    <div>
+                      <p className="text-sm text-slate-200 font-medium">{seq.name}</p>
+                      <p className="text-xs text-slate-500">{seq.steps.length} correo{seq.steps.length !== 1 ? 's' : ''} · {seq.status}</p>
+                    </div>
+                    {seq.status === 'scheduled' && (
+                      <button onClick={() => handleCancelSequence(seq.id)}
+                        className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 px-3 py-1 rounded-lg transition-colors">
+                        Cancelar secuencia
+                      </button>
+                    )}
+                  </div>
+                  <div className="divide-y divide-z-border">
+                    {seq.steps.map(s => (
+                      <div key={s.job_id} className="px-4 py-2.5 flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-sm text-slate-300 truncate">Paso {s.step}: {s.subject}</p>
+                          <p className="text-xs text-slate-500">{displayUTC5(s.scheduled_at)} <span className="text-slate-600">(UTC-5)</span></p>
+                        </div>
+                        <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
+                          s.status === 'done' ? 'bg-green-500/15 text-green-400' :
+                          s.status === 'failed' ? 'bg-red-500/15 text-red-400' :
+                          s.status === 'cancelled' ? 'bg-slate-500/15 text-slate-400' :
+                          'bg-blue-500/15 text-blue-400'
+                        }`}>{s.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </Section>
 
       {/* Modal reprogramar */}
       {rescheduleModal && (

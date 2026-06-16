@@ -257,6 +257,23 @@ class ScheduledEmailSend(SQLModel, table=True):
     initiated_by: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
     error: Optional[str] = None
+    sequence_id: Optional[int] = Field(default=None, index=True)
+    sequence_step: Optional[int] = None
+    subject_override: Optional[str] = None
+    body_override: Optional[str] = None
+
+
+class EmailSequence(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: int = Field(index=True)
+    name: str
+    email_list_id: int
+    objective: str
+    tone: str = Field(default="Profesional")
+    language: str = Field(default="Español")
+    status: str = Field(default="draft")  # draft / scheduled / completed / cancelled
+    created_by: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
 class LeadHunt(SQLModel, table=True):

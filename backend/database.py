@@ -1,6 +1,6 @@
 import os
 from sqlmodel import SQLModel, create_engine, Session, select
-from models import AgentConfig, Organization, User, WebhookLog, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, LeadHunt  # noqa: F401 — ensures table is registered
+from models import AgentConfig, Organization, User, WebhookLog, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, LeadHunt, EmailSequence  # noqa: F401 — ensures table is registered
 
 _raw_url = os.getenv("DATABASE_URL", "sqlite:///./calls.db")
 # Railway PostgreSQL URLs start with "postgres://" but SQLAlchemy requires "postgresql://"
@@ -162,6 +162,18 @@ def run_migrations():
                 if "email_list_id" not in sched_cols:
                     conn.execute(text("ALTER TABLE scheduledemailsend ADD COLUMN email_list_id INTEGER"))
                     log.info("Migration: added scheduledemailsend.email_list_id")
+                if "sequence_id" not in sched_cols:
+                    conn.execute(text("ALTER TABLE scheduledemailsend ADD COLUMN sequence_id INTEGER"))
+                    log.info("Migration: added scheduledemailsend.sequence_id")
+                if "sequence_step" not in sched_cols:
+                    conn.execute(text("ALTER TABLE scheduledemailsend ADD COLUMN sequence_step INTEGER"))
+                    log.info("Migration: added scheduledemailsend.sequence_step")
+                if "subject_override" not in sched_cols:
+                    conn.execute(text("ALTER TABLE scheduledemailsend ADD COLUMN subject_override TEXT"))
+                    log.info("Migration: added scheduledemailsend.subject_override")
+                if "body_override" not in sched_cols:
+                    conn.execute(text("ALTER TABLE scheduledemailsend ADD COLUMN body_override TEXT"))
+                    log.info("Migration: added scheduledemailsend.body_override")
 
         if "emailsendlog" in tables:
             log_cols = {c["name"] for c in insp.get_columns("emailsendlog")}

@@ -198,6 +198,13 @@ export const getScheduledEmails = () => api.get('/settings/email/scheduled').the
 export const cancelScheduledEmail = (id) => api.delete(`/settings/email/scheduled/${id}`).then(r => r.data)
 export const rescheduleEmail = (id, scheduled_at) => api.patch(`/settings/email/scheduled/${id}`, { scheduled_at }).then(r => r.data)
 
+// Email sequences (drip campaigns)
+export const generateEmailSequence = (data) => api.post('/settings/email/sequences/generate', data).then(r => r.data)
+export const createEmailSequence = (data) => api.post('/settings/email/sequences', data).then(r => r.data)
+export const getEmailSequences = () => api.get('/settings/email/sequences').then(r => r.data)
+export const updateSequenceStep = (seqId, jobId, data) => api.patch(`/settings/email/sequences/${seqId}/steps/${jobId}`, data).then(r => r.data)
+export const deleteEmailSequence = (id) => api.delete(`/settings/email/sequences/${id}`).then(r => r.data)
+
 // Admin — CRM
 export const testCRMWebhook = (orgId) =>
   api.post(`/admin/organizations/${orgId}/crm/test`).then(r => r.data)

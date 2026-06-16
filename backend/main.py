@@ -132,10 +132,10 @@ async def _run_scheduled_email(job_id: int):
                         "agente": from_name, "resumen": "", "telefono": prospect.phone or "",
                         "fecha": _dt.utcnow().strftime("%d/%m/%Y"),
                     }
-                    subject = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(job.template_key, "Mensaje de ZyraVoice"), tmpl_vars)
+                    subject = _fill(job.subject_override or tmpl.get("subject") or DEFAULT_SUBJECT.get(job.template_key, "Mensaje de ZyraVoice"), tmpl_vars)
                     color = tmpl.get("color") or "#4F46E5"
                     greeting = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
-                    body_text = _fill(tmpl.get("body") or "", tmpl_vars)
+                    body_text = _fill(job.body_override or tmpl.get("body") or "", tmpl_vars)
                     signature = _fill(tmpl.get("signature") or f"El equipo de {from_name}", tmpl_vars)
                     html_body = _build_html(color, greeting, body_text, tmpl.get("cta_text") or "", tmpl.get("cta_url") or "", signature, unsubscribe_url=unsub)
                     message = Mail(from_email=(from_email, from_name), to_emails=prospect.email, subject=subject, html_content=html_body)
