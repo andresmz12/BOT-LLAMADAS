@@ -3,7 +3,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieC
 import { UserGroupIcon, StarIcon, CalendarIcon, XCircleIcon, ClockIcon, PhoneArrowDownLeftIcon, ArrowPathIcon, EnvelopeIcon, CursorArrowRaysIcon, ArrowTrendingUpIcon, NoSymbolIcon } from '@heroicons/react/24/outline'
 import { WaveformIcon } from '../components/Sidebar'
 import StatusBadge from '../components/StatusBadge'
-import { getStats, getCampaigns, getOrganizations, getEmailStats, getEmailEvents } from '../api/client'
+import { getStats, getCampaigns, getOrganizations, getEmailStats, getEmailEvents, downloadEmailStatsPdf } from '../api/client'
 import { ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import { fmtDate } from '../utils/date'
 
@@ -56,10 +56,18 @@ function EmailDashboard({ selectedOrg }) {
   const [trackingTab, setTrackingTab] = useState('all')
   const [trackingEvents, setTrackingEvents] = useState(null)
   const [trackingLoading, setTrackingLoading] = useState(false)
+  const [pdfLoading, setPdfLoading] = useState(false)
 
   useEffect(() => {
     getEmailStats().then(setEs).catch(() => {})
   }, [selectedOrg])
+
+  const handleDownloadPdf = async () => {
+    setPdfLoading(true)
+    try { await downloadEmailStatsPdf() }
+    catch (e) { alert('Error al generar el PDF') }
+    finally { setPdfLoading(false) }
+  }
 
   const loadTracking = async () => {
     setTrackingLoading(true)
@@ -85,6 +93,18 @@ function EmailDashboard({ selectedOrg }) {
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-300">Métricas de email marketing</h2>
+        <button
+          onClick={handleDownloadPdf}
+          disabled={pdfLoading || noData}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 bg-white/5 hover:bg-white/10 border border-z-border rounded-lg transition-colors disabled:opacity-40"
+        >
+          <ArrowDownTrayIcon className="w-3.5 h-3.5" />
+          {pdfLoading ? 'Generando...' : 'Descargar PDF'}
+        </button>
+      </div>
+
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <KPI title="Enviados" value={es?.total_sent ?? 0} icon={EnvelopeIcon} iconColor="text-z-blue" />

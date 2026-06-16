@@ -1,5 +1,6 @@
 from typing import Optional
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from sqlmodel import Session, select, func
 from sqlalchemy import true as sql_true
 from database import get_session, engine as db_engine
@@ -277,6 +278,27 @@ def email_stats(
             for l in recent_sends
         ],
     }
+
+
+@router.get("/email/pdf")
+def email_stats_pdf(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Download the email marketing metrics as a corporate-styled PDF report."""
+    from services.pdf_report import build_email_stats_pdf
+
+    stats = email_stats(current_user=current_user, session=session)
+    org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
+    org_name = org.name if org else "ZyraVoice"
+
+    pdf_bytes = build_email_stats_pdf(org_name, stats)
+    filename = f"reporte-email-{datetime.utcnow().strftime('%Y%m%d')}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 def _empty_email_stats():

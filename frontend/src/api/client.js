@@ -107,6 +107,21 @@ export const startDemoCall = () => api.post('/demo/start-call').then(r => r.data
 export const getStats = (params) => api.get('/stats', { params }).then(r => r.data)
 export const getCampaignStats = (id) => api.get(`/stats/${id}`).then(r => r.data)
 
+export const downloadEmailStatsPdf = async () => {
+  const res = await api.get('/stats/email/pdf', { responseType: 'blob' })
+  const blob = new Blob([res.data], { type: 'application/pdf' })
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const disposition = res.headers['content-disposition'] || ''
+  const match = disposition.match(/filename="(.+)"/)
+  a.href = url
+  a.download = match ? match[1] : 'reporte-email.pdf'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 // Settings
 export const getSettings = () => api.get('/settings').then(r => r.data)
 export const saveSettings = (data) => api.post('/settings', data).then(r => r.data)
