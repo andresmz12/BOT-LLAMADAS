@@ -1333,7 +1333,13 @@ async def generate_email_sequence(
     }.get(data.language, "Escribe en español.")
 
     n = len(data.dates)
-    dates_list = "\n".join(f"{i+1}. {d}" for i, d in enumerate(data.dates))
+    def _date_only(iso_str: str) -> str:
+        try:
+            return datetime.fromisoformat(iso_str.replace("Z", "+00:00")).strftime("%d/%m/%Y")
+        except Exception:
+            return iso_str[:10]
+
+    dates_list = "\n".join(f"{i+1}. {_date_only(d)}" for i, d in enumerate(data.dates))
     prompt = (
         f"Eres un experto en email marketing para negocios hispanos en Estados Unidos.\n"
         f"{lang_hint}\n\n"
@@ -1362,6 +1368,10 @@ async def generate_email_sequence(
             raw = raw.strip("`")
             if raw.startswith("json"):
                 raw = raw[4:]
+        raw = raw.strip()
+        start, end = raw.find("["), raw.rfind("]")
+        if start != -1 and end != -1 and end > start:
+            raw = raw[start:end + 1]
         emails = json.loads(raw)
         if not isinstance(emails, list):
             raise ValueError("Respuesta no es una lista")

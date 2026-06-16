@@ -631,8 +631,13 @@ export default function EmailMarketing() {
   const removeSeqDate = (i) => setSeqDates(p => p.filter((_, idx) => idx !== i))
   const updateSeqDate = (i, v) => setSeqDates(p => p.map((d, idx) => idx === i ? v : d))
 
+  // Date-only pickers are interpreted as 9am local (UTC-5), matching the rest
+  // of the scheduling UI — without this, a bare "YYYY-MM-DD" parses as
+  // midnight UTC, which is 7pm the day before in UTC-5.
+  const dateOnlyToUTC5ISO = (d) => fromUTC5ToISO(`${d}T09:00`)
+
   const handleGenerateSequence = async () => {
-    const dates = seqDates.filter(Boolean)
+    const dates = seqDates.filter(Boolean).map(dateOnlyToUTC5ISO)
     if (!seqForm.email_list_id || !seqForm.objective || dates.length === 0) {
       setSeqError('Completa la lista, el objetivo y al menos una fecha'); return
     }
@@ -1604,7 +1609,7 @@ export default function EmailMarketing() {
               <p className="text-xs text-slate-400">Revisa y edita cada correo antes de programar la secuencia.</p>
               {seqGenerated.map((em, i) => (
                 <div key={i} className="border border-z-border rounded-lg p-3 space-y-2">
-                  <p className="text-xs text-blue-300">Correo {i + 1} · {em.date}</p>
+                  <p className="text-xs text-blue-300">Correo {i + 1} · {displayUTC5(em.date)} <span className="text-slate-600">(UTC-5)</span></p>
                   <input type="text" value={em.subject} onChange={e => updateGeneratedEmail(i, 'subject', e.target.value)}
                     className="z-input-light text-sm w-full" placeholder="Asunto" />
                   <textarea value={em.body} onChange={e => updateGeneratedEmail(i, 'body', e.target.value)}
