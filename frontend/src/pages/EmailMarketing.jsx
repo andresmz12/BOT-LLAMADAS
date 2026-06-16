@@ -128,6 +128,13 @@ function buildHtml(t) {
 </div>`
 }
 
+const TABS = [
+  { id: 'contactos', label: 'Contactos', icon: ListBulletIcon },
+  { id: 'enviar', label: 'Enviar', icon: PaperAirplaneIcon },
+  { id: 'plantillas', label: 'Plantillas', icon: SparklesIcon },
+  { id: 'analitica', label: 'Analítica', icon: ChartBarIcon },
+]
+
 // Accordion header component
 function Section({ id, label, icon: Icon, badge, openSections, toggle, children }) {
   const isOpen = openSections.has(id)
@@ -166,6 +173,7 @@ export default function EmailMarketing() {
 
   // Accordion
   const [openSections, setOpenSections] = useState(new Set(['listas', 'envio']))
+  const [activeTab, setActiveTab] = useState('contactos')
   const toggle = (id) => setOpenSections(prev => {
     const next = new Set(prev)
     next.has(id) ? next.delete(id) : next.add(id)
@@ -700,6 +708,27 @@ export default function EmailMarketing() {
         </span>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-z-border mb-1">
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
+              activeTab === t.id
+                ? 'text-z-blue-light border-z-blue-light'
+                : 'text-slate-500 border-transparent hover:text-slate-300'
+            }`}
+          >
+            <t.icon className="w-4 h-4" />
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── TAB: CONTACTOS ── */}
+      {activeTab === 'contactos' && (<>
+
       {/* ── 1. LISTAS DE EMAIL ── */}
       <Section id="listas" label="Listas de email" icon={ListBulletIcon}
         badge={emailLists.length > 0 ? `${emailLists.length} lista${emailLists.length !== 1 ? 's' : ''} · ${totalListContacts} contactos` : undefined}
@@ -926,6 +955,11 @@ export default function EmailMarketing() {
           )}
         </div>
       </Section>
+
+      </>)}
+
+      {/* ── TAB: ENVIAR ── */}
+      {activeTab === 'enviar' && (<>
 
       {/* ── 2. ENVÍO MASIVO ── */}
       <Section id="envio" label="Envío masivo" icon={PaperAirplaneIcon} openSections={openSections} toggle={toggle}>
@@ -1206,6 +1240,11 @@ export default function EmailMarketing() {
         </div>
       </Section>
 
+      </>)}
+
+      {/* ── TAB: PLANTILLAS ── */}
+      {activeTab === 'plantillas' && (<>
+
       {/* ── 3. PLANTILLAS PROFESIONALES ── */}
       <Section id="plantillas-pro" label="Plantillas profesionales" icon={SparklesIcon} openSections={openSections} toggle={toggle}>
         <div className="divide-y divide-z-border">
@@ -1420,6 +1459,11 @@ export default function EmailMarketing() {
           )}
         </div>
       </Section>
+
+      </>)}
+
+      {/* ── TAB: ENVIAR (continuación) ── */}
+      {activeTab === 'enviar' && (<>
 
       {/* ── 5. ENVÍO DE PRUEBA ── */}
       <Section id="prueba" label="Envío de prueba" icon={EnvelopeIcon} openSections={openSections} toggle={toggle}>
@@ -1682,6 +1726,8 @@ export default function EmailMarketing() {
         </div>
       </Section>
 
+      </>)}
+
       {/* Modal reprogramar */}
       {rescheduleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -1714,6 +1760,9 @@ export default function EmailMarketing() {
           </div>
         </div>
       )}
+
+      {/* ── TAB: ANALÍTICA ── */}
+      {activeTab === 'analitica' && (<>
 
       {/* ── 7. SEGUIMIENTO DE EMAILS ── */}
       <Section id="seguimiento" label="Seguimiento de emails" icon={ChartBarIcon} openSections={openSections} toggle={toggle}>
@@ -1902,6 +1951,8 @@ export default function EmailMarketing() {
           </div>
         </Section>
       )}
+
+      </>)}
 
       {/* Modal: vista previa de destinatarios */}
       {recipientDetailOpen && recipientDetail && (
