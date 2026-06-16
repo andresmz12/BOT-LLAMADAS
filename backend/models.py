@@ -233,6 +233,30 @@ class EmailSendLog(SQLModel, table=True):
     sent_details: Optional[str] = None  # JSON list of {name, email}
 
 
+class BulkEmailJob(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: int = Field(index=True)
+    status: str = Field(default="running")  # running / paused / done / error
+    template_key: str = Field(default="")
+    from_email: str = Field(default="")
+    from_name: str = Field(default="")
+    delay_ms: int = Field(default=0)
+    campaign_id: Optional[int] = None
+    email_only: bool = Field(default=False)
+    email_list_id: Optional[int] = None
+    batch_size: Optional[int] = None
+    base_url: str = Field(default="")
+    initiated_by: Optional[str] = None
+    total: int = Field(default=0)
+    sent: int = Field(default=0)
+    skipped: int = Field(default=0)
+    remaining: str = Field(default="[]")    # JSON list of prospect dicts not yet processed
+    sent_list: str = Field(default="[]")    # JSON list of {name, email}
+    failed_list: str = Field(default="[]")  # JSON list of {email, error}
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+    updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class EmailEvent(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     organization_id: int = Field(index=True)

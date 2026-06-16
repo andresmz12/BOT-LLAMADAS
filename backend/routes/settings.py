@@ -13,7 +13,7 @@ from typing import Optional
 from sqlmodel import Session, select
 from sqlalchemy import desc, func
 from database import get_session
-from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, EmailSequence
+from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, EmailSequence, BulkEmailJob
 from routes.auth import get_current_user, require_write_access, require_superadmin
 
 APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")
@@ -51,7 +51,7 @@ def _unsub_url(prospect_id: int, org_id: int, base: str = "") -> str:
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 
-_bulk_jobs: dict = {}
+_bulk_jobs_running: set = set()  # job_ids with a live in-process _run_bulk_send_job task
 _last_send: dict = {}  # org_id -> timestamp of last bulk send (idempotency guard)
 
 SECRET_FIELDS = {"retell_api_key", "anthropic_api_key", "openai_api_key", "google_api_key"}
@@ -529,58 +529,81 @@ async def bulk_send_email(
         for p in prospects_slice
     ]
 
-    job_id = str(uuid.uuid4())[:8]
-    _bulk_jobs[job_id] = {
-        "org_id": current_user.organization_id,
-        "status": "running",
-        "paused": False,
-        "sent": 0, "skipped": 0,
-        "total": len(prospects_data),
-        "sent_list": [],   # [{name, email}]
-        "failed_list": [], # [{email, error}]
-    }
-
-    background_tasks.add_task(
-        _run_bulk_send_job,
-        job_id=job_id,
-        org_id=current_user.organization_id,
-        user_email=current_user.email,
-        api_key=api_key,
+    job_row = BulkEmailJob(
+        organization_id=current_user.organization_id,
+        status="running",
+        template_key=data.template_key,
         from_email=from_email,
         from_name=from_name,
-        delay_s=delay_s,
-        template_key=data.template_key,
-        prospects_data=prospects_data,
+        delay_ms=org.email_send_delay_ms or 0,
         campaign_id=data.campaign_id,
         email_only=data.email_only or False,
         email_list_id=data.email_list_id,
         batch_size=data.batch_size,
         base_url=str(request.base_url).rstrip("/"),
+        initiated_by=current_user.email,
+        total=len(prospects_data),
+        remaining=json.dumps(prospects_data),
     )
+    session.add(job_row)
+    session.commit()
+    session.refresh(job_row)
+    job_id = str(job_row.id)
+
+    background_tasks.add_task(_run_bulk_send_job, job_id=job_id, api_key=api_key)
 
     return {"job_id": job_id, "status": "running", "total": len(prospects_data)}
 
 
-async def _run_bulk_send_job(
-    job_id: str, org_id: int, user_email: str,
-    api_key: str, from_email: str, from_name: str, delay_s: float,
-    template_key: str,
-    prospects_data: list, campaign_id, email_only: bool, email_list_id,
-    batch_size=None, base_url="",
-):
+async def _run_bulk_send_job(job_id: str, api_key: str):
+    _bulk_jobs_running.add(job_id)
+    try:
+        await _run_bulk_send_job_inner(job_id, api_key)
+    finally:
+        _bulk_jobs_running.discard(job_id)
+
+
+async def _run_bulk_send_job_inner(job_id: str, api_key: str):
     from sendgrid import SendGridAPIClient
     from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition, CustomArg
     from services.sendgrid_service import _fill, _build_html, DEFAULT_SUBJECT
     from database import engine as _engine
 
-    job = _bulk_jobs[job_id]
+    with Session(_engine) as s0:
+        row = s0.get(BulkEmailJob, int(job_id))
+        if not row:
+            return
+        org_id = row.organization_id
+        user_email = row.initiated_by
+        from_email = row.from_email
+        from_name = row.from_name
+        delay_s = (row.delay_ms or 0) / 1000.0
+        template_key = row.template_key
+        campaign_id = row.campaign_id
+        email_only = row.email_only
+        email_list_id = row.email_list_id
+        batch_size = row.batch_size
+        prospects_data = json.loads(row.remaining or "[]")
+        sent_list = json.loads(row.sent_list or "[]")
+        failed_list = json.loads(row.failed_list or "[]")
+        sent_count = row.sent
+        skipped_count = row.skipped
+
     sg = SendGridAPIClient(api_key)
     tmpl: dict = {}
 
-    for pdata in prospects_data:
+    while prospects_data:
         # Pausable: wait here while the job is paused before sending the next email
-        while job.get("paused"):
+        while True:
+            with Session(_engine) as s_chk:
+                row = s_chk.get(BulkEmailJob, int(job_id))
+                if not row or row.status in ("cancelled", "done"):
+                    return
+                if row.status != "paused":
+                    break
             await asyncio.sleep(1)
+
+        pdata = prospects_data[0]
         try:
             # Re-read the template/attachment from the DB on every send, so changes made
             # mid-job (e.g. while paused) take effect for the remaining prospects instead
@@ -647,14 +670,30 @@ async def _run_bulk_send_job(
                     s.add(p)
                     s.commit()
 
-            job["sent"] += 1
-            job["sent_list"].append({"name": pdata["name"], "email": pdata["email"]})
-            if delay_s > 0:
-                await asyncio.sleep(delay_s)
+            sent_count += 1
+            sent_list.append({"name": pdata["name"], "email": pdata["email"]})
 
         except Exception as e:
-            job["failed_list"].append({"email": pdata["email"], "error": str(e)[:80]})
-            job["skipped"] += 1
+            failed_list.append({"email": pdata["email"], "error": str(e)[:80]})
+            skipped_count += 1
+
+        # Remove processed prospect and persist progress so a restart can resume exactly here
+        prospects_data.pop(0)
+        with Session(_engine) as s_upd:
+            row = s_upd.get(BulkEmailJob, int(job_id))
+            if not row or row.status == "cancelled":
+                return
+            row.remaining = json.dumps(prospects_data)
+            row.sent = sent_count
+            row.skipped = skipped_count
+            row.sent_list = json.dumps(sent_list)
+            row.failed_list = json.dumps(failed_list)
+            row.updated_at = datetime.utcnow()
+            s_upd.add(row)
+            s_upd.commit()
+
+        if delay_s > 0:
+            await asyncio.sleep(delay_s)
 
     # Resolve campaign name for log
     if email_only:
@@ -674,70 +713,104 @@ async def _run_bulk_send_job(
             template_subject=tmpl.get("subject") or "",
             campaign_id=campaign_id,
             campaign_name=camp_name,
-            total_sent=job["sent"],
-            total_skipped=job["skipped"],
-            total_errors=len(job["failed_list"]),
-            error_details=json.dumps(job["failed_list"]) if job["failed_list"] else None,
+            total_sent=sent_count,
+            total_skipped=skipped_count,
+            total_errors=len(failed_list),
+            error_details=json.dumps(failed_list) if failed_list else None,
             initiated_by=user_email,
             source_email_only=email_only or False,
             source_email_list_id=email_list_id,
             source_batch_size=batch_size,
-            sent_details=json.dumps(job["sent_list"]) if job["sent_list"] else None,
+            sent_details=json.dumps(sent_list) if sent_list else None,
         )
         s.add(log_entry)
+        row = s.get(BulkEmailJob, int(job_id))
+        if row:
+            row.status = "done"
+            row.updated_at = datetime.utcnow()
+            s.add(row)
         s.commit()
 
-    job["status"] = "done"
+
+def _job_to_dict(row: "BulkEmailJob") -> dict:
+    return {
+        "org_id": row.organization_id,
+        "status": row.status,
+        "paused": row.status == "paused",
+        "sent": row.sent,
+        "skipped": row.skipped,
+        "total": row.total,
+        "sent_list": json.loads(row.sent_list or "[]"),
+        "failed_list": json.loads(row.failed_list or "[]"),
+    }
 
 
 @router.get("/email/bulk-send/status/{job_id}")
-def bulk_send_status(job_id: str, current_user: User = Depends(get_current_user)):
-    job = _bulk_jobs.get(job_id)
-    if not job:
+def bulk_send_status(job_id: str, current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
+    row = session.get(BulkEmailJob, int(job_id))
+    if not row:
         raise HTTPException(status_code=404, detail="Job no encontrado o expirado")
-    if current_user.role != "superadmin" and job.get("org_id") != current_user.organization_id:
+    if current_user.role != "superadmin" and row.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
-    return {**job, "job_id": job_id}
+    return {**_job_to_dict(row), "job_id": job_id}
 
 
 @router.get("/email/bulk-send/active")
-def get_active_bulk_send(current_user: User = Depends(get_current_user)):
+def get_active_bulk_send(current_user: User = Depends(get_current_user), session: Session = Depends(get_session)):
     """Find the most recently created running/paused job for this org — lets the
-    frontend reattach to an in-progress send after a page refresh."""
+    frontend reattach to an in-progress send after a page refresh OR a backend restart,
+    since job state now lives in the DB instead of in-process memory."""
     if not current_user.organization_id:
         return {"job_id": None}
-    for job_id, job in reversed(list(_bulk_jobs.items())):
-        if job.get("org_id") != current_user.organization_id:
-            continue
-        if job.get("status") in ("running", "paused"):
-            return {**job, "job_id": job_id}
-    return {"job_id": None}
+    row = session.exec(
+        select(BulkEmailJob)
+        .where(
+            BulkEmailJob.organization_id == current_user.organization_id,
+            BulkEmailJob.status.in_(["running", "paused"]),
+        )
+        .order_by(BulkEmailJob.id.desc())
+    ).first()
+    if not row:
+        return {"job_id": None}
+    return {**_job_to_dict(row), "job_id": str(row.id)}
 
 
 @router.post("/email/bulk-send/{job_id}/pause")
-def pause_bulk_send(job_id: str, current_user: User = Depends(require_write_access)):
-    job = _bulk_jobs.get(job_id)
-    if not job:
+def pause_bulk_send(job_id: str, current_user: User = Depends(require_write_access), session: Session = Depends(get_session)):
+    row = session.get(BulkEmailJob, int(job_id))
+    if not row:
         raise HTTPException(status_code=404, detail="Job no encontrado o expirado")
-    if current_user.role != "superadmin" and job.get("org_id") != current_user.organization_id:
+    if current_user.role != "superadmin" and row.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
-    if job.get("status") == "running":
-        job["paused"] = True
-        job["status"] = "paused"
-    return {**job, "job_id": job_id}
+    if row.status == "running":
+        row.status = "paused"
+        row.updated_at = datetime.utcnow()
+        session.add(row)
+        session.commit()
+    return {**_job_to_dict(row), "job_id": job_id}
 
 
 @router.post("/email/bulk-send/{job_id}/resume")
-def resume_bulk_send(job_id: str, current_user: User = Depends(require_write_access)):
-    job = _bulk_jobs.get(job_id)
-    if not job:
+def resume_bulk_send(job_id: str, current_user: User = Depends(require_write_access), session: Session = Depends(get_session)):
+    row = session.get(BulkEmailJob, int(job_id))
+    if not row:
         raise HTTPException(status_code=404, detail="Job no encontrado o expirado")
-    if current_user.role != "superadmin" and job.get("org_id") != current_user.organization_id:
+    if current_user.role != "superadmin" and row.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
-    if job.get("status") == "paused":
-        job["paused"] = False
-        job["status"] = "running"
-    return {**job, "job_id": job_id}
+    if row.status == "paused":
+        row.status = "running"
+        row.updated_at = datetime.utcnow()
+        session.add(row)
+        session.commit()
+        # If no live task is currently processing this job (e.g. it was left
+        # paused across a backend restart), relaunch it; otherwise the
+        # already-running task's pause-wait loop will pick up the new status itself.
+        if job_id not in _bulk_jobs_running:
+            org = session.get(Organization, row.organization_id)
+            api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "") if org else ""
+            if api_key:
+                asyncio.create_task(_run_bulk_send_job(job_id=job_id, api_key=api_key))
+    return {**_job_to_dict(row), "job_id": job_id}
 
 
 @router.get("/email/history")

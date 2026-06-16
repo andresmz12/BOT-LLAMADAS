@@ -286,6 +286,29 @@ async def lifespan(app: FastAPI):
     if not os.getenv("SUPERADMIN_PASSWORD"):
         logger.warning("⚠️  SUPERADMIN_PASSWORD not set — using default hardcoded password, CHANGE THIS IN PRODUCTION")
 
+    # Resume bulk email sends that were running/paused when the backend last stopped
+    try:
+        from sqlmodel import Session as _S2, select as _sel2
+        from models import BulkEmailJob as _BulkEmailJob, Organization as _Org
+        from routes.settings import _run_bulk_send_job as _resume_bulk_job
+        with _S2(engine) as s:
+            stuck_jobs = s.exec(
+                _sel2(_BulkEmailJob).where(_BulkEmailJob.status.in_(["running", "paused"]))
+            ).all()
+            for j in stuck_jobs:
+                org = s.get(_Org, j.organization_id)
+                api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "") if org else ""
+                if api_key and j.remaining and j.remaining != "[]":
+                    asyncio.create_task(_resume_bulk_job(job_id=str(j.id), api_key=api_key))
+                    logger.info(f"[Startup] Resumed bulk email job {j.id} (org={j.organization_id})")
+                else:
+                    j.status = "error"
+                    s.add(j)
+            if stuck_jobs:
+                s.commit()
+    except Exception as e:
+        logger.error(f"[Startup] Failed to resume bulk email jobs: {e}")
+
     scheduler = asyncio.create_task(_campaign_scheduler())
     yield
     scheduler.cancel()
