@@ -137,6 +137,9 @@ export const uploadEmailAttachment = (file) => {
 export const sendTestEmail = (data) => api.post('/settings/email/test', data).then(r => r.data)
 export const bulkSendEmail = (data) => api.post('/settings/email/bulk-send', data).then(r => r.data)
 export const getBulkSendStatus = (jobId) => api.get(`/settings/email/bulk-send/status/${jobId}`).then(r => r.data)
+export const getActiveBulkSend = () => api.get('/settings/email/bulk-send/active').then(r => r.data)
+export const pauseBulkSend = (jobId) => api.post(`/settings/email/bulk-send/${jobId}/pause`).then(r => r.data)
+export const resumeBulkSend = (jobId) => api.post(`/settings/email/bulk-send/${jobId}/resume`).then(r => r.data)
 export const getEmailHistory = () => api.get('/settings/email/history').then(r => r.data)
 export const getEmailContactsCount = () => api.get('/settings/email/email-contacts-count').then(r => r.data)
 export const importEmailContacts = (file) => {
@@ -164,6 +167,7 @@ export const uploadTemplateAttachment = (templateKey, file) => {
   form.append('file', file)
   return api.post('/settings/email/template-attachment', form).then(r => r.data)
 }
+export const deleteTemplateAttachment = (templateKey) => api.delete(`/settings/email/template-attachment/${templateKey}`).then(r => r.data)
 
 export const toggleContactUnsubscribe = (prospectId) =>
   api.patch(`/settings/email/contacts/${prospectId}/unsubscribe`).then(r => r.data)

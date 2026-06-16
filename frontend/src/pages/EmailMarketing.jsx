@@ -30,11 +30,11 @@ import {
 } from '@heroicons/react/24/outline'
 import {
   getEmailSettings, saveEmailSettings, uploadEmailAttachment,
-  sendTestEmail, bulkSendEmail, getBulkSendStatus, getCampaigns,
+  sendTestEmail, bulkSendEmail, getBulkSendStatus, getActiveBulkSend, pauseBulkSend, resumeBulkSend, getCampaigns,
   getEmailHistory, validateEmailRecipients, uploadTemplateAttachment,
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
   getEmailLists, createEmailList, deleteEmailList,
-  getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList,
+  getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList, deleteTemplateAttachment,
   getScheduledEmails, cancelScheduledEmail, rescheduleEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents, labelContact,
   generateEmailSequence, createEmailSequence, getEmailSequences, updateSequenceStep, deleteEmailSequence,
 } from '../api/client'
@@ -315,7 +315,50 @@ export default function EmailMarketing() {
     loadEmailLists()
     loadScheduled()
     loadSequences()
+    // Reattach to an in-progress bulk send if one exists (survives page refresh)
+    getActiveBulkSend().then(status => {
+      if (status.job_id) {
+        setBulkJobId(status.job_id)
+        setBulkJobProgress(status)
+        setBulkLoading(true)
+        startBulkPolling(status.job_id)
+        setOpenSections(prev => { const next = new Set(prev); next.add('envio'); return next })
+      }
+    }).catch(() => {})
   }, [])
+
+  const startBulkPolling = (jobId) => {
+    if (bulkPollRef?.current) { clearInterval(bulkPollRef.current); bulkPollRef.current = null }
+    bulkPollRef.current = setInterval(async () => {
+      try {
+        const status = await getBulkSendStatus(jobId)
+        setBulkJobProgress(status)
+        if (status.status === 'done' || status.status === 'error') {
+          clearInterval(bulkPollRef.current); bulkPollRef.current = null
+          setBulkLoading(false); loadHistory()
+          if (status.status === 'done') {
+            try {
+              const freshStats = await validateEmailRecipients({ ...parseBulkTarget(), skip_labeled: true })
+              setRecipientStats(freshStats)
+            } catch (_) {}
+          }
+        }
+      } catch (_) {
+        clearInterval(bulkPollRef.current); bulkPollRef.current = null
+        setBulkLoading(false)
+      }
+    }, 2000)
+  }
+
+  const togglePauseBulk = async () => {
+    if (!bulkJobId || !bulkJobProgress) return
+    try {
+      const updated = bulkJobProgress.status === 'paused'
+        ? await resumeBulkSend(bulkJobId)
+        : await pauseBulkSend(bulkJobId)
+      setBulkJobProgress(updated)
+    } catch (_) {}
+  }
 
   // Template helpers
   const customTemplates = Object.keys(cfg.email_templates)
@@ -515,25 +558,7 @@ export default function EmailMarketing() {
       } else if (r.job_id) {
         setBulkJobId(r.job_id)
         setBulkJobProgress({ status: 'running', sent: 0, skipped: 0, total: r.total, sent_list: [], failed_list: [] })
-        bulkPollRef.current = setInterval(async () => {
-          try {
-            const status = await getBulkSendStatus(r.job_id)
-            setBulkJobProgress(status)
-            if (status.status === 'done' || status.status === 'error') {
-              clearInterval(bulkPollRef.current); bulkPollRef.current = null
-              setBulkLoading(false); loadHistory()
-              if (status.status === 'done') {
-                try {
-                  const freshStats = await validateEmailRecipients({ ...parseBulkTarget(), skip_labeled: true })
-                  setRecipientStats(freshStats)
-                } catch (_) {}
-              }
-            }
-          } catch (_) {
-            clearInterval(bulkPollRef.current); bulkPollRef.current = null
-            setBulkLoading(false)
-          }
-        }, 2000)
+        startBulkPolling(r.job_id)
       } else {
         setBulkResult(r)
         setScheduleMode(false); setScheduleAt('')
@@ -611,6 +636,17 @@ export default function EmailMarketing() {
       setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [editingTmpl]: { ...(p.email_templates[editingTmpl] || {}), attachment_name: r.filename } } }))
       setTmplAttachMsg({ ok: true, text: r.filename })
     } catch (e) { setTmplAttachMsg({ ok: false, text: 'Error al subir' }) }
+    finally { setTmplAttachLoading(false) }
+  }
+
+  const removeTmplAttach = async () => {
+    if (!editingTmpl) return
+    setTmplAttachLoading(true); setTmplAttachMsg(null)
+    try {
+      await deleteTemplateAttachment(editingTmpl)
+      setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [editingTmpl]: { ...(p.email_templates[editingTmpl] || {}), attachment_name: null } } }))
+      setTmplAttachMsg({ ok: true, text: 'Adjunto eliminado — esta plantilla usará el adjunto global si hay uno' })
+    } catch (e) { setTmplAttachMsg({ ok: false, text: 'Error al eliminar' }) }
     finally { setTmplAttachLoading(false) }
   }
 
@@ -1129,7 +1165,7 @@ export default function EmailMarketing() {
             <div className="rounded-xl border border-z-border bg-white/5 overflow-hidden">
               <div className="px-4 py-3 border-b border-z-border flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  {bulkLoading && (
+                  {bulkLoading && bulkJobProgress?.status !== 'paused' && (
                     <svg className="animate-spin w-4 h-4 text-blue-400 flex-shrink-0" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
                       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z"/>
@@ -1139,16 +1175,32 @@ export default function EmailMarketing() {
                     <CheckCircleIcon className="w-4 h-4 text-green-400 flex-shrink-0" />
                   )}
                   <span className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
-                    {bulkLoading
-                      ? (batchNumber > 1 ? `Enviando lote ${batchNumber}...` : 'Enviando emails en progreso...')
-                      : `Lote ${batchNumber} completado`}
+                    {bulkJobProgress?.status === 'paused'
+                      ? '⏸ Envío en pausa'
+                      : bulkLoading
+                        ? (batchNumber > 1 ? `Enviando lote ${batchNumber}...` : 'Enviando emails en progreso...')
+                        : `Lote ${batchNumber} completado`}
                   </span>
                 </div>
-                {bulkJobProgress && (
-                  <span className="text-sm font-bold text-green-400">
-                    {bulkJobProgress.sent} / {bulkJobProgress.total}
-                  </span>
-                )}
+                <div className="flex items-center gap-3">
+                  {bulkJobId && bulkJobProgress && (bulkJobProgress.status === 'running' || bulkJobProgress.status === 'paused') && (
+                    <button
+                      onClick={togglePauseBulk}
+                      className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+                        bulkJobProgress.status === 'paused'
+                          ? 'text-green-400 border-green-500/30 hover:bg-green-500/10'
+                          : 'text-amber-400 border-amber-500/30 hover:bg-amber-500/10'
+                      }`}
+                    >
+                      {bulkJobProgress.status === 'paused' ? '▶ Reanudar' : '⏸ Pausar'}
+                    </button>
+                  )}
+                  {bulkJobProgress && (
+                    <span className="text-sm font-bold text-green-400">
+                      {bulkJobProgress.sent} / {bulkJobProgress.total}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {bulkJobProgress && (
@@ -1434,11 +1486,22 @@ export default function EmailMarketing() {
                       {tmplAttachLoading ? 'Subiendo...' : cfg.email_templates[editingTmpl]?.attachment_name ? 'Reemplazar adjunto' : 'Subir adjunto'}
                     </button>
                     {cfg.email_templates[editingTmpl]?.attachment_name && (
-                      <span className="text-xs font-mono text-slate-400 truncate max-w-[180px]">
-                        ✓ {cfg.email_templates[editingTmpl].attachment_name}
-                      </span>
+                      <>
+                        <span className="text-xs font-mono text-slate-400 truncate max-w-[180px]">
+                          ✓ {cfg.email_templates[editingTmpl].attachment_name}
+                        </span>
+                        <button onClick={removeTmplAttach} disabled={tmplAttachLoading}
+                          className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
+                          Quitar
+                        </button>
+                      </>
                     )}
                   </div>
+                  {cfg.email_templates[editingTmpl]?.attachment_name && (
+                    <p className="text-xs text-amber-400/80 mt-1">
+                      ⚠ Esta plantilla tiene su propio adjunto y siempre usará este archivo en lugar del adjunto global de "Configuración automática", aunque lo cambies allí.
+                    </p>
+                  )}
                   {tmplAttachMsg && (
                     <p className={`text-xs mt-1 ${tmplAttachMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
                       {tmplAttachMsg.ok ? `✓ ${tmplAttachMsg.text}` : tmplAttachMsg.text}

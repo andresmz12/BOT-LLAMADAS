@@ -518,20 +518,6 @@ async def bulk_send_email(
         raise HTTPException(status_code=400, detail="No hay prospectos con email válido en esta selección")
     prospects_slice = all_prospects[:data.batch_size] if data.batch_size and data.batch_size > 0 else all_prospects
 
-    templates: dict = {}
-    if org.email_templates:
-        try:
-            templates = json.loads(org.email_templates)
-        except Exception:
-            pass
-    tmpl = templates.get(data.template_key, {})
-
-    att_b64 = tmpl.get("attachment_b64") or ""
-    att_name = tmpl.get("attachment_name") or ""
-    if not att_b64 and org.email_attachment and org.email_attachment_name:
-        att_b64 = _b64.b64encode(org.email_attachment).decode()
-        att_name = org.email_attachment_name
-
     from_email = (org.email_from or "").strip() or os.getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
     from_name  = (org.email_from_name or "").strip() or "ZyraVoice"
     delay_s    = (org.email_send_delay_ms or 0) / 1000.0
@@ -547,6 +533,7 @@ async def bulk_send_email(
     _bulk_jobs[job_id] = {
         "org_id": current_user.organization_id,
         "status": "running",
+        "paused": False,
         "sent": 0, "skipped": 0,
         "total": len(prospects_data),
         "sent_list": [],   # [{name, email}]
@@ -563,9 +550,6 @@ async def bulk_send_email(
         from_name=from_name,
         delay_s=delay_s,
         template_key=data.template_key,
-        tmpl=tmpl,
-        att_b64=att_b64,
-        att_name=att_name,
         prospects_data=prospects_data,
         campaign_id=data.campaign_id,
         email_only=data.email_only or False,
@@ -580,7 +564,7 @@ async def bulk_send_email(
 async def _run_bulk_send_job(
     job_id: str, org_id: int, user_email: str,
     api_key: str, from_email: str, from_name: str, delay_s: float,
-    template_key: str, tmpl: dict, att_b64: str, att_name: str,
+    template_key: str,
     prospects_data: list, campaign_id, email_only: bool, email_list_id,
     batch_size=None, base_url="",
 ):
@@ -591,9 +575,31 @@ async def _run_bulk_send_job(
 
     job = _bulk_jobs[job_id]
     sg = SendGridAPIClient(api_key)
+    tmpl: dict = {}
 
     for pdata in prospects_data:
+        # Pausable: wait here while the job is paused before sending the next email
+        while job.get("paused"):
+            await asyncio.sleep(1)
         try:
+            # Re-read the template/attachment from the DB on every send, so changes made
+            # mid-job (e.g. while paused) take effect for the remaining prospects instead
+            # of the stale snapshot captured when the job started.
+            with Session(_engine) as s_tmpl:
+                org_fresh = s_tmpl.get(Organization, org_id)
+                templates_fresh = {}
+                if org_fresh and org_fresh.email_templates:
+                    try:
+                        templates_fresh = json.loads(org_fresh.email_templates)
+                    except Exception:
+                        pass
+                tmpl = templates_fresh.get(template_key, {})
+                att_b64 = tmpl.get("attachment_b64") or ""
+                att_name = tmpl.get("attachment_name") or ""
+                if not att_b64 and org_fresh and org_fresh.email_attachment and org_fresh.email_attachment_name:
+                    att_b64 = _b64.b64encode(org_fresh.email_attachment).decode()
+                    att_name = org_fresh.email_attachment_name
+
             unsub = _unsub_url(pdata["id"], org_id, base=base_url)
             tmpl_vars = {
                 "nombre":   pdata["name"],
@@ -691,7 +697,47 @@ def bulk_send_status(job_id: str, current_user: User = Depends(get_current_user)
         raise HTTPException(status_code=404, detail="Job no encontrado o expirado")
     if current_user.role != "superadmin" and job.get("org_id") != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
-    return job
+    return {**job, "job_id": job_id}
+
+
+@router.get("/email/bulk-send/active")
+def get_active_bulk_send(current_user: User = Depends(get_current_user)):
+    """Find the most recently created running/paused job for this org — lets the
+    frontend reattach to an in-progress send after a page refresh."""
+    if not current_user.organization_id:
+        return {"job_id": None}
+    for job_id, job in reversed(list(_bulk_jobs.items())):
+        if job.get("org_id") != current_user.organization_id:
+            continue
+        if job.get("status") in ("running", "paused"):
+            return {**job, "job_id": job_id}
+    return {"job_id": None}
+
+
+@router.post("/email/bulk-send/{job_id}/pause")
+def pause_bulk_send(job_id: str, current_user: User = Depends(require_write_access)):
+    job = _bulk_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job no encontrado o expirado")
+    if current_user.role != "superadmin" and job.get("org_id") != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+    if job.get("status") == "running":
+        job["paused"] = True
+        job["status"] = "paused"
+    return {**job, "job_id": job_id}
+
+
+@router.post("/email/bulk-send/{job_id}/resume")
+def resume_bulk_send(job_id: str, current_user: User = Depends(require_write_access)):
+    job = _bulk_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="Job no encontrado o expirado")
+    if current_user.role != "superadmin" and job.get("org_id") != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+    if job.get("status") == "paused":
+        job["paused"] = False
+        job["status"] = "running"
+    return {**job, "job_id": job_id}
 
 
 @router.get("/email/history")
@@ -970,6 +1016,35 @@ async def upload_template_attachment(
     session.add(org)
     session.commit()
     return {"ok": True, "filename": file.filename, "template_key": template_key}
+
+
+@router.delete("/email/template-attachment/{template_key}")
+async def delete_template_attachment(
+    template_key: str,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    """Removes this template's own attachment so sends fall back to the
+    organization's global attachment (configured in Configuración automática)."""
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    org = session.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    templates = {}
+    if org.email_templates:
+        try:
+            templates = json.loads(org.email_templates)
+        except Exception:
+            pass
+    tmpl = templates.get(template_key, {})
+    tmpl.pop("attachment_b64", None)
+    tmpl.pop("attachment_name", None)
+    templates[template_key] = tmpl
+    org.email_templates = json.dumps(templates)
+    session.add(org)
+    session.commit()
+    return {"ok": True}
 
 
 @router.get("/email/email-contacts-count")
