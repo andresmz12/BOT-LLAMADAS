@@ -814,6 +814,20 @@ async def resume_bulk_send(job_id: str, current_user: User = Depends(require_wri
     return {**_job_to_dict(row), "job_id": job_id}
 
 
+@router.delete("/email/bulk-send/{job_id}")
+def cancel_bulk_send(job_id: str, current_user: User = Depends(require_write_access), session: Session = Depends(get_session)):
+    row = session.get(BulkEmailJob, int(job_id))
+    if not row:
+        raise HTTPException(status_code=404, detail="Job no encontrado o expirado")
+    if current_user.role != "superadmin" and row.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+    row.status = "cancelled"
+    row.updated_at = datetime.utcnow()
+    session.add(row)
+    session.commit()
+    return {"ok": True, "job_id": job_id, "status": "cancelled"}
+
+
 @router.get("/email/history")
 def get_email_history(
     current_user: User = Depends(get_current_user),

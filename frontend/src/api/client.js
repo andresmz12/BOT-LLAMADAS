@@ -140,6 +140,7 @@ export const getBulkSendStatus = (jobId) => api.get(`/settings/email/bulk-send/s
 export const getActiveBulkSend = () => api.get('/settings/email/bulk-send/active').then(r => r.data)
 export const pauseBulkSend = (jobId) => api.post(`/settings/email/bulk-send/${jobId}/pause`).then(r => r.data)
 export const resumeBulkSend = (jobId) => api.post(`/settings/email/bulk-send/${jobId}/resume`).then(r => r.data)
+export const cancelBulkSend = (jobId) => api.delete(`/settings/email/bulk-send/${jobId}`).then(r => r.data)
 export const getEmailHistory = () => api.get('/settings/email/history').then(r => r.data)
 export const getEmailContactsCount = () => api.get('/settings/email/email-contacts-count').then(r => r.data)
 export const importEmailContacts = (file) => {

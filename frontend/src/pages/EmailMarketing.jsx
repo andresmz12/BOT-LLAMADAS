@@ -30,7 +30,7 @@ import {
 } from '@heroicons/react/24/outline'
 import {
   getEmailSettings, saveEmailSettings, uploadEmailAttachment,
-  sendTestEmail, bulkSendEmail, getBulkSendStatus, getActiveBulkSend, pauseBulkSend, resumeBulkSend, getCampaigns,
+  sendTestEmail, bulkSendEmail, getBulkSendStatus, getActiveBulkSend, pauseBulkSend, resumeBulkSend, cancelBulkSend, getCampaigns,
   getEmailHistory, validateEmailRecipients, uploadTemplateAttachment,
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
   getEmailLists, createEmailList, deleteEmailList,
@@ -357,6 +357,17 @@ export default function EmailMarketing() {
         ? await resumeBulkSend(bulkJobId)
         : await pauseBulkSend(bulkJobId)
       setBulkJobProgress(updated)
+    } catch (_) {}
+  }
+
+  const cancelBulk = async () => {
+    if (!bulkJobId) return
+    if (!window.confirm('¿Cancelar el envío? Los emails ya enviados no se pueden deshacer.')) return
+    try {
+      await cancelBulkSend(bulkJobId)
+      setBulkJobId(null)
+      setBulkJobProgress(null)
+      setBulkLoading(false)
     } catch (_) {}
   }
 
@@ -1184,16 +1195,24 @@ export default function EmailMarketing() {
                 </div>
                 <div className="flex items-center gap-3">
                   {bulkJobId && bulkJobProgress && (bulkJobProgress.status === 'running' || bulkJobProgress.status === 'paused') && (
-                    <button
-                      onClick={togglePauseBulk}
-                      className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
-                        bulkJobProgress.status === 'paused'
-                          ? 'text-green-400 border-green-500/30 hover:bg-green-500/10'
-                          : 'text-amber-400 border-amber-500/30 hover:bg-amber-500/10'
-                      }`}
-                    >
-                      {bulkJobProgress.status === 'paused' ? '▶ Reanudar' : '⏸ Pausar'}
-                    </button>
+                    <>
+                      <button
+                        onClick={togglePauseBulk}
+                        className={`text-xs px-2.5 py-1 rounded-lg border transition-colors ${
+                          bulkJobProgress.status === 'paused'
+                            ? 'text-green-400 border-green-500/30 hover:bg-green-500/10'
+                            : 'text-amber-400 border-amber-500/30 hover:bg-amber-500/10'
+                        }`}
+                      >
+                        {bulkJobProgress.status === 'paused' ? '▶ Reanudar' : '⏸ Pausar'}
+                      </button>
+                      <button
+                        onClick={cancelBulk}
+                        className="text-xs px-2.5 py-1 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        ✕ Cancelar
+                      </button>
+                    </>
                   )}
                   {bulkJobProgress && (
                     <span className="text-sm font-bold text-green-400">
