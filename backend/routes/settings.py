@@ -792,7 +792,7 @@ def pause_bulk_send(job_id: str, current_user: User = Depends(require_write_acce
 
 
 @router.post("/email/bulk-send/{job_id}/resume")
-def resume_bulk_send(job_id: str, current_user: User = Depends(require_write_access), session: Session = Depends(get_session)):
+async def resume_bulk_send(job_id: str, current_user: User = Depends(require_write_access), session: Session = Depends(get_session)):
     row = session.get(BulkEmailJob, int(job_id))
     if not row:
         raise HTTPException(status_code=404, detail="Job no encontrado o expirado")
@@ -1577,7 +1577,11 @@ def create_email_sequence(
 
     for i, item in enumerate(data.emails):
         try:
-            scheduled_dt = datetime.fromisoformat(item.date.replace("Z", "+00:00"))
+            date_str = item.date.replace("Z", "+00:00")
+            # Add a default time component for bare YYYY-MM-DD strings (Python < 3.11 can't parse date-only ISO)
+            if "T" not in date_str:
+                date_str += "T09:00:00"
+            scheduled_dt = datetime.fromisoformat(date_str)
             if scheduled_dt.tzinfo is not None:
                 from datetime import timezone
                 scheduled_dt = scheduled_dt.astimezone(timezone.utc).replace(tzinfo=None)
