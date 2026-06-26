@@ -73,7 +73,10 @@ export default function Agents() {
                     </span>
                   )}
                 </div>
-                <p className="text-sm text-slate-500 mt-0.5">{agent.company_name}</p>
+                <p className="text-sm text-slate-500 mt-0.5">
+                  {agent.company_name}
+                  <span className="ml-2 inline-block px-1.5 py-0.5 bg-slate-700 text-slate-400 text-xs rounded font-mono">ID: {agent.id}</span>
+                </p>
               </div>
               <button onClick={() => setDefaultAgent(agent.id).then(load)} className="text-slate-600 hover:text-yellow-400 ml-2 flex-shrink-0">
                 {agent.is_default ? <StarSolid className="w-5 h-5 text-yellow-400" /> : <StarIcon className="w-5 h-5" />}
