@@ -1,4 +1,7 @@
+import logging
 from fastapi import APIRouter, Depends, HTTPException
+
+logger = logging.getLogger(__name__)
 from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
@@ -90,6 +93,7 @@ async def demo_call(
         call.status = "failed"
         session.add(call)
         session.commit()
+        logger.error(f"[demo_call] FAILED phone={req.phone} agent_id={req.agent_id} error={str(e)}")
         raise HTTPException(status_code=400, detail=str(e))
 
 
