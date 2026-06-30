@@ -427,28 +427,10 @@ def api_health():
     except Exception:
         pass
 
-    # System metrics — use container cgroup limit when available (Railway containers
-    # have a memory cap much smaller than the host's total RAM)
-    proc = psutil.Process()
-    proc_rss = proc.memory_info().rss
-
-    def _container_mem_limit() -> int:
-        for path in ("/sys/fs/cgroup/memory.max",                      # cgroups v2
-                     "/sys/fs/cgroup/memory/memory.limit_in_bytes"):   # cgroups v1
-            try:
-                with open(path) as f:
-                    val = f.read().strip()
-                if val not in ("max", ""):
-                    limit = int(val)
-                    if limit < 2 ** 62:   # ignore "unlimited" sentinel
-                        return limit
-            except Exception:
-                pass
-        return psutil.virtual_memory().total
-
-    mem_total = _container_mem_limit()
-    mem_pct = round(proc_rss / mem_total * 100, 2)
-    cpu_pct = round(psutil.cpu_percent(interval=0.1), 2)
+    # System metrics — consistent with Report System and My Profit
+    vm = psutil.virtual_memory()
+    mem_pct = round(vm.used / vm.total * 100, 2)
+    cpu_pct = round(os.getloadavg()[0] / os.cpu_count() * 100, 2)
 
     with _health_lock:
         consec = _consecutive_failures
