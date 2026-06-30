@@ -429,7 +429,9 @@ def api_health():
 
     # System metrics
     proc = psutil.Process()
-    mem_mb = round(proc.memory_info().rss / 1024 / 1024, 2)
+    mem_info = psutil.virtual_memory()
+    proc_rss = proc.memory_info().rss
+    mem_pct = round(proc_rss / mem_info.total * 100, 2)
     cpu_pct = round(psutil.cpu_percent(interval=0.1), 2)
 
     with _health_lock:
@@ -441,7 +443,7 @@ def api_health():
         "errorRate": _compute_error_rate(),
         "consecutiveFailures": consec,
         "databaseConnected": db_connected,
-        "memoryUsage": mem_mb,
+        "memoryUsage": mem_pct,
         "cpuUsage": cpu_pct,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
