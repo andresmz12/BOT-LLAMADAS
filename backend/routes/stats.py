@@ -100,7 +100,7 @@ def global_stats(
         })
 
     # Outcome distribution — GROUP BY in SQL, no Python loop over all rows
-    from sqlalchemy import extract, case, text
+    from sqlalchemy import extract, case
     from collections import defaultdict
 
     outcome_rows = session.exec(
@@ -112,16 +112,17 @@ def global_stats(
 
     # Calls by hour — GROUP BY EXTRACT(hour) in SQL
     contacted_in = tuple(_CONTACTED_OUTCOMES)
+    hour_expr = extract("hour", Call.started_at)
     hour_rows = session.exec(
         select(
-            extract("hour", Call.started_at).label("h"),
+            hour_expr.label("h"),
             func.count(Call.id).label("calls"),
             func.sum(
                 case((Call.outcome.in_(contacted_in), 1), else_=0)
             ).label("contacted"),
         )
         .where(base & Call.started_at.is_not(None))
-        .group_by(text("h"))
+        .group_by(hour_expr)
     ).all()
 
     hour_buckets: dict = defaultdict(lambda: {"calls": 0, "contacted": 0})
