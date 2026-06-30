@@ -1,10 +1,14 @@
 import os
 import json
+import time
 import asyncio
 import logging
+import threading
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends
+from datetime import datetime, timezone
+from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -22,6 +26,45 @@ from routes import webhook as webhook_module
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Health metrics — tracked in-process with a rolling 60-second window
+# ---------------------------------------------------------------------------
+_health_lock = threading.Lock()
+_request_timestamps: list[float] = []   # timestamps of all requests in last 60s
+_error_timestamps: list[float] = []     # timestamps of 5xx responses in last 60s
+_consecutive_failures = 0               # increments on 5xx, resets on success
+
+
+class HealthMetricsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        global _consecutive_failures
+        response: Response = await call_next(request)
+        now = time.monotonic()
+        cutoff = now - 60.0
+        with _health_lock:
+            _request_timestamps.append(now)
+            # Prune old entries
+            while _request_timestamps and _request_timestamps[0] < cutoff:
+                _request_timestamps.pop(0)
+            if response.status_code >= 500:
+                _error_timestamps.append(now)
+                _consecutive_failures += 1
+            else:
+                _consecutive_failures = 0
+            while _error_timestamps and _error_timestamps[0] < cutoff:
+                _error_timestamps.pop(0)
+        return response
+
+
+def _compute_error_rate() -> float:
+    cutoff = time.monotonic() - 60.0
+    with _health_lock:
+        total = sum(1 for t in _request_timestamps if t >= cutoff)
+        errors = sum(1 for t in _error_timestamps if t >= cutoff)
+    if total == 0:
+        return 0.0
+    return round(errors / total * 100, 2)
 
 
 class WebSocketManager:
@@ -326,6 +369,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept"],
 )
+app.add_middleware(HealthMetricsMiddleware)
 
 app.include_router(auth.router)
 app.include_router(admin.router)
@@ -369,16 +413,35 @@ def health():
     return {"status": "ok"}
 
 
-@app.get("/health/db")
-def health_db():
-    from sqlalchemy import text, inspect as sa_inspect
+@app.get("/api/health")
+def api_health():
+    import psutil
+    from sqlalchemy import text
+
+    # Database connectivity
+    db_connected = False
     try:
-        insp = sa_inspect(engine)
-        org_cols = {c["name"] for c in insp.get_columns("organization")}
-        required = {"crm_api_key", "crm_board_or_list_id", "crm_extra_config"}
-        missing = list(required - org_cols)
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
-        return {"db": "ok", "migration_needed": bool(missing)}
+        db_connected = True
     except Exception:
-        return {"db": "error"}
+        pass
+
+    # System metrics
+    proc = psutil.Process()
+    mem_mb = round(proc.memory_info().rss / 1024 / 1024, 2)
+    cpu_pct = round(psutil.cpu_percent(interval=0.1), 2)
+
+    with _health_lock:
+        consec = _consecutive_failures
+
+    return {
+        "status": "ok",
+        "app": "Bot Llamadas",
+        "errorRate": _compute_error_rate(),
+        "consecutiveFailures": consec,
+        "databaseConnected": db_connected,
+        "memoryUsage": mem_mb,
+        "cpuUsage": cpu_pct,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
