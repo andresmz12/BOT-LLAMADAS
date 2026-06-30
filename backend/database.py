@@ -7,7 +7,17 @@ _raw_url = os.getenv("DATABASE_URL", "sqlite:///./calls.db")
 DATABASE_URL = _raw_url.replace("postgres://", "postgresql://", 1)
 
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, echo=False, connect_args=_connect_args)
+_pool_kwargs = (
+    {}
+    if DATABASE_URL.startswith("sqlite")
+    else {
+        "pool_size": 3,       # max persistent connections
+        "max_overflow": 5,    # extra connections allowed under burst
+        "pool_recycle": 300,  # recycle connections every 5 min to avoid stale sockets
+        "pool_pre_ping": True,
+    }
+)
+engine = create_engine(DATABASE_URL, echo=False, connect_args=_connect_args, **_pool_kwargs)
 
 RETELL_AGENT_ID_DEFAULT = "agent_1499fc3598510000648e68461e"
 RETELL_LLM_ID_DEFAULT = "llm_7bd5d1428d3903644ab5152e681d"

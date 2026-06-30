@@ -2,6 +2,7 @@ from typing import Optional, List
 from datetime import datetime
 from sqlmodel import SQLModel, Field, Relationship
 from sqlalchemy import Column, LargeBinary
+from sqlalchemy.orm import deferred as sa_deferred
 
 
 class Organization(SQLModel, table=True):
@@ -36,7 +37,8 @@ class Organization(SQLModel, table=True):
     email_send_on_voicemail: bool = Field(default=False)
     email_send_on_not_interested: bool = Field(default=False)
     email_templates: Optional[str] = None
-    email_attachment: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary))
+    # deferred=True: binary is NOT loaded on every SELECT — only when explicitly accessed
+    email_attachment: Optional[bytes] = Field(default=None, sa_column=sa_deferred(Column(LargeBinary)))
     email_attachment_name: Optional[str] = None
     email_send_delay_ms: int = Field(default=0)
     # AI Marketing

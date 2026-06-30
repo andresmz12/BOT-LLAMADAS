@@ -99,27 +99,36 @@ def global_stats(
             "interested": d_interested,
         })
 
-    # Outcome distribution + calls by hour (single pass over all calls)
-    outcomes: dict[str, int] = {}
-    hour_data: dict[int, dict] = {}
-    for call in session.exec(select(Call).where(base)).all():
-        if call.outcome:
-            outcomes[call.outcome] = outcomes.get(call.outcome, 0) + 1
-        if call.started_at:
-            h = call.started_at.hour
-            if h not in hour_data:
-                hour_data[h] = {"calls": 0, "contacted": 0}
-            hour_data[h]["calls"] += 1
-            if call.outcome in _CONTACTED_OUTCOMES:
-                hour_data[h]["contacted"] += 1
-
+    # Outcome distribution — GROUP BY in SQL, no Python loop over all rows
+    from sqlalchemy import extract, case, text
     from collections import defaultdict
+
+    outcome_rows = session.exec(
+        select(Call.outcome, func.count(Call.id))
+        .where(base & Call.outcome.is_not(None))
+        .group_by(Call.outcome)
+    ).all()
+    outcomes: dict[str, int] = {row[0]: row[1] for row in outcome_rows}
+
+    # Calls by hour — GROUP BY EXTRACT(hour) in SQL
+    contacted_in = tuple(_CONTACTED_OUTCOMES)
+    hour_rows = session.exec(
+        select(
+            extract("hour", Call.started_at).label("h"),
+            func.count(Call.id).label("calls"),
+            func.sum(
+                case((Call.outcome.in_(contacted_in), 1), else_=0)
+            ).label("contacted"),
+        )
+        .where(base & Call.started_at.is_not(None))
+        .group_by(text("h"))
+    ).all()
+
     hour_buckets: dict = defaultdict(lambda: {"calls": 0, "contacted": 0})
-    for c in session.exec(select(Call).where(base & Call.started_at.is_not(None))).all():
-        h = c.started_at.hour
-        hour_buckets[h]["calls"] += 1
-        if c.outcome in _CONTACTED_OUTCOMES:
-            hour_buckets[h]["contacted"] += 1
+    for row in hour_rows:
+        h = int(row[0])
+        hour_buckets[h]["calls"] = row[1]
+        hour_buckets[h]["contacted"] = int(row[2] or 0)
 
     def _hour_label(h: int) -> str:
         if h == 0: return "12am"
