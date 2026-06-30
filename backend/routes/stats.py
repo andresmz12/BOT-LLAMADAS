@@ -196,28 +196,51 @@ def email_stats(
     if not org_id:
         return _empty_email_stats()
 
-    # Aggregate from EmailSendLog (bulk sends)
+    # Aggregate from EmailSendLog (bulk sends) — SQL SUM, no Python loop
+    log_agg = session.exec(
+        select(
+            func.coalesce(func.sum(EmailSendLog.total_sent), 0),
+            func.coalesce(func.sum(EmailSendLog.total_errors), 0),
+        ).where(EmailSendLog.organization_id == org_id)
+    ).one()
+    total_sent = int(log_agg[0])
+    total_errors = int(log_agg[1])
+    # Still need rows for per-day/per-template breakdown
     logs = session.exec(
         select(EmailSendLog).where(EmailSendLog.organization_id == org_id)
     ).all()
-    total_sent = sum(l.total_sent for l in logs)
-    total_errors = sum(l.total_errors for l in logs)
 
-    # Aggregate from EmailEvent (tracking events from SendGrid)
+    # Aggregate EmailEvent counts via GROUP BY — avoids loading all rows into Python
+    delivered = opens = unique_opens = clicks = unique_clicks = bounces = unsubscribes = 0
     try:
+        event_counts = session.exec(
+            select(EmailEvent.event_type, func.count(EmailEvent.id))
+            .where(EmailEvent.organization_id == org_id)
+            .group_by(EmailEvent.event_type)
+        ).all()
+        counts_by_type = {row[0]: row[1] for row in event_counts}
+        delivered = counts_by_type.get("delivered", 0)
+        opens = counts_by_type.get("open", 0)
+        clicks = counts_by_type.get("click", 0)
+        bounces = counts_by_type.get("bounce", 0) + counts_by_type.get("dropped", 0)
+        unsubscribes = counts_by_type.get("unsubscribe", 0) + counts_by_type.get("spamreport", 0)
+
+        unique_opens = session.exec(
+            select(func.count(func.distinct(EmailEvent.prospect_email)))
+            .where(EmailEvent.organization_id == org_id, EmailEvent.event_type == "open")
+        ).one() or 0
+        unique_clicks = session.exec(
+            select(func.count(func.distinct(EmailEvent.prospect_email)))
+            .where(EmailEvent.organization_id == org_id, EmailEvent.event_type == "click")
+        ).one() or 0
+        # Keep events list for per-day/per-template breakdown but limit to last 30 days
+        cutoff_30d = datetime.utcnow() - timedelta(days=30)
         events = session.exec(
-            select(EmailEvent).where(EmailEvent.organization_id == org_id)
+            select(EmailEvent)
+            .where(EmailEvent.organization_id == org_id, EmailEvent.timestamp >= cutoff_30d)
         ).all()
     except Exception:
         events = []
-
-    delivered = sum(1 for e in events if e.event_type == "delivered")
-    opens = sum(1 for e in events if e.event_type == "open")
-    unique_opens = len({e.prospect_email for e in events if e.event_type == "open"})
-    clicks = sum(1 for e in events if e.event_type == "click")
-    unique_clicks = len({e.prospect_email for e in events if e.event_type == "click"})
-    bounces = sum(1 for e in events if e.event_type in ("bounce", "dropped"))
-    unsubscribes = sum(1 for e in events if e.event_type in ("unsubscribe", "spamreport"))
 
     open_rate = round(unique_opens / delivered * 100, 1) if delivered else 0
     click_rate = round(unique_clicks / delivered * 100, 1) if delivered else 0

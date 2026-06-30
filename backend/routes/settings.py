@@ -591,10 +591,30 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
         skipped_count = row.skipped
 
     sg = SendGridAPIClient(api_key)
-    tmpl: dict = {}
+
+    def _load_template_and_attachment() -> tuple[dict, str, str]:
+        """Fetch org template + attachment once; called at job start and after resume."""
+        with Session(_engine) as s_tmpl:
+            org_fresh = s_tmpl.get(Organization, org_id)
+            templates_fresh: dict = {}
+            if org_fresh and org_fresh.email_templates:
+                try:
+                    templates_fresh = json.loads(org_fresh.email_templates)
+                except Exception:
+                    pass
+            t = templates_fresh.get(template_key, {})
+            a_b64 = t.get("attachment_b64") or ""
+            a_name = t.get("attachment_name") or ""
+            if not a_b64 and org_fresh and org_fresh.email_attachment and org_fresh.email_attachment_name:
+                a_b64 = _b64.b64encode(org_fresh.email_attachment).decode()
+                a_name = org_fresh.email_attachment_name
+        return t, a_b64, a_name
+
+    tmpl, att_b64, att_name = _load_template_and_attachment()
 
     while prospects_data:
         # Pausable: wait here while the job is paused before sending the next email
+        was_paused = False
         while True:
             with Session(_engine) as s_chk:
                 row = s_chk.get(BulkEmailJob, int(job_id))
@@ -602,27 +622,15 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
                     return
                 if row.status != "paused":
                     break
+                was_paused = True
             await asyncio.sleep(1)
+
+        # Reload template/attachment once after a pause (settings may have changed)
+        if was_paused:
+            tmpl, att_b64, att_name = _load_template_and_attachment()
 
         pdata = prospects_data[0]
         try:
-            # Re-read the template/attachment from the DB on every send, so changes made
-            # mid-job (e.g. while paused) take effect for the remaining prospects instead
-            # of the stale snapshot captured when the job started.
-            with Session(_engine) as s_tmpl:
-                org_fresh = s_tmpl.get(Organization, org_id)
-                templates_fresh = {}
-                if org_fresh and org_fresh.email_templates:
-                    try:
-                        templates_fresh = json.loads(org_fresh.email_templates)
-                    except Exception:
-                        pass
-                tmpl = templates_fresh.get(template_key, {})
-                att_b64 = tmpl.get("attachment_b64") or ""
-                att_name = tmpl.get("attachment_name") or ""
-                if not att_b64 and org_fresh and org_fresh.email_attachment and org_fresh.email_attachment_name:
-                    att_b64 = _b64.b64encode(org_fresh.email_attachment).decode()
-                    att_name = org_fresh.email_attachment_name
 
             unsub = _unsub_url(pdata["id"], org_id, base=base_url)
             tmpl_vars = {
@@ -673,6 +681,9 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
 
             sent_count += 1
             sent_list.append({"name": pdata["name"], "email": pdata["email"]})
+            # Trim sent_list to last 100 entries to avoid unbounded memory growth
+            if len(sent_list) > 100:
+                sent_list = sent_list[-100:]
 
         except Exception as e:
             failed_list.append({"email": pdata["email"], "error": str(e)[:80]})
@@ -688,7 +699,7 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
             row.sent = sent_count
             row.skipped = skipped_count
             row.sent_list = json.dumps(sent_list)
-            row.failed_list = json.dumps(failed_list)
+            row.failed_list = json.dumps(failed_list[-200:])  # cap errors list too
             row.updated_at = datetime.utcnow()
             s_upd.add(row)
             s_upd.commit()
