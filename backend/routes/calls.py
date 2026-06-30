@@ -2,7 +2,7 @@ import logging
 from fastapi import APIRouter, Depends, HTTPException
 
 logger = logging.getLogger(__name__)
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from database import get_session
@@ -102,6 +102,8 @@ def list_calls(
     campaign_id: int | None = None,
     outcome: str | None = None,
     prospect_id: int | None = None,
+    limit: int = 200,
+    offset: int = 0,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -114,7 +116,9 @@ def list_calls(
         query = query.where(Call.outcome == outcome)
     if prospect_id:
         query = query.where(Call.prospect_id == prospect_id)
-    calls = session.exec(query.order_by(Call.started_at.desc())).all()
+    calls = session.exec(
+        query.order_by(Call.started_at.desc()).offset(offset).limit(min(limit, 500))
+    ).all()
     result = []
     for call in calls:
         d = call.dict(exclude={"prospect", "campaign"})
@@ -134,22 +138,26 @@ def delete_calls(
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
-    query = select(Call)
+    from sqlalchemy import delete as _sql_delete
+
+    # Build ID-only query to avoid loading full Call rows (raw_transcript can be large)
+    id_query = select(Call.id)
     if current_user.role != "superadmin":
-        query = query.where(Call.organization_id == current_user.organization_id)
+        id_query = id_query.where(Call.organization_id == current_user.organization_id)
     if ids:
-        id_list = [int(i) for i in ids.split(",") if i.strip().isdigit()]
-        query = query.where(Call.id.in_(id_list))
+        parsed_ids = [int(i) for i in ids.split(",") if i.strip().isdigit()]
+        id_query = id_query.where(Call.id.in_(parsed_ids))
     else:
         if campaign_id:
-            query = query.where(Call.campaign_id == campaign_id)
+            id_query = id_query.where(Call.campaign_id == campaign_id)
         if outcome:
-            query = query.where(Call.outcome == outcome)
-    calls = session.exec(query).all()
-    for c in calls:
-        session.delete(c)
-    session.commit()
-    return {"deleted": len(calls)}
+            id_query = id_query.where(Call.outcome == outcome)
+
+    ids_to_delete = session.exec(id_query).all()
+    if ids_to_delete:
+        session.exec(_sql_delete(Call).where(Call.id.in_(ids_to_delete)))  # type: ignore[arg-type]
+        session.commit()
+    return {"deleted": len(ids_to_delete)}
 
 
 @router.get("/{call_id}")

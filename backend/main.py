@@ -77,11 +77,14 @@ class WebSocketManager:
         self.connections.setdefault(campaign_id, []).append(ws)
 
     def disconnect(self, campaign_id: int, ws: WebSocket):
-        if campaign_id in self.connections:
+        conns = self.connections.get(campaign_id)
+        if conns:
             try:
-                self.connections[campaign_id].remove(ws)
+                conns.remove(ws)
             except ValueError:
                 pass
+            if not conns:
+                del self.connections[campaign_id]
 
     async def broadcast(self, campaign_id: int, data: dict):
         dead = []
@@ -90,8 +93,15 @@ class WebSocketManager:
                 await ws.send_text(json.dumps(data))
             except Exception:
                 dead.append(ws)
-        for ws in dead:
-            self.connections[campaign_id].remove(ws)
+        if dead:
+            conns = self.connections.get(campaign_id, [])
+            for ws in dead:
+                try:
+                    conns.remove(ws)
+                except ValueError:
+                    pass
+            if not conns:
+                self.connections.pop(campaign_id, None)
 
 
 ws_manager = WebSocketManager()

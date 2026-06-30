@@ -205,9 +205,13 @@ def email_stats(
     ).one()
     total_sent = int(log_agg[0])
     total_errors = int(log_agg[1])
-    # Still need rows for per-day/per-template breakdown
+    # Rows for per-day/per-template breakdown — last 90 days only
+    cutoff_logs = datetime.utcnow() - timedelta(days=90)
     logs = session.exec(
-        select(EmailSendLog).where(EmailSendLog.organization_id == org_id)
+        select(EmailSendLog)
+        .where(EmailSendLog.organization_id == org_id, EmailSendLog.sent_at >= cutoff_logs)
+        .order_by(EmailSendLog.sent_at.desc())
+        .limit(500)
     ).all()
 
     # Aggregate EmailEvent counts via GROUP BY — avoids loading all rows into Python
