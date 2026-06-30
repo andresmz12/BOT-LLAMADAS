@@ -438,9 +438,36 @@ def api_health():
     except Exception:
         pass
 
-    # System metrics — consistent with Report System and My Profit
-    vm = psutil.virtual_memory()
-    mem_pct = round(vm.used / vm.total * 100, 2)
+    # System metrics — read container cgroup memory (accurate in Railway/Docker),
+    # falling back to host /proc/meminfo only if cgroup files are unavailable.
+    def _cgroup_mem_pct() -> float:
+        # cgroups v2 (modern kernels, Docker 20+, Railway)
+        try:
+            with open("/sys/fs/cgroup/memory.current") as f:
+                used = int(f.read().strip())
+            with open("/sys/fs/cgroup/memory.max") as f:
+                val = f.read().strip()
+            if val != "max":
+                limit = int(val)
+                if limit < 2 ** 62:
+                    return round(used / limit * 100, 2)
+        except Exception:
+            pass
+        # cgroups v1
+        try:
+            with open("/sys/fs/cgroup/memory/memory.usage_in_bytes") as f:
+                used = int(f.read().strip())
+            with open("/sys/fs/cgroup/memory/memory.limit_in_bytes") as f:
+                limit = int(f.read().strip())
+            if limit < 2 ** 62:
+                return round(used / limit * 100, 2)
+        except Exception:
+            pass
+        # Fallback: host memory (inaccurate inside shared containers)
+        vm = psutil.virtual_memory()
+        return round(vm.used / vm.total * 100, 2)
+
+    mem_pct = _cgroup_mem_pct()
     cpu_pct = round(os.getloadavg()[0] / os.cpu_count() * 100, 2)
 
     with _health_lock:
