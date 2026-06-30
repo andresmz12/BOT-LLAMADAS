@@ -1,7 +1,7 @@
 import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from pydantic import BaseModel, Field
 from typing import Optional
 from database import get_session
@@ -67,16 +67,39 @@ def list_campaigns(
     if current_user.role != "superadmin":
         query = query.where(Campaign.organization_id == current_user.organization_id)
     campaigns = session.exec(query).all()
-    result = []
-    for c in campaigns:
-        total = session.exec(select(Prospect).where(Prospect.campaign_id == c.id)).all()
-        done = [p for p in total if p.status not in ("pending", "calling")]
-        result.append({
+    if not campaigns:
+        return []
+
+    # Count prospects with SQL — avoids loading every Prospect row into Python
+    campaign_ids = [c.id for c in campaigns]
+    total_counts = {
+        row[0]: row[1]
+        for row in session.exec(
+            select(Prospect.campaign_id, func.count(Prospect.id))
+            .where(Prospect.campaign_id.in_(campaign_ids))
+            .group_by(Prospect.campaign_id)
+        ).all()
+    }
+    done_counts = {
+        row[0]: row[1]
+        for row in session.exec(
+            select(Prospect.campaign_id, func.count(Prospect.id))
+            .where(
+                Prospect.campaign_id.in_(campaign_ids),
+                Prospect.status.not_in(["pending", "calling"]),
+            )
+            .group_by(Prospect.campaign_id)
+        ).all()
+    }
+
+    return [
+        {
             **c.dict(),
-            "total_prospects": len(total),
-            "completed_prospects": len(done),
-        })
-    return result
+            "total_prospects": total_counts.get(c.id, 0),
+            "completed_prospects": done_counts.get(c.id, 0),
+        }
+        for c in campaigns
+    ]
 
 
 @router.get("/{campaign_id}")

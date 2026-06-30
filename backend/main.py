@@ -4,6 +4,7 @@ import time
 import asyncio
 import logging
 import threading
+from collections import deque
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from fastapi import FastAPI, Request, Response, WebSocket, WebSocketDisconnect, Depends
@@ -31,9 +32,10 @@ logger = logging.getLogger(__name__)
 # Health metrics — tracked in-process with a rolling 60-second window
 # ---------------------------------------------------------------------------
 _health_lock = threading.Lock()
-_request_timestamps: list[float] = []   # timestamps of all requests in last 60s
-_error_timestamps: list[float] = []     # timestamps of 5xx responses in last 60s
-_consecutive_failures = 0               # increments on 5xx, resets on success
+# deque with maxlen caps memory; popleft() is O(1) vs list.pop(0) O(n)
+_request_timestamps: deque[float] = deque(maxlen=6000)
+_error_timestamps: deque[float] = deque(maxlen=6000)
+_consecutive_failures = 0
 
 
 class HealthMetricsMiddleware(BaseHTTPMiddleware):
@@ -44,16 +46,15 @@ class HealthMetricsMiddleware(BaseHTTPMiddleware):
         cutoff = now - 60.0
         with _health_lock:
             _request_timestamps.append(now)
-            # Prune old entries
             while _request_timestamps and _request_timestamps[0] < cutoff:
-                _request_timestamps.pop(0)
+                _request_timestamps.popleft()
             if response.status_code >= 500:
                 _error_timestamps.append(now)
                 _consecutive_failures += 1
             else:
                 _consecutive_failures = 0
             while _error_timestamps and _error_timestamps[0] < cutoff:
-                _error_timestamps.pop(0)
+                _error_timestamps.popleft()
         return response
 
 

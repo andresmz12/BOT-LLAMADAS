@@ -140,12 +140,14 @@ async def import_file(
         reader = csv.DictReader(io.StringIO(text))
         rows = [{k.strip().lower(): v for k, v in r.items()} for r in reader]
 
-    # Pre-load existing phones in the org to skip duplicates across all campaigns
+    # Pre-load existing phones in the org to skip duplicates (only the phone column)
     existing_phones: set[str] = set()
     if current_user.organization_id:
         existing_phones = {
             p for p in session.exec(
-                select(Prospect.phone).where(Prospect.organization_id == current_user.organization_id)
+                select(Prospect.phone)
+                .where(Prospect.organization_id == current_user.organization_id)
+                .limit(200_000)
             ).all()
             if p
         }
@@ -185,6 +187,8 @@ def list_prospects(
     campaign_id: int | None = None,
     email_only: bool = False,
     status: str | None = None,
+    limit: int = 500,
+    offset: int = 0,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -197,7 +201,7 @@ def list_prospects(
         query = query.where(Prospect.campaign_id == campaign_id)
     if status:
         query = query.where(Prospect.status == status)
-    prospects = session.exec(query).all()
+    prospects = session.exec(query.offset(offset).limit(min(limit, 1000))).all()
     return [p.model_dump(exclude={"campaign", "calls"}) for p in prospects]
 
 

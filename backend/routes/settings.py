@@ -52,7 +52,14 @@ def _unsub_url(prospect_id: int, org_id: int, base: str = "") -> str:
 router = APIRouter(prefix="/settings", tags=["settings"])
 
 _bulk_jobs_running: set = set()  # job_ids with a live in-process _run_bulk_send_job task
-_last_send: dict = {}  # org_id -> timestamp of last bulk send (idempotency guard)
+_last_send: dict = {}  # org_id -> timestamp of last bulk send (idempotency guard, capped at 500 entries)
+
+
+def _last_send_set(key, ts: float) -> None:
+    if len(_last_send) >= 500:
+        oldest = min(_last_send, key=_last_send.__getitem__)
+        del _last_send[oldest]
+    _last_send[key] = ts
 
 SECRET_FIELDS = {"retell_api_key", "anthropic_api_key", "openai_api_key", "google_api_key"}
 CREDENTIAL_FIELDS = {"retell_api_key", "retell_phone_number", "anthropic_api_key", "openai_api_key", "google_api_key"}
@@ -459,7 +466,7 @@ async def bulk_send_email(
     _now = _time.monotonic()
     if _send_key in _last_send and _now - _last_send[_send_key] < 15:
         raise HTTPException(status_code=429, detail="Envío duplicado detectado. Espera unos segundos antes de intentar de nuevo.")
-    _last_send[_send_key] = _now
+    _last_send_set(_send_key, _now)
 
     # If scheduled for the future, store the job and return early
     if data.scheduled_at:
