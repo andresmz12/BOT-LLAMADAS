@@ -445,7 +445,7 @@ def api_health():
 
     cpu_pct: float | None = None
     try:
-        cpu_pct = round(psutil.cpu_percent(interval=None), 2)
+        cpu_pct = round(psutil.cpu_percent(interval=0.1), 2)
     except Exception:
         pass
 
