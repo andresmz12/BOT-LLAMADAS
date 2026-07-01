@@ -439,7 +439,7 @@ def api_health():
 
     mem_pct: float | None = None
     try:
-        mem_pct = round(psutil.Process().memory_percent(), 2)
+        mem_pct = round(psutil.virtual_memory().percent, 2)
     except Exception:
         pass
 
