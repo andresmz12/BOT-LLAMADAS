@@ -31,7 +31,6 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Health metrics — tracked in-process with a rolling 60-second window
 # ---------------------------------------------------------------------------
-_process_start_time = time.monotonic()
 _health_lock = threading.Lock()
 # deque with maxlen caps memory; popleft() is O(1) vs list.pop(0) O(n)
 _request_timestamps: deque[float] = deque(maxlen=6000)
@@ -477,7 +476,6 @@ def api_health():
     return {
         "status": "ok",
         "app": "Bot Llamadas",
-        "uptime": round(time.monotonic() - _process_start_time, 2),
         "errorRate": _compute_error_rate(),
         "consecutiveFailures": consec,
         "databaseConnected": db_connected,
