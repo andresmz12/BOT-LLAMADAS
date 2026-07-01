@@ -32,9 +32,9 @@ logger = logging.getLogger(__name__)
 # Health metrics — tracked in-process with a rolling 60-second window
 # ---------------------------------------------------------------------------
 _health_lock = threading.Lock()
-# deque with maxlen caps memory; popleft() is O(1) vs list.pop(0) O(n)
-_request_timestamps: deque[float] = deque(maxlen=6000)
-_error_timestamps: deque[float] = deque(maxlen=6000)
+# 5-minute rolling window; maxlen=30000 supports ~100 req/s sustained
+_request_timestamps: deque[float] = deque(maxlen=30000)
+_error_timestamps: deque[float] = deque(maxlen=30000)
 _consecutive_failures = 0
 
 
@@ -43,7 +43,7 @@ class HealthMetricsMiddleware(BaseHTTPMiddleware):
         global _consecutive_failures
         response: Response = await call_next(request)
         now = time.monotonic()
-        cutoff = now - 60.0
+        cutoff = now - 300.0
         with _health_lock:
             _request_timestamps.append(now)
             while _request_timestamps and _request_timestamps[0] < cutoff:
@@ -59,7 +59,7 @@ class HealthMetricsMiddleware(BaseHTTPMiddleware):
 
 
 def _compute_error_rate() -> float:
-    cutoff = time.monotonic() - 60.0
+    cutoff = time.monotonic() - 300.0
     with _health_lock:
         total = sum(1 for t in _request_timestamps if t >= cutoff)
         errors = sum(1 for t in _error_timestamps if t >= cutoff)
@@ -429,57 +429,35 @@ def api_health():
     import psutil
     from sqlalchemy import text
 
-    # Database connectivity
-    db_connected = False
+    db_connected: bool = False
     try:
         with engine.connect() as conn:
             conn.execute(text("SELECT 1"))
         db_connected = True
     except Exception:
+        db_connected = False
+
+    mem_pct: float | None = None
+    try:
+        mem_pct = round(psutil.Process().memory_percent(), 2)
+    except Exception:
         pass
 
-    # System metrics — read container cgroup memory (accurate in Railway/Docker),
-    # falling back to host /proc/meminfo only if cgroup files are unavailable.
-    def _cgroup_mem_pct() -> float:
-        # cgroups v2 (modern kernels, Docker 20+, Railway)
-        try:
-            with open("/sys/fs/cgroup/memory.current") as f:
-                used = int(f.read().strip())
-            with open("/sys/fs/cgroup/memory.max") as f:
-                val = f.read().strip()
-            if val != "max":
-                limit = int(val)
-                if limit < 2 ** 62:
-                    return round(used / limit * 100, 2)
-        except Exception:
-            pass
-        # cgroups v1
-        try:
-            with open("/sys/fs/cgroup/memory/memory.usage_in_bytes") as f:
-                used = int(f.read().strip())
-            with open("/sys/fs/cgroup/memory/memory.limit_in_bytes") as f:
-                limit = int(f.read().strip())
-            if limit < 2 ** 62:
-                return round(used / limit * 100, 2)
-        except Exception:
-            pass
-        # Fallback: host memory (inaccurate inside shared containers)
-        vm = psutil.virtual_memory()
-        return round(vm.used / vm.total * 100, 2)
+    cpu_pct: float | None = None
+    try:
+        cpu_pct = round(psutil.cpu_percent(interval=None), 2)
+    except Exception:
+        pass
 
-    mem_pct = _cgroup_mem_pct()
-    cpu_pct = round(os.getloadavg()[0] / os.cpu_count() * 100, 2)
-
-    with _health_lock:
-        consec = _consecutive_failures
+    error_rate: float | None = None
+    try:
+        error_rate = _compute_error_rate()
+    except Exception:
+        pass
 
     return {
-        "status": "ok",
-        "app": "Bot Llamadas",
-        "errorRate": _compute_error_rate(),
-        "consecutiveFailures": consec,
         "databaseConnected": db_connected,
+        "errorRate": error_rate,
         "memoryUsage": mem_pct,
         "cpuUsage": cpu_pct,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
     }
