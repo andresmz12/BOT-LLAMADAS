@@ -6,7 +6,11 @@ _raw_url = os.getenv("DATABASE_URL", "sqlite:///./calls.db")
 # Railway PostgreSQL URLs start with "postgres://" but SQLAlchemy requires "postgresql://"
 DATABASE_URL = _raw_url.replace("postgres://", "postgresql://", 1)
 
-_connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
+_connect_args = (
+    {"check_same_thread": False}
+    if DATABASE_URL.startswith("sqlite")
+    else {"connect_timeout": 5}  # bound connect attempts so health checks don't hang on a dead DB
+)
 _pool_kwargs = (
     {}
     if DATABASE_URL.startswith("sqlite")
