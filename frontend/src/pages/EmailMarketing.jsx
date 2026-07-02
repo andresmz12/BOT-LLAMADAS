@@ -1631,47 +1631,7 @@ export default function EmailMarketing() {
         </div>
       </Section>
 
-      </>)}
-
-      {/* ── TAB: ENVIAR (continuación) ── */}
-      {activeTab === 'enviar' && (<>
-
-      {/* ── 5. ENVÍO DE PRUEBA ── */}
-      <Section id="prueba" label="Envío de prueba" icon={EnvelopeIcon} openSections={openSections} toggle={toggle}>
-        <div className="p-5 space-y-3">
-          <p className="text-xs text-slate-500">Verifica que el email se ve bien antes de enviarlo a tus prospectos. Se envía con datos de ejemplo.</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Tu correo</label>
-              <input type="email" value={testAddr} onChange={e => setTestAddr(e.target.value)}
-                placeholder="mi@correo.com" className="z-input-light text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">Plantilla a probar</label>
-              <select value={testTmpl} onChange={e => setTestTmpl(e.target.value)} className="z-input-light text-sm">
-                {allTemplates.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
-              </select>
-            </div>
-          </div>
-          {(() => {
-            const subj = cfg.email_templates[testTmpl]?.subject
-            return subj
-              ? <p className="text-xs text-slate-400">Asunto: <span className="italic">"{subj}"</span></p>
-              : <p className="text-xs text-amber-400">⚠ Sin asunto configurado</p>
-          })()}
-          <button onClick={sendTest} disabled={testLoading || !testAddr || !cfg.sendgrid_configured}
-            className="z-btn-primary disabled:opacity-50">
-            {testLoading ? 'Enviando...' : 'Enviar prueba'}
-          </button>
-          {testMsg && (
-            <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
-              {testMsg.ok ? '✓' : '✗'} {testMsg.text}
-            </p>
-          )}
-        </div>
-      </Section>
-
-      {/* ── 6. CONFIGURACIÓN ── */}
+      {/* ── Configuración automática (también visible aquí para no perderla de vista al editar plantillas) ── */}
       <Section id="config" label="Configuración automática" icon={Cog6ToothIcon} openSections={openSections} toggle={toggle}>
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
@@ -1763,6 +1723,46 @@ export default function EmailMarketing() {
             </button>
             {saved && <span className="flex items-center gap-1.5 text-sm text-green-400"><CheckCircleIcon className="w-4 h-4" /> Guardado</span>}
           </div>
+        </div>
+      </Section>
+
+      </>)}
+
+      {/* ── TAB: ENVIAR (continuación) ── */}
+      {activeTab === 'enviar' && (<>
+
+      {/* ── 5. ENVÍO DE PRUEBA ── */}
+      <Section id="prueba" label="Envío de prueba" icon={EnvelopeIcon} openSections={openSections} toggle={toggle}>
+        <div className="p-5 space-y-3">
+          <p className="text-xs text-slate-500">Verifica que el email se ve bien antes de enviarlo a tus prospectos. Se envía con datos de ejemplo.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Tu correo</label>
+              <input type="email" value={testAddr} onChange={e => setTestAddr(e.target.value)}
+                placeholder="mi@correo.com" className="z-input-light text-sm" />
+            </div>
+            <div>
+              <label className="text-xs text-slate-400 mb-1 block">Plantilla a probar</label>
+              <select value={testTmpl} onChange={e => setTestTmpl(e.target.value)} className="z-input-light text-sm">
+                {allTemplates.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+              </select>
+            </div>
+          </div>
+          {(() => {
+            const subj = cfg.email_templates[testTmpl]?.subject
+            return subj
+              ? <p className="text-xs text-slate-400">Asunto: <span className="italic">"{subj}"</span></p>
+              : <p className="text-xs text-amber-400">⚠ Sin asunto configurado</p>
+          })()}
+          <button onClick={sendTest} disabled={testLoading || !testAddr || !cfg.sendgrid_configured}
+            className="z-btn-primary disabled:opacity-50">
+            {testLoading ? 'Enviando...' : 'Enviar prueba'}
+          </button>
+          {testMsg && (
+            <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
+              {testMsg.ok ? '✓' : '✗'} {testMsg.text}
+            </p>
+          )}
         </div>
       </Section>
 
