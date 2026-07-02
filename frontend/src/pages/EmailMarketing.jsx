@@ -1706,7 +1706,14 @@ export default function EmailMarketing() {
                     {j.status === 'failed' ? 'Reintentar' : 'Reprogramar'}
                   </button>
                   <button
-                    onClick={async () => { await cancelScheduledEmail(j.id); loadScheduled() }}
+                    onClick={async () => {
+                      try {
+                        await cancelScheduledEmail(j.id)
+                      } catch (e) {
+                        alert(e.response?.data?.detail || 'Error al cancelar')
+                      }
+                      loadScheduled()
+                    }}
                     className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 px-3 py-1 rounded-lg transition-colors"
                   >
                     Cancelar

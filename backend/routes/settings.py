@@ -756,7 +756,10 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
         )
         s.add(log_entry)
         row = s.get(BulkEmailJob, int(job_id))
-        if row:
+        # Don't clobber a status set by someone else while this loop was running
+        # (e.g. the user cancelled it, or a competing claim marked it "resuming"/
+        # "error") — only the still-active "running"/"paused" states are ours to finalize.
+        if row and row.status in ("running", "paused"):
             row.status = "done"
             row.updated_at = datetime.utcnow()
             s.add(row)
@@ -1713,26 +1716,46 @@ def update_sequence_step(
     job = session.get(ScheduledEmailSend, job_id)
     if not job or job.organization_id != current_user.organization_id or job.sequence_id != sequence_id:
         raise HTTPException(status_code=404, detail="Paso no encontrado")
-    if job.status not in ("pending", "failed"):
-        raise HTTPException(status_code=400, detail="Solo se pueden editar pasos pendientes o fallidos")
+
+    values: dict = {}
     if data.subject is not None:
-        job.subject_override = data.subject
+        values["subject_override"] = data.subject
     if data.body is not None:
-        job.body_override = data.body
+        values["body_override"] = data.body
     if data.scheduled_at is not None:
         try:
-            job.scheduled_at = _parse_scheduled_dt(data.scheduled_at)
+            values["scheduled_at"] = _parse_scheduled_dt(data.scheduled_at)
         except Exception:
             raise HTTPException(status_code=400, detail="Fecha inválida")
-    if job.status == "failed":
+    was_failed = job.status == "failed"
+    if was_failed:
         # Editing a failed step is how an admin retries it.
-        job.status = "pending"
-        job.error = None
+        values["status"] = "pending"
+        values["error"] = None
+
+    if not values:
+        if job.status not in ("pending", "failed"):
+            raise HTTPException(status_code=400, detail="Solo se pueden editar pasos pendientes o fallidos")
+        return {"ok": True}
+
+    # Atomic conditional update: only apply if the step is still pending/failed at
+    # write time, so an edit can't stomp a step the scheduler poller just claimed
+    # and is actively sending (same race class fixed for reschedule_email above).
+    from sqlalchemy import update as _step_upd
+    result = session.execute(
+        _step_upd(ScheduledEmailSend)
+        .where(ScheduledEmailSend.id == job_id, ScheduledEmailSend.status.in_(["pending", "failed"]))
+        .values(**values)
+    )
+    if result.rowcount == 0:
+        session.rollback()
+        raise HTTPException(status_code=400, detail="Solo se pueden editar pasos pendientes o fallidos (puede que ya se esté enviando)")
+
+    if was_failed:
         seq = session.get(EmailSequence, sequence_id)
         if seq and seq.status == "completed":
             seq.status = "scheduled"
             session.add(seq)
-    session.add(job)
     session.commit()
     return {"ok": True}
 

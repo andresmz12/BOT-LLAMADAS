@@ -374,45 +374,75 @@ async def lifespan(app: FastAPI):
     if not os.getenv("SUPERADMIN_PASSWORD"):
         logger.warning("⚠️  SUPERADMIN_PASSWORD not set — using default hardcoded password, CHANGE THIS IN PRODUCTION")
 
-    # Resume bulk email sends that were running/paused when the backend last stopped.
-    # Atomically claim each job before touching it: on a Railway deploy the old and
-    # new instances can briefly run side by side, and without this claim both would
-    # resume the same job and double-send to every remaining prospect (unlike
-    # ScheduledEmailSend's pending→running claim below, "running"/"paused"→"running"
-    # is not itself exclusive since a second instance's identical UPDATE would still
-    # match — so we first move the row to a transient "resuming" marker that only one
-    # instance's UPDATE can hit).
+    # Resume bulk email sends that were running/paused/resuming when the backend
+    # last stopped. A claim based purely on status is NOT enough on Railway: during
+    # a rolling deploy the OLD instance can still be alive with a live in-process
+    # send task while the NEW instance runs this startup block — the job's row
+    # legitimately says status="running" because it genuinely still is. Claiming it
+    # anyway (as an earlier version of this fix did) launches a second sender over
+    # the same prospect list and double-sends, because the old instance's task has
+    # no way to know it's been "taken over".
+    #
+    # Instead we use updated_at as a heartbeat: the send loop touches it after
+    # every single prospect (routes/settings.py _run_bulk_send_job_inner). A row
+    # only counts as orphaned if it hasn't been touched in STALE_AFTER — long
+    # enough that a genuinely live process would have updated it again by now.
+    # Freshly-touched rows are left alone (a live process — this instance's
+    # predecessor or a still-running replica — owns them). This also self-heals a
+    # job that gets stuck in the transient "resuming" marker below if a crash
+    # lands between its two commits: it simply looks orphaned on a later restart.
     try:
+        from datetime import timedelta as _timedelta
         from sqlmodel import Session as _S2, select as _sel2
         from sqlalchemy import update as _bulk_upd
         from models import BulkEmailJob as _BulkEmailJob, Organization as _Org
         from routes.settings import _run_bulk_send_job as _resume_bulk_job
+        STALE_AFTER = _timedelta(seconds=120)
         with _S2(engine) as s:
+            cutoff = datetime.utcnow() - STALE_AFTER
+            candidate_statuses = ["running", "paused", "resuming"]
             stuck_jobs = s.exec(
-                _sel2(_BulkEmailJob).where(_BulkEmailJob.status.in_(["running", "paused"]))
+                _sel2(_BulkEmailJob).where(_BulkEmailJob.status.in_(candidate_statuses))
             ).all()
             for j in stuck_jobs:
-                claim = s.execute(
-                    _bulk_upd(_BulkEmailJob)
-                    .where(_BulkEmailJob.id == j.id, _BulkEmailJob.status.in_(["running", "paused"]))
-                    .values(status="resuming")
-                )
-                s.commit()
-                if claim.rowcount == 0:
-                    logger.info(f"[Startup] Bulk email job {j.id} already claimed by another instance, skipping")
+                if j.updated_at and j.updated_at > cutoff:
+                    logger.info(f"[Startup] Bulk email job {j.id} updated recently ({j.updated_at}); assuming a live process still owns it, not claiming")
                     continue
-                org = s.get(_Org, j.organization_id)
-                api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "") if org else ""
-                if api_key and j.remaining and j.remaining != "[]":
-                    j.status = "running"
-                    s.add(j)
+                try:
+                    # Re-check staleness inside the WHERE clause itself so a job
+                    # touched between the read above and this UPDATE loses the
+                    # claim instead of being stolen from its live owner.
+                    claim = s.execute(
+                        _bulk_upd(_BulkEmailJob)
+                        .where(
+                            _BulkEmailJob.id == j.id,
+                            _BulkEmailJob.status.in_(candidate_statuses),
+                            _BulkEmailJob.updated_at <= cutoff,
+                        )
+                        .values(status="resuming", updated_at=datetime.utcnow())
+                    )
                     s.commit()
-                    asyncio.create_task(_resume_bulk_job(job_id=str(j.id), api_key=api_key))
-                    logger.info(f"[Startup] Resumed bulk email job {j.id} (org={j.organization_id})")
-                else:
-                    j.status = "error"
-                    s.add(j)
-                    s.commit()
+                    if claim.rowcount == 0:
+                        logger.info(f"[Startup] Bulk email job {j.id} claimed or touched by another process, skipping")
+                        continue
+                    org = s.get(_Org, j.organization_id)
+                    api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "") if org else ""
+                    if api_key and j.remaining and j.remaining != "[]":
+                        s.execute(
+                            _bulk_upd(_BulkEmailJob).where(_BulkEmailJob.id == j.id)
+                            .values(status="running", updated_at=datetime.utcnow())
+                        )
+                        s.commit()
+                        asyncio.create_task(_resume_bulk_job(job_id=str(j.id), api_key=api_key))
+                        logger.info(f"[Startup] Resumed bulk email job {j.id} (org={j.organization_id})")
+                    else:
+                        s.execute(
+                            _bulk_upd(_BulkEmailJob).where(_BulkEmailJob.id == j.id)
+                            .values(status="error", updated_at=datetime.utcnow())
+                        )
+                        s.commit()
+                except Exception as job_err:
+                    logger.error(f"[Startup] Failed to recover bulk email job {j.id}: {job_err}")
     except Exception as e:
         logger.error(f"[Startup] Failed to resume bulk email jobs: {e}")
 
