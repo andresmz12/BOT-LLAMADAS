@@ -829,18 +829,28 @@ async def resume_bulk_send(job_id: str, current_user: User = Depends(require_wri
     if current_user.role != "superadmin" and row.organization_id != current_user.organization_id:
         raise HTTPException(status_code=403, detail="Acceso denegado")
     if row.status == "paused":
-        row.status = "running"
-        row.updated_at = datetime.utcnow()
-        session.add(row)
+        # Atomic conditional update: only the request that actually wins the
+        # paused→running transition relaunches the send task. A plain
+        # read-then-write here would let two near-simultaneous resume clicks (or
+        # two backend instances) both see status=="paused" and both launch a
+        # task for the same job, double-sending to every remaining prospect.
+        from sqlalchemy import update as _resume_upd
+        result = session.execute(
+            _resume_upd(BulkEmailJob)
+            .where(BulkEmailJob.id == row.id, BulkEmailJob.status == "paused")
+            .values(status="running", updated_at=datetime.utcnow())
+        )
         session.commit()
-        # If no live task is currently processing this job (e.g. it was left
-        # paused across a backend restart), relaunch it; otherwise the
-        # already-running task's pause-wait loop will pick up the new status itself.
-        if job_id not in _bulk_jobs_running:
-            org = session.get(Organization, row.organization_id)
-            api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "") if org else ""
-            if api_key:
-                asyncio.create_task(_run_bulk_send_job(job_id=job_id, api_key=api_key))
+        if result.rowcount:
+            # If no live task is currently processing this job (e.g. it was left
+            # paused across a backend restart), relaunch it; otherwise the
+            # already-running task's pause-wait loop will pick up the new status itself.
+            if job_id not in _bulk_jobs_running:
+                org = session.get(Organization, row.organization_id)
+                api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "") if org else ""
+                if api_key:
+                    asyncio.create_task(_run_bulk_send_job(job_id=job_id, api_key=api_key))
+        session.refresh(row)
     return {**_job_to_dict(row), "job_id": job_id}
 
 

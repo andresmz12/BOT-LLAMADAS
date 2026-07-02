@@ -374,9 +374,17 @@ async def lifespan(app: FastAPI):
     if not os.getenv("SUPERADMIN_PASSWORD"):
         logger.warning("⚠️  SUPERADMIN_PASSWORD not set — using default hardcoded password, CHANGE THIS IN PRODUCTION")
 
-    # Resume bulk email sends that were running/paused when the backend last stopped
+    # Resume bulk email sends that were running/paused when the backend last stopped.
+    # Atomically claim each job before touching it: on a Railway deploy the old and
+    # new instances can briefly run side by side, and without this claim both would
+    # resume the same job and double-send to every remaining prospect (unlike
+    # ScheduledEmailSend's pending→running claim below, "running"/"paused"→"running"
+    # is not itself exclusive since a second instance's identical UPDATE would still
+    # match — so we first move the row to a transient "resuming" marker that only one
+    # instance's UPDATE can hit).
     try:
         from sqlmodel import Session as _S2, select as _sel2
+        from sqlalchemy import update as _bulk_upd
         from models import BulkEmailJob as _BulkEmailJob, Organization as _Org
         from routes.settings import _run_bulk_send_job as _resume_bulk_job
         with _S2(engine) as s:
@@ -384,16 +392,27 @@ async def lifespan(app: FastAPI):
                 _sel2(_BulkEmailJob).where(_BulkEmailJob.status.in_(["running", "paused"]))
             ).all()
             for j in stuck_jobs:
+                claim = s.execute(
+                    _bulk_upd(_BulkEmailJob)
+                    .where(_BulkEmailJob.id == j.id, _BulkEmailJob.status.in_(["running", "paused"]))
+                    .values(status="resuming")
+                )
+                s.commit()
+                if claim.rowcount == 0:
+                    logger.info(f"[Startup] Bulk email job {j.id} already claimed by another instance, skipping")
+                    continue
                 org = s.get(_Org, j.organization_id)
                 api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "") if org else ""
                 if api_key and j.remaining and j.remaining != "[]":
+                    j.status = "running"
+                    s.add(j)
+                    s.commit()
                     asyncio.create_task(_resume_bulk_job(job_id=str(j.id), api_key=api_key))
                     logger.info(f"[Startup] Resumed bulk email job {j.id} (org={j.organization_id})")
                 else:
                     j.status = "error"
                     s.add(j)
-            if stuck_jobs:
-                s.commit()
+                    s.commit()
     except Exception as e:
         logger.error(f"[Startup] Failed to resume bulk email jobs: {e}")
 
