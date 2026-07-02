@@ -1619,6 +1619,12 @@ export default function EmailMarketing() {
                   <div className="rounded-lg overflow-hidden border border-gray-200"
                     dangerouslySetInnerHTML={{ __html: buildHtml(editingData) }} />
                 )}
+                <div className="flex items-center gap-3 pt-2 border-t border-z-border">
+                  <button onClick={saveTemplate} disabled={tmplSaving} className="z-btn-primary disabled:opacity-50">
+                    {tmplSaving ? 'Guardando...' : 'Guardar plantilla'}
+                  </button>
+                  {tmplSaved && <span className="flex items-center gap-1.5 text-sm text-green-400">✓ Guardada</span>}
+                </div>
               </div>
             </div>
           )}
