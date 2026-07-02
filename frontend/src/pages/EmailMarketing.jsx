@@ -426,7 +426,7 @@ export default function EmailMarketing() {
     setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [key]: { ...(p.email_templates[key] || {}), ...pro } } }))
   }
 
-  const isFilled = (key) => { const t = cfg.email_templates[key]; return t && (t.subject || t.body) }
+  const isFilled = (key) => { const t = cfg.email_templates[key]; return t && !!t.subject?.trim() && !!t.body?.trim() }
 
   const save = async () => {
     setSaving(true); setSaved(false)
@@ -1089,9 +1089,17 @@ export default function EmailMarketing() {
 
           {(() => {
             const subj = cfg.email_templates[bulkTmpl]?.subject
-            return subj
-              ? <p className="text-xs text-slate-400">Asunto: <span className="text-slate-300 italic">"{subj}"</span></p>
-              : <p className="text-xs text-amber-400">⚠ La plantilla seleccionada no tiene asunto configurado</p>
+            const body = cfg.email_templates[bulkTmpl]?.body
+            return (
+              <>
+                {subj
+                  ? <p className="text-xs text-slate-400">Asunto: <span className="text-slate-300 italic">"{subj}"</span></p>
+                  : <p className="text-xs text-amber-400">⚠ La plantilla seleccionada no tiene asunto configurado</p>}
+                {!body?.trim() && (
+                  <p className="text-xs text-amber-400">⚠ La plantilla seleccionada no tiene cuerpo del mensaje — se enviaría prácticamente vacía</p>
+                )}
+              </>
+            )
           })()}
 
           {!cfg.sendgrid_configured && (
