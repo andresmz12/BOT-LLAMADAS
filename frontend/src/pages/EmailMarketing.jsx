@@ -241,6 +241,8 @@ export default function EmailMarketing() {
   const [attachMsg, setAttachMsg] = useState(null)
   const [tmplAttachLoading, setTmplAttachLoading] = useState(false)
   const [tmplAttachMsg, setTmplAttachMsg] = useState(null)
+  const [tmplSaving, setTmplSaving] = useState(false)
+  const [tmplSaved, setTmplSaved] = useState(false)
 
   // History
   const [emailHistory, setEmailHistory] = useState([])
@@ -444,6 +446,28 @@ export default function EmailMarketing() {
       setSaved(true); setTimeout(() => setSaved(false), 3000)
     } catch (e) { alert(e.response?.data?.detail || 'Error') }
     finally { setSaving(false) }
+  }
+
+  // Persists the template editor's changes right away — creating/editing a
+  // template only updates local state until this (or the general "Guardar
+  // cambios" button elsewhere) is called, so without an obvious save button
+  // right here a new/edited template silently vanishes on refresh.
+  const saveTemplate = async () => {
+    setTmplSaving(true); setTmplSaved(false)
+    try {
+      await saveEmailSettings({
+        email_enabled: cfg.email_enabled, email_from: cfg.email_from || null,
+        email_from_name: cfg.email_from_name || null,
+        email_send_on_interested: cfg.email_send_on_interested,
+        email_send_on_callback: cfg.email_send_on_callback,
+        email_send_on_voicemail: cfg.email_send_on_voicemail,
+        email_send_on_not_interested: cfg.email_send_on_not_interested,
+        email_templates: cfg.email_templates,
+        email_send_delay_ms: cfg.email_send_delay_ms ?? 0,
+      })
+      setTmplSaved(true); setTimeout(() => setTmplSaved(false), 3000)
+    } catch (e) { alert(e.response?.data?.detail || 'Error al guardar la plantilla') }
+    finally { setTmplSaving(false) }
   }
 
   // Email lists CRUD
@@ -1485,11 +1509,21 @@ export default function EmailMarketing() {
                     Variables: <span className="font-mono text-blue-400">{'{{nombre}}  {{empresa}}  {{telefono}}  {{fecha}}  {{agente}}'}</span>
                   </p>
                 </div>
-                <button onClick={() => loadProTemplate(editingTmpl)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-400 border border-amber-400/30 rounded-lg hover:bg-amber-400/10 transition-colors">
-                  <SparklesIcon className="w-3.5 h-3.5" /> Plantilla profesional
-                </button>
+                <div className="flex items-center gap-2">
+                  {tmplSaved && <span className="text-xs text-green-400">✓ Guardada</span>}
+                  <button onClick={saveTemplate} disabled={tmplSaving}
+                    className="z-btn-primary text-xs disabled:opacity-50">
+                    {tmplSaving ? 'Guardando...' : 'Guardar plantilla'}
+                  </button>
+                  <button onClick={() => loadProTemplate(editingTmpl)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-400 border border-amber-400/30 rounded-lg hover:bg-amber-400/10 transition-colors">
+                    <SparklesIcon className="w-3.5 h-3.5" /> Plantilla profesional
+                  </button>
+                </div>
               </div>
+              <p className="px-5 pt-3 text-xs text-amber-400/80 bg-amber-400/5">
+                ⚠ Los cambios no se guardan solos — recuerda pulsar "Guardar plantilla" antes de salir de aquí.
+              </p>
               <div className="p-5 space-y-3">
                 <div>
                   <label className="text-xs text-slate-400 mb-1 block">Asunto del email</label>
