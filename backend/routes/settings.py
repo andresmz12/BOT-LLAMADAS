@@ -22,6 +22,16 @@ APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")
 _UNSUB_SECRET = os.getenv("UNSUB_SECRET", "unsub-fallback-sign-key-change-me")
 
 
+def _parse_scheduled_dt(value: str) -> datetime:
+    """Parse an ISO datetime string and normalize to naive UTC (matches how
+    scheduled_at is stored and compared against datetime.utcnow())."""
+    dt = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    if dt.tzinfo is not None:
+        from datetime import timezone
+        dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+    return dt
+
+
 def _unsub_token(prospect_id: int, org_id: int) -> str:
     import hmac as _hmac, hashlib as _hashlib
     payload = f"{prospect_id}:{org_id}"
@@ -384,8 +394,11 @@ async def test_email(
     body_text = _fill(tmpl.get("body") or "Este es un email de prueba enviado desde ZyraVoice.", tmpl_vars)
     cta_text  = tmpl.get("cta_text") or ""
     cta_url   = tmpl.get("cta_url") or ""
+    cta_text_2 = tmpl.get("cta_text_2") or ""
+    cta_url_2  = tmpl.get("cta_url_2") or ""
     signature = _fill(tmpl.get("signature") or f"El equipo de {tmpl_vars['agente']}", tmpl_vars)
-    html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature)
+    html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature,
+                             cta_text_2=cta_text_2, cta_url_2=cta_url_2)
 
     from_email = (data.from_email_override or org.email_from or "").strip() or os.getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
     from_name  = (data.from_name_override or org.email_from_name or "").strip() or "ZyraVoice"
@@ -471,11 +484,7 @@ async def bulk_send_email(
     # If scheduled for the future, store the job and return early
     if data.scheduled_at:
         try:
-            scheduled_dt = datetime.fromisoformat(data.scheduled_at.replace("Z", "+00:00"))
-            # Convert to naive UTC for comparison with utcnow()
-            if scheduled_dt.tzinfo is not None:
-                from datetime import timezone
-                scheduled_dt = scheduled_dt.astimezone(timezone.utc).replace(tzinfo=None)
+            scheduled_dt = _parse_scheduled_dt(data.scheduled_at)
         except ValueError:
             raise HTTPException(status_code=400, detail="Formato de fecha inválido")
         if scheduled_dt > datetime.utcnow():
@@ -654,8 +663,11 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
             body_text = _fill(tmpl.get("body") or "", tmpl_vars)
             cta_text  = tmpl.get("cta_text") or ""
             cta_url   = tmpl.get("cta_url") or ""
+            cta_text_2 = tmpl.get("cta_text_2") or ""
+            cta_url_2  = tmpl.get("cta_url_2") or ""
             signature = _fill(tmpl.get("signature") or f"El equipo de {from_name}", tmpl_vars)
-            html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature, unsubscribe_url=unsub)
+            html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature, unsubscribe_url=unsub,
+                                     cta_text_2=cta_text_2, cta_url_2=cta_url_2)
 
             message = Mail(
                 from_email=(from_email, from_name),
@@ -1609,14 +1621,11 @@ def create_email_sequence(
 
     for i, item in enumerate(data.emails):
         try:
-            date_str = item.date.replace("Z", "+00:00")
+            date_str = item.date
             # Add a default time component for bare YYYY-MM-DD strings (Python < 3.11 can't parse date-only ISO)
             if "T" not in date_str:
                 date_str += "T09:00:00"
-            scheduled_dt = datetime.fromisoformat(date_str)
-            if scheduled_dt.tzinfo is not None:
-                from datetime import timezone
-                scheduled_dt = scheduled_dt.astimezone(timezone.utc).replace(tzinfo=None)
+            scheduled_dt = _parse_scheduled_dt(date_str)
         except ValueError:
             raise HTTPException(status_code=400, detail=f"Fecha inválida: {item.date}")
         job = ScheduledEmailSend(
@@ -1694,21 +1703,25 @@ def update_sequence_step(
     job = session.get(ScheduledEmailSend, job_id)
     if not job or job.organization_id != current_user.organization_id or job.sequence_id != sequence_id:
         raise HTTPException(status_code=404, detail="Paso no encontrado")
-    if job.status != "pending":
-        raise HTTPException(status_code=400, detail="Solo se pueden editar pasos pendientes")
+    if job.status not in ("pending", "failed"):
+        raise HTTPException(status_code=400, detail="Solo se pueden editar pasos pendientes o fallidos")
     if data.subject is not None:
         job.subject_override = data.subject
     if data.body is not None:
         job.body_override = data.body
     if data.scheduled_at is not None:
         try:
-            new_dt = datetime.fromisoformat(data.scheduled_at.replace("Z", "+00:00"))
-            if new_dt.tzinfo is not None:
-                from datetime import timezone
-                new_dt = new_dt.astimezone(timezone.utc).replace(tzinfo=None)
+            job.scheduled_at = _parse_scheduled_dt(data.scheduled_at)
         except Exception:
             raise HTTPException(status_code=400, detail="Fecha inválida")
-        job.scheduled_at = new_dt
+    if job.status == "failed":
+        # Editing a failed step is how an admin retries it.
+        job.status = "pending"
+        job.error = None
+        seq = session.get(EmailSequence, sequence_id)
+        if seq and seq.status == "completed":
+            seq.status = "scheduled"
+            session.add(seq)
     session.add(job)
     session.commit()
     return {"ok": True}
@@ -1778,10 +1791,17 @@ def cancel_scheduled_email(
     job = session.get(ScheduledEmailSend, job_id)
     if not job or job.organization_id != current_user.organization_id:
         raise HTTPException(status_code=404, detail="Trabajo no encontrado")
-    if job.status not in ("pending", "failed"):
-        raise HTTPException(status_code=400, detail="Solo se pueden cancelar trabajos pendientes o fallidos")
-    job.status = "cancelled"
-    session.add(job)
+    from sqlalchemy import update as _upd
+    result = session.execute(
+        _upd(ScheduledEmailSend)
+        .where(ScheduledEmailSend.id == job_id, ScheduledEmailSend.status.in_(["pending", "failed"]))
+        .values(status="cancelled")
+    )
+    if result.rowcount == 0:
+        session.rollback()
+        raise HTTPException(status_code=400, detail="Solo se pueden cancelar trabajos pendientes o fallidos (puede que ya se esté enviando)")
+    from main import _maybe_complete_sequence
+    _maybe_complete_sequence(session, job.sequence_id)
     session.commit()
     return {"ok": True}
 
@@ -1800,23 +1820,38 @@ def reschedule_email(
     job = session.get(ScheduledEmailSend, job_id)
     if not job or job.organization_id != current_user.organization_id:
         raise HTTPException(status_code=404, detail="Trabajo no encontrado")
-    if job.status not in ("pending", "failed"):
-        raise HTTPException(status_code=400, detail="Solo se pueden reprogramar trabajos pendientes o fallidos")
     try:
-        new_dt = datetime.fromisoformat(data.scheduled_at.replace("Z", "+00:00"))
-        if new_dt.tzinfo is not None:
-            from datetime import timezone
-            new_dt = new_dt.astimezone(timezone.utc).replace(tzinfo=None)
+        new_dt = _parse_scheduled_dt(data.scheduled_at)
     except Exception:
         raise HTTPException(status_code=400, detail="Fecha inválida")
-    job.scheduled_at = new_dt
-    # Rescheduling a failed job is how an admin retries it — clear the error and
-    # put it back in the poller's pending queue.
-    job.status = "pending"
-    job.error = None
-    session.add(job)
+
+    # Atomic conditional update: only proceed if the job is still pending/failed at
+    # the moment of the write. This prevents a reschedule from stomping a job that
+    # the scheduler poller has *just* claimed (pending→running) and is now sending —
+    # without this guard the job would be forced back to "pending" mid-send and get
+    # picked up (and sent) a second time by the next poll.
+    from sqlalchemy import update as _upd
+    result = session.execute(
+        _upd(ScheduledEmailSend)
+        .where(ScheduledEmailSend.id == job_id, ScheduledEmailSend.status.in_(["pending", "failed"]))
+        # Rescheduling a failed job is how an admin retries it — clear the error and
+        # put it back in the poller's pending queue.
+        .values(status="pending", error=None, scheduled_at=new_dt)
+    )
+    if result.rowcount == 0:
+        session.rollback()
+        raise HTTPException(status_code=400, detail="Solo se pueden reprogramar trabajos pendientes o fallidos (puede que ya se esté enviando)")
+
+    # Retrying a failed step may have already caused the parent sequence to be
+    # marked "completed" — reopen it since one of its steps is pending again.
+    if job.sequence_id:
+        seq = session.get(EmailSequence, job.sequence_id)
+        if seq and seq.status == "completed":
+            seq.status = "scheduled"
+            session.add(seq)
+
     session.commit()
-    return {"ok": True, "scheduled_at": job.scheduled_at.isoformat()}
+    return {"ok": True, "scheduled_at": new_dt.isoformat()}
 
 
 @router.post("/email/events")

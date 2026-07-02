@@ -139,7 +139,7 @@ async def _run_scheduled_email(job_id: int):
             if not org:
                 job.status = "failed"
                 job.error = "Organización no encontrada"
-                s.add(job); s.commit(); return
+                s.add(job); _maybe_complete_sequence(s, job.sequence_id); s.commit(); return
             if not org.is_active:
                 job.status = "failed"
                 job.error = "Organización inactiva"

@@ -160,8 +160,8 @@ def _cta_button(text: str, url: str, primary: bool = True) -> str:
         return ""
     bg = "#1e40af" if primary else "#475569"
     return (
-        f'<a href="{url}" style="background:{bg};color:#fff;padding:12px 28px;'
-        f'border-radius:4px;text-decoration:none;font-weight:600;margin:0 6px;display:inline-block">{label}</a>'
+        f'<a href="{url}" style="background:{bg};color:#fff;padding:10px 24px;'
+        f'border-radius:4px;text-decoration:none;font-weight:600;margin:0 6px;display:inline-block;font-size:13px">{label}</a>'
     )
 
 
