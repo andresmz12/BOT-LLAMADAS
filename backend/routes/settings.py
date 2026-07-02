@@ -301,7 +301,12 @@ def save_email_settings(
                 existing_tmpls = json.loads(org.email_templates)
             except Exception:
                 pass
-        merged = {}
+        # Start from what's already saved instead of replacing the whole dict with
+        # the payload: a stale/partial frontend snapshot (e.g. a tab that loaded
+        # before another tab or session created a template) must not silently wipe
+        # out templates it doesn't know about. Explicit deletion goes through
+        # DELETE /email/template/{key} instead of "just don't send it back".
+        merged = dict(existing_tmpls)
         for key, tmpl in data.email_templates.items():
             merged[key] = dict(tmpl)
             if key in existing_tmpls:
@@ -309,6 +314,33 @@ def save_email_settings(
                     if field not in merged[key] and field in existing_tmpls[key]:
                         merged[key][field] = existing_tmpls[key][field]
         org.email_templates = json.dumps(merged)
+    session.add(org)
+    session.commit()
+    return {"ok": True}
+
+
+@router.delete("/email/template/{template_key}")
+def delete_email_template(
+    template_key: str,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    """Explicitly removes one custom template. Deletion must go through here rather
+    than through save_email_settings' merge, which never deletes a key just
+    because a save request happened not to include it."""
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    org = session.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    templates = {}
+    if org.email_templates:
+        try:
+            templates = json.loads(org.email_templates)
+        except Exception:
+            pass
+    templates.pop(template_key, None)
+    org.email_templates = json.dumps(templates)
     session.add(org)
     session.commit()
     return {"ok": True}

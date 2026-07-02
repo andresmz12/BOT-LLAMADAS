@@ -29,7 +29,7 @@ import {
   ArrowDownTrayIcon, ChartBarIcon,
 } from '@heroicons/react/24/outline'
 import {
-  getEmailSettings, saveEmailSettings, uploadEmailAttachment, deleteEmailAttachment,
+  getEmailSettings, saveEmailSettings, uploadEmailAttachment, deleteEmailAttachment, deleteEmailTemplate,
   sendTestEmail, bulkSendEmail, getBulkSendStatus, getActiveBulkSend, pauseBulkSend, resumeBulkSend, cancelBulkSend, getCampaigns,
   getEmailHistory, validateEmailRecipients, uploadTemplateAttachment,
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
@@ -405,10 +405,17 @@ export default function EmailMarketing() {
     setTimeout(() => editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80)
   }
 
-  const deleteTemplate = (key) => {
+  const deleteTemplate = async (key) => {
     if (!confirm('¿Eliminar esta plantilla?')) return
     setCfg(p => { const t = { ...p.email_templates }; delete t[key]; return { ...p, email_templates: t } })
     if (editingTmpl === key) setEditingTmpl(null)
+    try {
+      // Delete immediately on the backend — don't rely on the next "Guardar
+      // cambios" click to persist this via omission from the saved payload.
+      await deleteEmailTemplate(key)
+    } catch (e) {
+      alert(e.response?.data?.detail || 'Error al eliminar la plantilla')
+    }
   }
 
   const renameTemplate = (key, newName) =>
