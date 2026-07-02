@@ -108,10 +108,25 @@ ws_manager = WebSocketManager()
 webhook_module.ws_manager = ws_manager
 
 
+def _maybe_complete_sequence(session, sequence_id: int) -> None:
+    """Mark an EmailSequence as completed once every one of its steps has left status='pending'."""
+    if not sequence_id:
+        return
+    from models import EmailSequence as _Seq, ScheduledEmailSend as _Job
+    from sqlmodel import select as _sel3
+    seq = session.get(_Seq, sequence_id)
+    if not seq or seq.status in ("completed", "cancelled"):
+        return
+    steps = session.exec(_sel3(_Job).where(_Job.sequence_id == sequence_id)).all()
+    if steps and all(st.status in ("done", "failed", "cancelled") for st in steps):
+        seq.status = "completed"
+        session.add(seq)
+
+
 async def _run_scheduled_email(job_id: int):
     """Execute a scheduled email bulk send job."""
     from sqlmodel import Session as _S
-    from models import ScheduledEmailSend as _EmailJob, Organization as _Org, Prospect as _Prospect, EmailSendLog as _Log
+    from models import ScheduledEmailSend as _EmailJob, Organization as _Org, Prospect as _Prospect, EmailSendLog as _Log, Campaign as _Campaign
     from sqlmodel import select as _sel
     import asyncio as _asyncio
     try:
@@ -125,11 +140,21 @@ async def _run_scheduled_email(job_id: int):
                 job.status = "failed"
                 job.error = "Organización no encontrada"
                 s.add(job); s.commit(); return
+            if not org.is_active:
+                job.status = "failed"
+                job.error = "Organización inactiva"
+                s.add(job); _maybe_complete_sequence(s, job.sequence_id); s.commit(); return
+            if job.campaign_id:
+                campaign = s.get(_Campaign, job.campaign_id)
+                if campaign and campaign.status == "paused":
+                    job.status = "failed"
+                    job.error = "Campaña pausada"
+                    s.add(job); _maybe_complete_sequence(s, job.sequence_id); s.commit(); return
 
             api_key = (org.sendgrid_api_key or "").strip() or __import__("os").getenv("SENDGRID_API_KEY", "")
             if not api_key:
                 job.status = "failed"; job.error = "Sin API key"
-                s.add(job); s.commit(); return
+                s.add(job); _maybe_complete_sequence(s, job.sequence_id); s.commit(); return
 
             import json, base64 as _b64
             from datetime import datetime as _dt
@@ -191,7 +216,8 @@ async def _run_scheduled_email(job_id: int):
                     greeting = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
                     body_text = _fill(job.body_override or tmpl.get("body") or "", tmpl_vars)
                     signature = _fill(tmpl.get("signature") or f"El equipo de {from_name}", tmpl_vars)
-                    html_body = _build_html(color, greeting, body_text, tmpl.get("cta_text") or "", tmpl.get("cta_url") or "", signature, unsubscribe_url=unsub)
+                    html_body = _build_html(color, greeting, body_text, tmpl.get("cta_text") or "", tmpl.get("cta_url") or "", signature, unsubscribe_url=unsub,
+                                             cta_text_2=tmpl.get("cta_text_2") or "", cta_url_2=tmpl.get("cta_url_2") or "")
                     message = Mail(from_email=(from_email, from_name), to_emails=prospect.email, subject=subject, html_content=html_body)
                     message.custom_arg = [CustomArg(key="org_id", value=str(org.id)), CustomArg(key="template_key", value=job.template_key)]
                     if att_b64 and att_name:
@@ -229,6 +255,7 @@ async def _run_scheduled_email(job_id: int):
             s.add(log_entry)
             job.status = "done"
             s.add(job)
+            _maybe_complete_sequence(s, job.sequence_id)
             s.commit()
             logger.info(f"[Scheduler] Email job {job_id} done: sent={sent} errors={len(errors)}")
     except Exception as e:
@@ -237,7 +264,10 @@ async def _run_scheduled_email(job_id: int):
             from sqlmodel import Session as _S2
             with _S2(engine) as s2:
                 j = s2.get(__import__("models", fromlist=["ScheduledEmailSend"]).ScheduledEmailSend, job_id)
-                if j: j.status = "failed"; j.error = str(e)[:200]; s2.add(j); s2.commit()
+                if j:
+                    j.status = "failed"; j.error = str(e)[:200]; s2.add(j)
+                    _maybe_complete_sequence(s2, j.sequence_id)
+                    s2.commit()
         except Exception: pass
 
 
@@ -276,10 +306,14 @@ async def _campaign_scheduler():
         try:
             with _S(engine) as s:
                 due_emails = s.exec(
-                    _sel(_EmailJob).where(
+                    _sel(_EmailJob)
+                    .where(
                         _EmailJob.status == "pending",
                         _EmailJob.scheduled_at <= now_utc,
                     )
+                    # Earlier-due jobs are claimed/fired first so sequence steps that
+                    # both became due in the same poll keep their intended order.
+                    .order_by(_EmailJob.scheduled_at)
                 ).all()
                 for job in due_emails:
                     # Atomic claim: only proceed if we can change status from pending→running
@@ -362,6 +396,24 @@ async def lifespan(app: FastAPI):
                 s.commit()
     except Exception as e:
         logger.error(f"[Startup] Failed to resume bulk email jobs: {e}")
+
+    # Recover scheduled-email jobs left in "running" by a crash/restart mid-send —
+    # reset to "pending" so the next scheduler poll re-claims and re-runs them.
+    try:
+        from sqlmodel import Session as _S3, select as _sel3
+        from models import ScheduledEmailSend as _EmailJob3
+        with _S3(engine) as s:
+            orphaned = s.exec(
+                _sel3(_EmailJob3).where(_EmailJob3.status == "running")
+            ).all()
+            for j in orphaned:
+                j.status = "pending"
+                s.add(j)
+            if orphaned:
+                s.commit()
+                logger.info(f"[Startup] Reset {len(orphaned)} orphaned scheduled email job(s) 'running' → 'pending'")
+    except Exception as e:
+        logger.error(f"[Startup] Failed to recover orphaned scheduled email jobs: {e}")
 
     scheduler = asyncio.create_task(_campaign_scheduler())
     yield

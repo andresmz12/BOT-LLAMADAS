@@ -1702,7 +1702,10 @@ def update_sequence_step(
         job.body_override = data.body
     if data.scheduled_at is not None:
         try:
-            new_dt = datetime.fromisoformat(data.scheduled_at.replace("Z", "+00:00")).replace(tzinfo=None)
+            new_dt = datetime.fromisoformat(data.scheduled_at.replace("Z", "+00:00"))
+            if new_dt.tzinfo is not None:
+                from datetime import timezone
+                new_dt = new_dt.astimezone(timezone.utc).replace(tzinfo=None)
         except Exception:
             raise HTTPException(status_code=400, detail="Fecha inválida")
         job.scheduled_at = new_dt
@@ -1746,7 +1749,7 @@ def list_scheduled_emails(
         select(ScheduledEmailSend)
         .where(
             ScheduledEmailSend.organization_id == current_user.organization_id,
-            ScheduledEmailSend.status == "pending",
+            ScheduledEmailSend.status.in_(["pending", "failed"]),
         )
         .order_by(ScheduledEmailSend.scheduled_at)
     ).all()
@@ -1759,6 +1762,8 @@ def list_scheduled_emails(
             "scheduled_at": j.scheduled_at.isoformat(),
             "initiated_by": j.initiated_by,
             "created_at": j.created_at.isoformat(),
+            "status": j.status,
+            "error": j.error,
         }
         for j in jobs
     ]
@@ -1773,8 +1778,8 @@ def cancel_scheduled_email(
     job = session.get(ScheduledEmailSend, job_id)
     if not job or job.organization_id != current_user.organization_id:
         raise HTTPException(status_code=404, detail="Trabajo no encontrado")
-    if job.status != "pending":
-        raise HTTPException(status_code=400, detail="Solo se pueden cancelar trabajos pendientes")
+    if job.status not in ("pending", "failed"):
+        raise HTTPException(status_code=400, detail="Solo se pueden cancelar trabajos pendientes o fallidos")
     job.status = "cancelled"
     session.add(job)
     session.commit()
@@ -1795,13 +1800,20 @@ def reschedule_email(
     job = session.get(ScheduledEmailSend, job_id)
     if not job or job.organization_id != current_user.organization_id:
         raise HTTPException(status_code=404, detail="Trabajo no encontrado")
-    if job.status != "pending":
-        raise HTTPException(status_code=400, detail="Solo se pueden reprogramar trabajos pendientes")
+    if job.status not in ("pending", "failed"):
+        raise HTTPException(status_code=400, detail="Solo se pueden reprogramar trabajos pendientes o fallidos")
     try:
-        new_dt = datetime.fromisoformat(data.scheduled_at.replace("Z", "+00:00")).replace(tzinfo=None)
+        new_dt = datetime.fromisoformat(data.scheduled_at.replace("Z", "+00:00"))
+        if new_dt.tzinfo is not None:
+            from datetime import timezone
+            new_dt = new_dt.astimezone(timezone.utc).replace(tzinfo=None)
     except Exception:
         raise HTTPException(status_code=400, detail="Fecha inválida")
     job.scheduled_at = new_dt
+    # Rescheduling a failed job is how an admin retries it — clear the error and
+    # put it back in the poller's pending queue.
+    job.status = "pending"
+    job.error = None
     session.add(job)
     session.commit()
     return {"ok": True, "scheduled_at": job.scheduled_at.isoformat()}

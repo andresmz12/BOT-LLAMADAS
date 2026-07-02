@@ -55,7 +55,7 @@ const PRO_GALLERY = [
   { key: 'not_interested',     label: 'Cierre cordial',     tag: 'No interesado', tagColor: 'bg-red-500/20 text-red-400' },
 ]
 const FIXED_KEYS = new Set(FIXED_TEMPLATES.map(t => t.key))
-const EMPTY_TMPL = { subject: '', greeting: '', body: '', cta_text: '', cta_url: '', signature: '' }
+const EMPTY_TMPL = { subject: '', greeting: '', body: '', cta_text: '', cta_url: '', cta_text_2: '', cta_url_2: '', signature: '' }
 
 const PRO_TEMPLATES = {
   general: {
@@ -111,11 +111,18 @@ function formatSignature(text) {
   return text.split('\n').join('<br>')
 }
 
+function buildCtaButton(text, url, primary) {
+  const label = text || (url ? 'Ver más →' : '')
+  if (!label || !url) return ''
+  const bg = primary ? '#1e40af' : '#475569'
+  return `<a href="${url}" style="background:${bg};color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;font-weight:600;display:inline-block;font-size:13px;margin:0 6px">${label}</a>`
+}
+
 function buildHtml(t) {
-  const ctaLabel = t.cta_text || (t.cta_url ? 'Ver más →' : '')
-  const cta = ctaLabel && t.cta_url
-    ? `<p style="text-align:center;margin:20px 0"><a href="${t.cta_url}" style="background:#1e40af;color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;font-weight:600;display:inline-block;font-size:13px">${ctaLabel}</a></p>`
-    : ''
+  const buttons = [buildCtaButton(t.cta_text, t.cta_url, true), buildCtaButton(t.cta_text_2, t.cta_url_2, false)]
+    .filter(Boolean)
+    .join('')
+  const cta = buttons ? `<p style="text-align:center;margin:20px 0">${buttons}</p>` : ''
   return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;color:#111827">
   <div style="padding:28px 32px;border-bottom:1px solid #e5e7eb">
     <p style="margin:0 0 16px;color:#111827;font-size:14px">${t.greeting || '<span style="color:#9ca3af;font-style:italic">Saludo...</span>'}</p>
@@ -1476,16 +1483,30 @@ export default function EmailMarketing() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Texto del botón (opcional)</label>
+                    <label className="text-xs text-slate-400 mb-1 block">Texto del botón 1 (opcional)</label>
                     <input type="text" value={editingData.cta_text}
                       onChange={e => setTmplField(editingTmpl, 'cta_text', e.target.value)}
                       placeholder="Agendar llamada" className="z-input-light text-sm" />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">URL del botón</label>
+                    <label className="text-xs text-slate-400 mb-1 block">URL del botón 1</label>
                     <input type="url" value={editingData.cta_url}
                       onChange={e => setTmplField(editingTmpl, 'cta_url', e.target.value)}
                       placeholder="https://calendly.com/..." className="z-input-light text-sm" />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">Texto del botón 2 (opcional)</label>
+                    <input type="text" value={editingData.cta_text_2 || ''}
+                      onChange={e => setTmplField(editingTmpl, 'cta_text_2', e.target.value)}
+                      placeholder="Ver catálogo" className="z-input-light text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">URL del botón 2 (opcional)</label>
+                    <input type="url" value={editingData.cta_url_2 || ''}
+                      onChange={e => setTmplField(editingTmpl, 'cta_url_2', e.target.value)}
+                      placeholder="https://ejemplo.com/..." className="z-input-light text-sm" />
                   </div>
                 </div>
                 <div>
@@ -1651,27 +1672,38 @@ export default function EmailMarketing() {
             <ClockIcon className="w-4 h-4 text-blue-400" />
             <div>
               <h2 className="text-sm font-semibold text-slate-200">Envíos programados</h2>
-              <p className="text-xs text-slate-500 mt-0.5">{scheduledJobs.length} pendiente{scheduledJobs.length !== 1 ? 's' : ''}</p>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {scheduledJobs.filter(j => j.status === 'pending').length} pendiente{scheduledJobs.filter(j => j.status === 'pending').length !== 1 ? 's' : ''}
+                {scheduledJobs.some(j => j.status === 'failed') && (
+                  <span className="text-red-400"> · {scheduledJobs.filter(j => j.status === 'failed').length} fallido{scheduledJobs.filter(j => j.status === 'failed').length !== 1 ? 's' : ''}</span>
+                )}
+              </p>
             </div>
           </div>
           <div className="divide-y divide-z-border">
             {scheduledJobs.map(j => (
               <div key={j.id} className="px-5 py-3 flex items-center justify-between gap-4">
                 <div className="min-w-0">
-                  <p className="text-sm text-slate-200 font-medium">
+                  <p className="text-sm text-slate-200 font-medium flex items-center gap-2">
                     {j.email_only ? 'Contactos de email' : j.campaign_id ? `Campaña #${j.campaign_id}` : 'Todos los prospectos'}
-                    <span className="ml-2 text-xs text-slate-500 font-normal">· plantilla: {j.template_key}</span>
+                    <span className="text-xs text-slate-500 font-normal">· plantilla: {j.template_key}</span>
+                    {j.status === 'failed' && (
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-400">Fallido</span>
+                    )}
                   </p>
-                  <p className="text-xs text-blue-300 mt-0.5">
+                  <p className={`text-xs mt-0.5 ${j.status === 'failed' ? 'text-red-300' : 'text-blue-300'}`}>
                     {displayUTC5(j.scheduled_at)} <span className="text-slate-600">(UTC-5)</span>
                   </p>
+                  {j.status === 'failed' && j.error && (
+                    <p className="text-xs text-red-400/80 mt-0.5">{j.error}</p>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">
                   <button
                     onClick={() => setRescheduleModal({ id: j.id, scheduled_at: toUTC5Display(j.scheduled_at) })}
                     className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:bg-blue-500/10 px-3 py-1 rounded-lg transition-colors"
                   >
-                    Reprogramar
+                    {j.status === 'failed' ? 'Reintentar' : 'Reprogramar'}
                   </button>
                   <button
                     onClick={async () => { await cancelScheduledEmail(j.id); loadScheduled() }}

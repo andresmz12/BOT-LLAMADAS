@@ -67,6 +67,8 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
         body_text = _fill(tmpl.get("body") or "", tmpl_vars)
         cta_text  = tmpl.get("cta_text") or ""
         cta_url   = tmpl.get("cta_url") or ""
+        cta_text_2 = tmpl.get("cta_text_2") or ""
+        cta_url_2  = tmpl.get("cta_url_2") or ""
         signature = _fill(tmpl.get("signature") or f"El equipo de {tmpl_vars['agente']}", tmpl_vars)
 
         try:
@@ -74,7 +76,8 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
             unsub = _unsub_url(prospect.id, org.id)
         except Exception:
             unsub = ""
-        html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature, unsubscribe_url=unsub)
+        html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature, unsubscribe_url=unsub,
+                                 cta_text_2=cta_text_2, cta_url_2=cta_url_2)
 
         from_email = (org.email_from or "").strip() or os.getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
         from_name  = (org.email_from_name or "").strip() or agent_name or "Bot Llamadas"
@@ -151,15 +154,21 @@ def _format_signature(text: str) -> str:
     return '<br>'.join(line for line in text.split('\n'))
 
 
-def _build_html(color: str, greeting: str, body: str, cta_text: str, cta_url: str, signature: str, unsubscribe_url: str = "") -> str:
-    cta_block = ""
-    cta_label = cta_text or ("Ver más →" if cta_url else "")
-    if cta_label and cta_url:
-        cta_block = (
-            f'<p style="text-align:center;margin:24px 0">'
-            f'<a href="{cta_url}" style="background:#1e40af;color:#fff;padding:12px 28px;'
-            f'border-radius:4px;text-decoration:none;font-weight:600">{cta_label}</a></p>'
-        )
+def _cta_button(text: str, url: str, primary: bool = True) -> str:
+    label = text or ("Ver más →" if url else "")
+    if not label or not url:
+        return ""
+    bg = "#1e40af" if primary else "#475569"
+    return (
+        f'<a href="{url}" style="background:{bg};color:#fff;padding:12px 28px;'
+        f'border-radius:4px;text-decoration:none;font-weight:600;margin:0 6px;display:inline-block">{label}</a>'
+    )
+
+
+def _build_html(color: str, greeting: str, body: str, cta_text: str, cta_url: str, signature: str,
+                 unsubscribe_url: str = "", cta_text_2: str = "", cta_url_2: str = "") -> str:
+    buttons = _cta_button(cta_text, cta_url, primary=True) + _cta_button(cta_text_2, cta_url_2, primary=False)
+    cta_block = f'<p style="text-align:center;margin:24px 0">{buttons}</p>' if buttons else ""
     unsub_block = ""
     if unsubscribe_url:
         unsub_block = (
