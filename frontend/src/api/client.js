@@ -134,6 +134,7 @@ export const uploadEmailAttachment = (file) => {
   form.append('file', file)
   return api.post('/settings/email/attachment', form).then(r => r.data)
 }
+export const deleteEmailAttachment = () => api.delete('/settings/email/attachment').then(r => r.data)
 export const sendTestEmail = (data) => api.post('/settings/email/test', data).then(r => r.data)
 export const bulkSendEmail = (data) => api.post('/settings/email/bulk-send', data).then(r => r.data)
 export const getBulkSendStatus = (jobId) => api.get(`/settings/email/bulk-send/status/${jobId}`).then(r => r.data)

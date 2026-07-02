@@ -29,7 +29,7 @@ import {
   ArrowDownTrayIcon, ChartBarIcon,
 } from '@heroicons/react/24/outline'
 import {
-  getEmailSettings, saveEmailSettings, uploadEmailAttachment,
+  getEmailSettings, saveEmailSettings, uploadEmailAttachment, deleteEmailAttachment,
   sendTestEmail, bulkSendEmail, getBulkSendStatus, getActiveBulkSend, pauseBulkSend, resumeBulkSend, cancelBulkSend, getCampaigns,
   getEmailHistory, validateEmailRecipients, uploadTemplateAttachment,
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
@@ -119,9 +119,11 @@ function buildCtaButton(text, url, primary) {
 }
 
 function buildHtml(t) {
+  // Explicit &nbsp; separator (not just CSS margin) so the two buttons never
+  // visually run together — some email clients strip inline margin on <a>.
   const buttons = [buildCtaButton(t.cta_text, t.cta_url, true), buildCtaButton(t.cta_text_2, t.cta_url_2, false)]
     .filter(Boolean)
-    .join('')
+    .join('&nbsp;&nbsp;&nbsp;&nbsp;')
   const cta = buttons ? `<p style="text-align:center;margin:20px 0">${buttons}</p>` : ''
   return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;color:#111827">
   <div style="padding:28px 32px;border-bottom:1px solid #e5e7eb">
@@ -266,6 +268,7 @@ export default function EmailMarketing() {
   const [trackingLoading, setTrackingLoading] = useState(false)
   const [scheduleAt, setScheduleAt] = useState('')
   const fileRef = useRef(null)
+  const attachRef = useRef(null)
   const tmplAttachRef = useRef(null)
   const emailImportRef = useRef(null)
   const editorRef = useRef(null)
@@ -687,6 +690,16 @@ export default function EmailMarketing() {
       setCfg(p => ({ ...p, email_attachment_name: r.filename }))
       setAttachMsg({ ok: true, text: r.filename })
     } catch (e) { setAttachMsg({ ok: false, text: 'Error al subir' }) }
+    finally { setAttachLoading(false) }
+  }
+
+  const removeAttach = async () => {
+    setAttachLoading(true); setAttachMsg(null)
+    try {
+      await deleteEmailAttachment()
+      setCfg(p => ({ ...p, email_attachment_name: null }))
+      setAttachMsg({ ok: true, text: 'Adjunto global eliminado' })
+    } catch (e) { setAttachMsg({ ok: false, text: 'Error al eliminar' }) }
     finally { setAttachLoading(false) }
   }
 
@@ -1617,6 +1630,39 @@ export default function EmailMarketing() {
               <input type="text" value={cfg.email_from_name} onChange={e => setCfg(p => ({ ...p, email_from_name: e.target.value }))}
                 placeholder="Isabella - Mi Empresa" className="z-input-light text-sm" />
             </div>
+          </div>
+          <div className="border-t border-z-border pt-4">
+            <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
+              <PaperClipIcon className="w-3.5 h-3.5" /> Adjunto global (PDF o imagen, máx. 5 MB)
+            </label>
+            <div className="flex items-center gap-3">
+              <input ref={attachRef} type="file" accept=".pdf,image/*" className="hidden" onChange={uploadAttach} />
+              <button onClick={() => attachRef.current?.click()} disabled={attachLoading}
+                className="z-btn-ghost border border-z-border text-xs disabled:opacity-50">
+                {attachLoading ? 'Subiendo...' : cfg.email_attachment_name ? 'Reemplazar adjunto' : 'Subir adjunto'}
+              </button>
+              {cfg.email_attachment_name && (
+                <>
+                  <span className="text-xs font-mono text-slate-400 truncate max-w-[180px]">
+                    ✓ {cfg.email_attachment_name}
+                  </span>
+                  <button onClick={removeAttach} disabled={attachLoading}
+                    className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
+                    Quitar
+                  </button>
+                </>
+              )}
+            </div>
+            {cfg.email_attachment_name && (
+              <p className="text-xs text-slate-500 mt-1">
+                Se adjunta a todos los envíos que no tengan su propio adjunto por plantilla.
+              </p>
+            )}
+            {attachMsg && (
+              <p className={`text-xs mt-1 ${attachMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
+                {attachMsg.ok ? `✓ ${attachMsg.text}` : attachMsg.text}
+              </p>
+            )}
           </div>
           <div className="border-t border-z-border pt-4">
             <label className="text-xs text-slate-400 mb-1.5 block">Delay entre envíos</label>

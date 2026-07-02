@@ -167,7 +167,11 @@ def _cta_button(text: str, url: str, primary: bool = True) -> str:
 
 def _build_html(color: str, greeting: str, body: str, cta_text: str, cta_url: str, signature: str,
                  unsubscribe_url: str = "", cta_text_2: str = "", cta_url_2: str = "") -> str:
-    buttons = _cta_button(cta_text, cta_url, primary=True) + _cta_button(cta_text_2, cta_url_2, primary=False)
+    btn1 = _cta_button(cta_text, cta_url, primary=True)
+    btn2 = _cta_button(cta_text_2, cta_url_2, primary=False)
+    # Explicit &nbsp; separator (not just CSS margin) so the two buttons never
+    # visually run together — some email clients strip inline margin on <a>.
+    buttons = f"{btn1}&nbsp;&nbsp;&nbsp;&nbsp;{btn2}" if (btn1 and btn2) else (btn1 or btn2)
     cta_block = f'<p style="text-align:center;margin:24px 0">{buttons}</p>' if buttons else ""
     unsub_block = ""
     if unsubscribe_url:

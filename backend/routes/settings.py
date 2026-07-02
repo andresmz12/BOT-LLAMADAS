@@ -335,6 +335,25 @@ async def upload_email_attachment(
     return {"ok": True, "filename": file.filename}
 
 
+@router.delete("/email/attachment")
+def delete_email_attachment(
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    """Removes the organization's global fallback attachment — every send that
+    doesn't have its own per-template attachment stops attaching anything."""
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    org = session.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    org.email_attachment = None
+    org.email_attachment_name = None
+    session.add(org)
+    session.commit()
+    return {"ok": True}
+
+
 class EmailTestRequest(BaseModel):
     to_email: str
     outcome: str = "interested"
