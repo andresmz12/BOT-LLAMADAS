@@ -1,4 +1,5 @@
 import os
+import json
 import httpx
 import logging
 from typing import Optional
@@ -6,6 +7,33 @@ from models import AgentConfig
 
 logger = logging.getLogger(__name__)
 RETELL_API_URL = "https://api.retellai.com"
+
+# Keys always set from the Prospect record; custom_context may not override them
+_RESERVED_DYNAMIC_VARS = {"customer_name", "company_name"}
+
+
+def _parse_custom_context(raw: Optional[str]) -> dict:
+    """Deserialize a prospect's custom_context into Retell dynamic variables.
+
+    Returns {} on any invalid input instead of failing the call. Values are
+    coerced to strings (Retell requires string dynamic variables) and reserved
+    keys are dropped so custom data can't spoof the prospect's identity vars.
+    """
+    if not raw:
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        logger.warning("[Retell] custom_context is not valid JSON; ignoring")
+        return {}
+    if not isinstance(parsed, dict):
+        logger.warning("[Retell] custom_context is not a JSON object; ignoring")
+        return {}
+    return {
+        str(k): v if isinstance(v, str) else json.dumps(v, ensure_ascii=False)
+        for k, v in parsed.items()
+        if k not in _RESERVED_DYNAMIC_VARS
+    }
 
 
 def _get_credentials(organization_id: Optional[int] = None) -> tuple[str, str]:
@@ -275,13 +303,7 @@ async def create_call(
             "Ve a Agentes, edítalo y selecciona una voz."
         )
 
-    custom_vars = {}
-    if prospect_custom_context:
-        try:
-            import json
-            custom_vars = json.loads(prospect_custom_context)
-        except (json.JSONDecodeError, TypeError):
-            logger.warning(f"[Retell] Failed to parse custom_context: {prospect_custom_context}")
+    custom_vars = _parse_custom_context(prospect_custom_context)
 
     payload = {
         "from_number": from_number,
@@ -330,13 +352,7 @@ async def create_call_direct(
             "Ve a Agentes y pulsa 'Sincronizar'."
         )
 
-    custom_vars = {}
-    if prospect_custom_context:
-        try:
-            import json
-            custom_vars = json.loads(prospect_custom_context)
-        except (json.JSONDecodeError, TypeError):
-            logger.warning(f"[Retell] Failed to parse custom_context: {prospect_custom_context}")
+    custom_vars = _parse_custom_context(prospect_custom_context)
 
     payload = {
         "from_number": from_number,

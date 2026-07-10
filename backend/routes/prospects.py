@@ -42,7 +42,7 @@ class ProspectCreate(BaseModel):
     phone: str
     company: Optional[str] = None
     notes: Optional[str] = None
-    custom_context: Optional[dict] = None
+    custom_context: Optional[str] = None  # accepts a JSON object; stored as serialized JSON
 
     @field_validator("phone")
     @classmethod
@@ -58,14 +58,24 @@ class ProspectCreate(BaseModel):
 
     @field_validator("custom_context", mode="before")
     @classmethod
-    def custom_context_valid(cls, v: Optional[dict]) -> Optional[str]:
+    def custom_context_valid(cls, v) -> Optional[str]:
         if v is None:
             return None
         import json
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                raise ValueError("custom_context debe ser JSON válido")
+        if not isinstance(v, dict):
+            raise ValueError("custom_context debe ser un objeto JSON")
         try:
-            return json.dumps(v)
+            serialized = json.dumps(v)
         except (TypeError, ValueError) as e:
             raise ValueError(f"custom_context debe ser JSON válido: {e}")
+        if len(serialized) > 10_000:
+            raise ValueError("custom_context demasiado grande (máx. 10 KB)")
+        return serialized
 
 
 class ProspectUpdate(BaseModel):
@@ -74,7 +84,7 @@ class ProspectUpdate(BaseModel):
     company: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
-    custom_context: Optional[dict] = None
+    custom_context: Optional[str] = None  # accepts a JSON object; stored as serialized JSON
 
     @field_validator("phone")
     @classmethod
@@ -93,14 +103,24 @@ class ProspectUpdate(BaseModel):
 
     @field_validator("custom_context", mode="before")
     @classmethod
-    def custom_context_valid(cls, v: Optional[dict]) -> Optional[str]:
+    def custom_context_valid(cls, v) -> Optional[str]:
         if v is None:
             return None
         import json
+        if isinstance(v, str):
+            try:
+                v = json.loads(v)
+            except (json.JSONDecodeError, TypeError):
+                raise ValueError("custom_context debe ser JSON válido")
+        if not isinstance(v, dict):
+            raise ValueError("custom_context debe ser un objeto JSON")
         try:
-            return json.dumps(v)
+            serialized = json.dumps(v)
         except (TypeError, ValueError) as e:
             raise ValueError(f"custom_context debe ser JSON válido: {e}")
+        if len(serialized) > 10_000:
+            raise ValueError("custom_context demasiado grande (máx. 10 KB)")
+        return serialized
 
 
 @router.post("")

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 logger = logging.getLogger(__name__)
 from sqlmodel import Session, select, func
 from sqlalchemy.orm import selectinload
-from pydantic import BaseModel
+from pydantic import BaseModel, Field as PydanticField
 from database import get_session
 from models import Call, Campaign, Prospect, AgentConfig, User, Organization
 from services import retell_client
@@ -18,8 +18,8 @@ router = APIRouter(prefix="/calls", tags=["calls"])
 class DemoCallRequest(BaseModel):
     phone: str
     agent_id: int
-    prospect_name: str = "Demo"
-    prospect_company: str = "Demo"
+    prospect_name: str = PydanticField(default="Demo", max_length=200)
+    prospect_company: str = PydanticField(default="Demo", max_length=200)
     custom_context: Optional[dict] = None
 
 
@@ -62,7 +62,9 @@ async def demo_call(
         try:
             custom_context_str = json.dumps(req.custom_context)
         except (TypeError, ValueError) as e:
-            logger.warning(f"[demo_call] Failed to serialize custom_context: {e}")
+            raise HTTPException(status_code=422, detail=f"custom_context debe ser JSON válido: {e}")
+        if len(custom_context_str) > 10_000:
+            raise HTTPException(status_code=422, detail="custom_context demasiado grande (máx. 10 KB)")
 
     prospect = Prospect(
         campaign_id=demo_campaign.id,
