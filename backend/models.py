@@ -158,6 +158,7 @@ class Prospect(SQLModel, table=True):
     last_email_sent_at: Optional[datetime] = None
     email_send_count: int = Field(default=0)
     email_label: Optional[str] = None  # interested / not_interested / converted / do_not_contact
+    custom_context: Optional[str] = None  # JSON string for dynamic call variables
 
     campaign: Optional[Campaign] = Relationship(back_populates="prospects")
     calls: List["Call"] = Relationship(back_populates="prospect")
