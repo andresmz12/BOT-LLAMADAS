@@ -1,4 +1,6 @@
 import logging
+import json
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
 logger = logging.getLogger(__name__)
@@ -16,6 +18,9 @@ router = APIRouter(prefix="/calls", tags=["calls"])
 class DemoCallRequest(BaseModel):
     phone: str
     agent_id: int
+    prospect_name: str = "Demo"
+    prospect_company: str = "Demo"
+    custom_context: Optional[dict] = None
 
 
 @router.post("/demo")
@@ -51,11 +56,20 @@ async def demo_call(
         session.commit()
         session.refresh(demo_campaign)
 
+    # Serialize custom_context dict → JSON string
+    custom_context_str = None
+    if req.custom_context:
+        try:
+            custom_context_str = json.dumps(req.custom_context)
+        except (TypeError, ValueError) as e:
+            logger.warning(f"[demo_call] Failed to serialize custom_context: {e}")
+
     prospect = Prospect(
         campaign_id=demo_campaign.id,
-        name="Demo",
+        name=req.prospect_name,
         phone=req.phone,
-        company="Demo",
+        company=req.prospect_company,
+        custom_context=custom_context_str,
         organization_id=current_user.organization_id,
     )
     session.add(prospect)
@@ -79,8 +93,9 @@ async def demo_call(
     try:
         result = await retell_client.create_call(
             req.phone, agent,
-            prospect_name="Demo",
-            prospect_company="Demo",
+            prospect_name=req.prospect_name,
+            prospect_company=req.prospect_company,
+            prospect_custom_context=custom_context_str,
             api_key=api_key,
             from_number=from_number,
         )
