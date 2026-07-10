@@ -15,8 +15,9 @@ _pool_kwargs = (
     {}
     if DATABASE_URL.startswith("sqlite")
     else {
-        "pool_size": 3,       # max persistent connections
-        "max_overflow": 5,    # extra connections allowed under burst
+        "pool_size": 10,      # max persistent connections
+        "max_overflow": 15,   # extra connections allowed under burst
+        "pool_timeout": 15,   # fail fast instead of freezing a request (and the event loop) for 30s
         "pool_recycle": 300,  # recycle connections every 5 min to avoid stale sockets
         "pool_pre_ping": True,
     }

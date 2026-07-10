@@ -464,6 +464,27 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"[Startup] Failed to recover orphaned scheduled email jobs: {e}")
 
+    # Resume call campaigns left "running" by a crash/redeploy — their asyncio
+    # task died with the old process, so without this they stay "running" in the
+    # DB forever: the dialer never resumes and POST /start rejects them with
+    # "already running". Prospect claiming is atomic (pending→calling), so if an
+    # old instance is still dialing during a rolling deploy the two loops can't
+    # dial the same prospect twice.
+    try:
+        from sqlmodel import Session as _S4, select as _sel4
+        from models import Campaign as _Campaign4
+        from services import call_orchestrator as _orch4
+        with _S4(engine) as s:
+            orphaned_campaigns = s.exec(
+                _sel4(_Campaign4).where(_Campaign4.status == "running")
+            ).all()
+            for c in orphaned_campaigns:
+                task = asyncio.create_task(_orch4.start_campaign(c.id))
+                _orch4.running_tasks[c.id] = task
+                logger.info(f"[Startup] Resumed running campaign {c.id} '{c.name}' (org={c.organization_id})")
+    except Exception as e:
+        logger.error(f"[Startup] Failed to resume running campaigns: {e}")
+
     scheduler = asyncio.create_task(_campaign_scheduler())
     yield
     scheduler.cancel()

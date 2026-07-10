@@ -224,11 +224,23 @@ async def _run_campaign_loop(campaign_id: int):
                 logger.info(f"[Campaign {campaign_id}] No more pending prospects — completed")
                 break
 
-            # Mark prospect as calling
-            prospect.status = "calling"
-            prospect.call_attempts += 1
-            prospect.last_called_at = datetime.utcnow()
-            session.add(prospect)
+            # Atomic claim: pending→calling only succeeds for one dialer. During a
+            # rolling deploy two instances can run this loop for the same campaign;
+            # without this both would dial the same prospect.
+            from sqlalchemy import update as _upd
+            claim = session.execute(
+                _upd(Prospect)
+                .where(Prospect.id == prospect.id, Prospect.status == "pending")
+                .values(
+                    status="calling",
+                    call_attempts=prospect.call_attempts + 1,
+                    last_called_at=datetime.utcnow(),
+                )
+            )
+            if claim.rowcount == 0:
+                session.commit()
+                logger.info(f"[Campaign {campaign_id}] Prospect {prospect.id} claimed by another dialer, skipping")
+                continue
 
             # Create call record
             call = Call(
@@ -261,7 +273,7 @@ async def _run_campaign_loop(campaign_id: int):
             }
             logger.info(
                 f"[Campaign {campaign_id}] Dialing {prospect.phone} "
-                f"(call_id={call.id}, attempt={prospect.call_attempts})"
+                f"(call_id={call.id}, attempt={prospect.call_attempts + 1})"
             )
 
         # ── Make the Retell call OUTSIDE the session ───────────────────────────

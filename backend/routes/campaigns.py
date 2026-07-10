@@ -176,11 +176,21 @@ async def start_campaign(
         raise HTTPException(status_code=400, detail="Campaign already running")
     if campaign.status == "completed":
         raise HTTPException(status_code=400, detail="Campaign already completed")
-    campaign.status = "running"
-    session.add(campaign)
+    # Atomic claim: only the request that wins the →running transition launches
+    # the orchestrator. A plain read-then-write lets two simultaneous starts both
+    # pass the checks above and spawn two dialing loops over the same prospects.
+    from sqlalchemy import update as _upd
+    result = session.execute(
+        _upd(Campaign)
+        .where(Campaign.id == campaign_id, Campaign.status.not_in(["running", "completed"]))
+        .values(status="running")
+    )
     session.commit()
-    task = asyncio.create_task(call_orchestrator.start_campaign(campaign_id))
-    call_orchestrator.running_tasks[campaign_id] = task
+    if result.rowcount == 0:
+        raise HTTPException(status_code=400, detail="Campaign already running")
+    if campaign_id not in call_orchestrator.running_tasks:
+        task = asyncio.create_task(call_orchestrator.start_campaign(campaign_id))
+        call_orchestrator.running_tasks[campaign_id] = task
     return {"ok": True, "status": "running"}
 
 
