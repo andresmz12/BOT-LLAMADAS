@@ -42,6 +42,7 @@ class ProspectCreate(BaseModel):
     phone: str
     company: Optional[str] = None
     notes: Optional[str] = None
+    custom_context: Optional[dict] = None
 
     @field_validator("phone")
     @classmethod
@@ -55,6 +56,17 @@ class ProspectCreate(BaseModel):
             raise ValueError("Nombre demasiado largo")
         return v.strip()
 
+    @field_validator("custom_context", mode="before")
+    @classmethod
+    def custom_context_valid(cls, v: Optional[dict]) -> Optional[str]:
+        if v is None:
+            return None
+        import json
+        try:
+            return json.dumps(v)
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"custom_context debe ser JSON válido: {e}")
+
 
 class ProspectUpdate(BaseModel):
     name: Optional[str] = None
@@ -62,6 +74,7 @@ class ProspectUpdate(BaseModel):
     company: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    custom_context: Optional[dict] = None
 
     @field_validator("phone")
     @classmethod
@@ -77,6 +90,17 @@ class ProspectUpdate(BaseModel):
         if v is not None and v not in allowed:
             raise ValueError(f"Estado inválido: {v}")
         return v
+
+    @field_validator("custom_context", mode="before")
+    @classmethod
+    def custom_context_valid(cls, v: Optional[dict]) -> Optional[str]:
+        if v is None:
+            return None
+        import json
+        try:
+            return json.dumps(v)
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"custom_context debe ser JSON válido: {e}")
 
 
 @router.post("")
@@ -95,6 +119,7 @@ def create_prospect(
         phone=normalize_phone(data.phone),
         company=data.company or None,
         notes=data.notes or None,
+        custom_context=data.custom_context,
         organization_id=current_user.organization_id,
     )
     session.add(prospect)
@@ -202,7 +227,7 @@ def list_prospects(
     if status:
         query = query.where(Prospect.status == status)
     prospects = session.exec(query.offset(offset).limit(min(limit, 1000))).all()
-    return [p.model_dump(exclude={"campaign", "calls"}) for p in prospects]
+    return [p.model_dump(exclude={"campaign", "calls", "custom_context"}) for p in prospects]
 
 
 @router.put("/{prospect_id}")
@@ -268,6 +293,7 @@ async def call_prospect(
             prospect.phone, agent,
             prospect_name=prospect.name,
             prospect_company=prospect.company or "",
+            prospect_custom_context=prospect.custom_context,
             api_key=api_key,
             from_number=from_number,
         )

@@ -211,6 +211,9 @@ def run_migrations():
                 if "email_label" not in prospect_cols:
                     conn.execute(text("ALTER TABLE prospect ADD COLUMN email_label VARCHAR"))
                     log.info("Migration: added prospect.email_label")
+                if "custom_context" not in prospect_cols:
+                    conn.execute(text("ALTER TABLE prospect ADD COLUMN custom_context TEXT"))
+                    log.info("Migration: added prospect.custom_context")
 
         # Indexes for performance on frequently filtered columns
         is_pg = not DATABASE_URL.startswith("sqlite")

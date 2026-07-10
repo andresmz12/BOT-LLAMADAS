@@ -251,6 +251,7 @@ async def create_call(
     agent_config: AgentConfig,
     prospect_name: str = "",
     prospect_company: str = "",
+    prospect_custom_context: str = None,
     api_key: str = "",
     from_number: str = "",
 ) -> dict:
@@ -274,6 +275,14 @@ async def create_call(
             "Ve a Agentes, edítalo y selecciona una voz."
         )
 
+    custom_vars = {}
+    if prospect_custom_context:
+        try:
+            import json
+            custom_vars = json.loads(prospect_custom_context)
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(f"[Retell] Failed to parse custom_context: {prospect_custom_context}")
+
     payload = {
         "from_number": from_number,
         "to_number": phone,
@@ -281,6 +290,7 @@ async def create_call(
         "retell_llm_dynamic_variables": {
             "customer_name": prospect_name or "cliente",
             "company_name": prospect_company or "",
+            **custom_vars,
         },
     }
 
@@ -306,6 +316,7 @@ async def create_call_direct(
     voice_id: str = "",
     prospect_name: str = "",
     prospect_company: str = "",
+    prospect_custom_context: str = None,
     api_key: str = "",
     from_number: str = "",
     voicemail_message: str = "",
@@ -319,6 +330,14 @@ async def create_call_direct(
             "Ve a Agentes y pulsa 'Sincronizar'."
         )
 
+    custom_vars = {}
+    if prospect_custom_context:
+        try:
+            import json
+            custom_vars = json.loads(prospect_custom_context)
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(f"[Retell] Failed to parse custom_context: {prospect_custom_context}")
+
     payload = {
         "from_number": from_number,
         "to_number": phone,
@@ -326,6 +345,7 @@ async def create_call_direct(
         "retell_llm_dynamic_variables": {
             "customer_name": prospect_name or "cliente",
             "company_name": prospect_company or "",
+            **custom_vars,
         },
     }
     if voicemail_message:
