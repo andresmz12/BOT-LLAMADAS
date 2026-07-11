@@ -65,29 +65,56 @@ def _sign_payload(secret: str, body_bytes: bytes) -> str:
     return hmac.new(secret.encode("utf-8"), body_bytes, hashlib.sha256).hexdigest()
 
 
-async def send_crm_webhook(
+def _make_delivery_id(campaign_id: Optional[int], email: str, timestamp: str) -> str:
+    """Deterministic unique id per individual send (campaign + recipient + send timestamp),
+    so the CRM can dedupe retries of the same webhook delivery without dropping other sends."""
+    raw = f"{campaign_id if campaign_id is not None else 'none'}:{email.strip().lower()}:{timestamp}"
+    return "es_" + hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+
+
+def _build_email_campaign_payload(
     organization: Organization,
-    call: Call,
     prospect: Optional[Prospect],
-    agent_config: Optional[AgentConfig],
+    campaign_id: Optional[int],
+    campaign_name: Optional[str],
+    template_key: str,
+    subject: str,
+    recipient_email: str,
+    delivery_id: str,
+    timestamp: str,
+) -> dict:
+    return {
+        "event": "campaign_email_sent",
+        "delivery_id": delivery_id,
+        "timestamp": timestamp,
+        "organization_id": organization.id,
+        "organization": {
+            "id": organization.id,
+            "name": organization.name,
+        },
+        "campaign": {
+            "id": campaign_id,
+            "name": campaign_name,
+        },
+        "template_key": template_key,
+        "subject": subject,
+        "email": recipient_email,
+        "sent_at": timestamp,
+        "prospect": {
+            "id": prospect.id if prospect else None,
+            "name": prospect.name if prospect else None,
+            "company": prospect.company if prospect else None,
+        },
+    }
+
+
+async def _dispatch_webhook(
+    organization: Organization,
     event_type: str,
+    payload: dict,
     session: Session,
 ) -> dict:
-    if not organization.crm_webhook_enabled:
-        return {"success": False, "status_code": None, "response": "disabled"}
-    if not organization.crm_webhook_url:
-        return {"success": False, "status_code": None, "response": "no url configured"}
-
-    try:
-        enabled_events = json.loads(organization.crm_events or '["call_ended","interested"]')
-    except Exception:
-        enabled_events = ["call_ended", "interested"]
-
-    if event_type not in enabled_events:
-        return {"success": False, "status_code": None, "response": "event not enabled for this org"}
-
-    timestamp = datetime.utcnow().isoformat() + "Z"
-    payload = _build_payload(organization, call, prospect, agent_config, event_type, timestamp)
+    timestamp = payload.get("timestamp") or (datetime.utcnow().isoformat() + "Z")
     body_bytes = json.dumps(payload, ensure_ascii=False, default=str).encode("utf-8")
 
     headers = {
@@ -152,6 +179,70 @@ async def send_crm_webhook(
         logger.error(f"[CRM_WEBHOOK] Failed to write WebhookLog: {db_exc}")
 
     return {"success": success, "status_code": last_status, "response": last_response}
+
+
+async def send_crm_webhook(
+    organization: Organization,
+    call: Call,
+    prospect: Optional[Prospect],
+    agent_config: Optional[AgentConfig],
+    event_type: str,
+    session: Session,
+) -> dict:
+    if not organization.crm_webhook_enabled:
+        return {"success": False, "status_code": None, "response": "disabled"}
+    if not organization.crm_webhook_url:
+        return {"success": False, "status_code": None, "response": "no url configured"}
+
+    try:
+        enabled_events = json.loads(organization.crm_events or '["call_ended","interested"]')
+    except Exception:
+        enabled_events = ["call_ended", "interested"]
+
+    if event_type not in enabled_events:
+        return {"success": False, "status_code": None, "response": "event not enabled for this org"}
+
+    timestamp = datetime.utcnow().isoformat() + "Z"
+    payload = _build_payload(organization, call, prospect, agent_config, event_type, timestamp)
+    return await _dispatch_webhook(organization, event_type, payload, session)
+
+
+async def send_email_campaign_webhook(
+    organization: Organization,
+    prospect: Optional[Prospect],
+    campaign_id: Optional[int],
+    campaign_name: Optional[str],
+    template_key: str,
+    subject: str,
+    recipient_email: str,
+    session: Session,
+) -> dict:
+    """Notify the org's CRM webhook that a single campaign email was sent.
+    Fired once per recipient (not once per campaign) so each delivery carries
+    its own unique delivery_id, letting the CRM dedupe retried webhook calls
+    without conflating different recipients."""
+    event_type = "campaign_email_sent"
+
+    if not organization.crm_webhook_enabled:
+        return {"success": False, "status_code": None, "response": "disabled"}
+    if not organization.crm_webhook_url:
+        return {"success": False, "status_code": None, "response": "no url configured"}
+
+    try:
+        enabled_events = json.loads(organization.crm_events or '["call_ended","interested"]')
+    except Exception:
+        enabled_events = ["call_ended", "interested"]
+
+    if event_type not in enabled_events:
+        return {"success": False, "status_code": None, "response": "event not enabled for this org"}
+
+    timestamp = datetime.utcnow().isoformat() + "Z"
+    delivery_id = _make_delivery_id(campaign_id, recipient_email, timestamp)
+    payload = _build_email_campaign_payload(
+        organization, prospect, campaign_id, campaign_name, template_key, subject,
+        recipient_email, delivery_id, timestamp,
+    )
+    return await _dispatch_webhook(organization, event_type, payload, session)
 
 
 async def send_test_webhook(organization: Organization, session: Session) -> dict:

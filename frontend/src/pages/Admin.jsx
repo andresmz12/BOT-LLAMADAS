@@ -100,6 +100,7 @@ const CRM_EVENTS_OPTIONS = [
   { value: 'appointment_scheduled', label: 'Cita agendada' },
   { value: 'voicemail', label: 'Buzón de voz' },
   { value: 'failed', label: 'Llamada fallida' },
+  { value: 'campaign_email_sent', label: 'Email de campaña enviado' },
 ]
 
 export default function Admin() {

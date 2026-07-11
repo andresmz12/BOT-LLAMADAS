@@ -1,6 +1,7 @@
 import csv
 import io
 import json
+import logging
 import os
 import uuid
 import asyncio
@@ -15,6 +16,8 @@ from sqlalchemy import desc, func
 from database import get_session
 from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, EmailSequence, BulkEmailJob
 from routes.auth import get_current_user, require_write_access, require_superadmin
+
+logger = logging.getLogger(__name__)
 
 APP_BASE_URL = os.getenv("APP_BASE_URL", "").rstrip("/")
 
@@ -679,6 +682,17 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
 
     tmpl, att_b64, att_name = _load_template_and_attachment()
 
+    # Resolve campaign name once (used both for the per-recipient CRM webhooks
+    # fired during the loop below and for the final EmailSendLog entry)
+    if email_only:
+        camp_name = "Contactos de email"
+    elif campaign_id:
+        with Session(_engine) as s_camp:
+            c = s_camp.get(Campaign, campaign_id)
+            camp_name = c.name if c else None
+    else:
+        camp_name = None
+
     while prospects_data:
         # Pausable: wait here while the job is paused before sending the next email
         was_paused = False
@@ -755,6 +769,28 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
             if len(sent_list) > 100:
                 sent_list = sent_list[-100:]
 
+            # Best-effort CRM notification for this individual send. Fired per
+            # recipient (not once for the whole campaign) so each delivery carries
+            # its own delivery_id and a failure/retry here never blocks the send loop.
+            try:
+                from services.crm_webhook import send_email_campaign_webhook
+                with Session(_engine) as s_wh:
+                    org_wh = s_wh.get(Organization, org_id)
+                    prospect_wh = s_wh.get(Prospect, pdata["id"])
+                    if org_wh:
+                        await send_email_campaign_webhook(
+                            organization=org_wh,
+                            prospect=prospect_wh,
+                            campaign_id=campaign_id,
+                            campaign_name=camp_name,
+                            template_key=template_key,
+                            subject=subject,
+                            recipient_email=pdata["email"],
+                            session=s_wh,
+                        )
+            except Exception as wh_exc:
+                logger.warning(f"[EMAIL_CAMPAIGN_WEBHOOK] org={org_id} email={pdata['email']} failed: {wh_exc}")
+
         except Exception as e:
             failed_list.append({"email": pdata["email"], "error": str(e)[:80]})
             skipped_count += 1
@@ -776,17 +812,6 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
 
         if delay_s > 0:
             await asyncio.sleep(delay_s)
-
-    # Resolve campaign name for log
-    if email_only:
-        camp_name = "Contactos de email"
-    elif campaign_id:
-        from database import engine as _eng2
-        with Session(_eng2) as s:
-            c = s.get(Campaign, campaign_id)
-            camp_name = c.name if c else None
-    else:
-        camp_name = None
 
     with Session(_engine) as s:
         log_entry = EmailSendLog(
