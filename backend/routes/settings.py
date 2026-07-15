@@ -550,6 +550,7 @@ async def bulk_send_email(
                 email_only=data.email_only,
                 scheduled_at=scheduled_dt,
                 initiated_by=current_user.email,
+                skip_labeled=data.skip_labeled,
             )
             session.add(job)
             session.commit()

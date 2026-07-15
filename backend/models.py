@@ -286,6 +286,7 @@ class ScheduledEmailSend(SQLModel, table=True):
     sequence_step: Optional[int] = None
     subject_override: Optional[str] = None
     body_override: Optional[str] = None
+    skip_labeled: bool = Field(default=True)  # skip contacts already classified (interested/not_interested/converted/do_not_contact)
 
 
 class EmailSequence(SQLModel, table=True):

@@ -189,6 +189,9 @@ def run_migrations():
                 if "body_override" not in sched_cols:
                     conn.execute(text("ALTER TABLE scheduledemailsend ADD COLUMN body_override TEXT"))
                     log.info("Migration: added scheduledemailsend.body_override")
+                if "skip_labeled" not in sched_cols:
+                    conn.execute(text("ALTER TABLE scheduledemailsend ADD COLUMN skip_labeled BOOLEAN DEFAULT TRUE"))
+                    log.info("Migration: added scheduledemailsend.skip_labeled")
 
         if "emailsendlog" in tables:
             log_cols = {c["name"] for c in insp.get_columns("emailsendlog")}

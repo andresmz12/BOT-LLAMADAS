@@ -175,6 +175,8 @@ async def _run_scheduled_email(job_id: int):
                 query = query.where(_Prospect.campaign_id == None)  # noqa: E711
             elif job.campaign_id:
                 query = query.where(_Prospect.campaign_id == job.campaign_id)
+            if job.skip_labeled:
+                query = query.where(_Prospect.email_label.is_(None))
             all_prospects = s.exec(query).all()
             # Deduplicate by email (same as immediate send)
             seen_emails: set[str] = set()
