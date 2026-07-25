@@ -584,17 +584,32 @@ export default function LeadHunter() {
               {sendModal.phone && (
                 <p className="text-xs text-slate-500 font-mono">{sendModal.phone}</p>
               )}
+              {sendModal.email && (
+                <p className="text-xs text-slate-500 font-mono">{sendModal.email}</p>
+              )}
               <div className="bg-black/30 rounded-lg p-3 border border-z-border">
                 <p className="text-xs text-slate-400 whitespace-pre-wrap">{sendModal.message_es}</p>
               </div>
             </div>
-            <div className="flex gap-2 pt-1">
-              <button
-                onClick={() => handleSend(sendModal, 'whatsapp')}
-                className="flex-1 z-btn-primary text-sm flex items-center justify-center gap-2"
-              >
-                <PaperAirplaneIcon className="w-4 h-4" /> Enviar por WhatsApp
-              </button>
+            <div className="flex flex-wrap gap-2 pt-1">
+              {sendModal.phone && (
+                <button
+                  onClick={() => handleSend(sendModal, 'whatsapp')}
+                  className="flex-1 z-btn-primary text-sm flex items-center justify-center gap-2"
+                >
+                  <PaperAirplaneIcon className="w-4 h-4" /> Enviar por WhatsApp
+                </button>
+              )}
+              {sendModal.email ? (
+                <button
+                  onClick={() => handleSend(sendModal, 'email')}
+                  className="flex-1 z-btn-primary text-sm flex items-center justify-center gap-2"
+                >
+                  <PaperAirplaneIcon className="w-4 h-4" /> Enviar por Email
+                </button>
+              ) : (
+                <p className="text-xs text-amber-400/80 w-full">⚠ Sin email capturado para este lead — solo se puede enviar por WhatsApp.</p>
+              )}
               <button onClick={() => setSendModal(null)} className="z-btn-ghost text-sm">Cancelar</button>
             </div>
           </div>

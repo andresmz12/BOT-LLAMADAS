@@ -14,7 +14,7 @@ from typing import Optional
 from sqlmodel import Session, select
 from sqlalchemy import desc, func
 from database import get_session
-from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, EmailSequence, BulkEmailJob
+from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, EmailSequence, BulkEmailJob, SequenceRule, SendingDomain
 from routes.auth import get_current_user, require_write_access, require_superadmin
 
 logger = logging.getLogger(__name__)
@@ -683,6 +683,11 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
 
     tmpl, att_b64, att_name = _load_template_and_attachment()
 
+    from services.email_deliverability import get_active_domains, pick_sender, reserve_daily_send
+    with Session(_engine) as s_dom:
+        active_domains = get_active_domains(s_dom, org_id)
+    send_index = 0
+
     # Resolve campaign name once (used both for the per-recipient CRM webhooks
     # fired during the loop below and for the final EmailSendLog entry)
     if email_only:
@@ -713,12 +718,32 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
 
         pdata = prospects_data[0]
         try:
+            # Daily throttle: pause the job (not fail it) once the org's daily
+            # limit is hit — a paused BulkEmailJob already knows how to resume
+            # (manually, or automatically once the day rolls over — see
+            # _campaign_scheduler in main.py) without losing its remaining list.
+            with Session(_engine) as s_thr:
+                org_thr = s_thr.get(Organization, org_id)
+                if org_thr and not reserve_daily_send(s_thr, org_thr):
+                    with Session(_engine) as s_pause:
+                        row = s_pause.get(BulkEmailJob, int(job_id))
+                        if row and row.status == "running":
+                            row.status = "paused"
+                            row.paused_reason = "daily_limit"
+                            row.updated_at = datetime.utcnow()
+                            s_pause.add(row)
+                            s_pause.commit()
+                    logger.info(f"[BulkEmail] job={job_id} org={org_id} paused — daily send limit reached")
+                    return
+
+            send_from_email, send_from_name = pick_sender(active_domains, send_index, from_email, from_name)
+            send_index += 1
 
             unsub = _unsub_url(pdata["id"], org_id, base=base_url)
             tmpl_vars = {
                 "nombre":   pdata["name"],
                 "empresa":  pdata["company"],
-                "agente":   from_name,
+                "agente":   send_from_name,
                 "resumen":  "",
                 "telefono": pdata["phone"],
                 "fecha":    datetime.utcnow().strftime("%d/%m/%Y"),
@@ -731,12 +756,12 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
             cta_url   = tmpl.get("cta_url") or ""
             cta_text_2 = tmpl.get("cta_text_2") or ""
             cta_url_2  = tmpl.get("cta_url_2") or ""
-            signature = _fill(tmpl.get("signature") or f"El equipo de {from_name}", tmpl_vars)
+            signature = _fill(tmpl.get("signature") or f"El equipo de {send_from_name}", tmpl_vars)
             html_body = _build_html(color, greeting, body_text, cta_text, cta_url, signature, unsubscribe_url=unsub,
                                      cta_text_2=cta_text_2, cta_url_2=cta_url_2)
 
             message = Mail(
-                from_email=(from_email, from_name),
+                from_email=(send_from_email, send_from_name),
                 to_emails=pdata["email"],
                 subject=subject,
                 html_content=html_body,
@@ -895,6 +920,7 @@ def pause_bulk_send(job_id: str, current_user: User = Depends(require_write_acce
         raise HTTPException(status_code=403, detail="Acceso denegado")
     if row.status == "running":
         row.status = "paused"
+        row.paused_reason = None  # user-initiated — the throttle auto-resume must not touch this
         row.updated_at = datetime.utcnow()
         session.add(row)
         session.commit()
@@ -918,7 +944,7 @@ async def resume_bulk_send(job_id: str, current_user: User = Depends(require_wri
         result = session.execute(
             _resume_upd(BulkEmailJob)
             .where(BulkEmailJob.id == row.id, BulkEmailJob.status == "paused")
-            .values(status="running", updated_at=datetime.utcnow())
+            .values(status="running", paused_reason=None, updated_at=datetime.utcnow())
         )
         session.commit()
         if result.rowcount:
@@ -1593,6 +1619,7 @@ class SequenceGenerateRequest(BaseModel):
     tone: str = "Profesional"
     language: str = "Español"
     dates: list[str]  # ISO date strings, one per email
+    include_variants: bool = False  # also ask Claude for behavior-based variants (steps 2+)
 
 
 @router.post("/email/sequences/generate")
@@ -1624,6 +1651,17 @@ async def generate_email_sequence(
             return iso_str[:10]
 
     dates_list = "\n".join(f"{i+1}. {_date_only(d)}" for i, d in enumerate(data.dates))
+    variants_instruction = ""
+    variants_shape = ""
+    if data.include_variants and n > 1:
+        variants_instruction = (
+            "\nAdemás, para cada correo a partir del 2do, genera hasta 2 variantes condicionales "
+            "según cómo se comportó el destinatario con el correo ANTERIOR: una variante para quienes "
+            "NO abrieron el correo anterior ('no_open', tono más directo/urgente) y otra para quienes lo "
+            "abrieron pero no dieron click ('opened_no_click', refuerza el valor con un ángulo distinto). "
+            "Si un correo no necesita variantes, omite la clave 'variants' o déjala vacía.\n"
+        )
+        variants_shape = ', "variants": {"no_open": {"subject": "...", "body": "..."}, "opened_no_click": {"subject": "...", "body": "..."}}'
     prompt = (
         f"Eres un experto en email marketing para negocios hispanos en Estados Unidos.\n"
         f"{lang_hint}\n\n"
@@ -1632,11 +1670,12 @@ async def generate_email_sequence(
         f"Tono: {data.tone}\n\n"
         f"Cada correo debe avanzar lógicamente respecto al anterior (ej: el primero presenta, "
         f"los intermedios refuerzan el valor, el último cierra con urgencia o llamado a la acción claro). "
-        f"No repitas el mismo mensaje en cada correo.\n\n"
+        f"No repitas el mismo mensaje en cada correo.\n"
+        f"{variants_instruction}\n"
         f"Puedes usar las variables {{{{nombre}}}}, {{{{empresa}}}} dentro del cuerpo si tiene sentido, se reemplazarán automáticamente.\n\n"
         f"Responde ÚNICAMENTE con un JSON array de {n} objetos, sin texto adicional, con esta forma exacta:\n"
-        f'[{{"subject": "...", "body": "..."}}, ...]\n'
-        f"El campo body debe ser texto plano con saltos de línea (no HTML)."
+        f'[{{"subject": "...", "body": "..."{variants_shape}}}, ...]\n'
+        f"El campo body (y el body de cada variante) debe ser texto plano con saltos de línea (no HTML)."
     )
 
     try:
@@ -1665,7 +1704,16 @@ async def generate_email_sequence(
     result = []
     for i, d in enumerate(data.dates):
         item = emails[i] if i < len(emails) else {"subject": "", "body": ""}
-        result.append({"date": d, "subject": item.get("subject", ""), "body": item.get("body", "")})
+        entry = {"date": d, "subject": item.get("subject", ""), "body": item.get("body", "")}
+        raw_variants = item.get("variants") if isinstance(item.get("variants"), dict) else {}
+        variants = {
+            cond: {"subject": v.get("subject", ""), "body": v.get("body", "")}
+            for cond, v in raw_variants.items()
+            if cond in ("no_open", "opened_no_click", "clicked", "bounced") and isinstance(v, dict)
+        }
+        if variants:
+            entry["variants"] = variants
+        result.append(entry)
     return {"emails": result}
 
 
@@ -1675,6 +1723,14 @@ class SequenceEmailItem(BaseModel):
     body: str
 
 
+class SequenceRuleItem(BaseModel):
+    after_step: int
+    condition: str   # no_open | opened_no_click | clicked | bounced
+    action: str       # send_variant | skip_step | mark_hot | stop_sequence
+    variant_subject: Optional[str] = None
+    variant_body: Optional[str] = None
+
+
 class SequenceCreateRequest(BaseModel):
     name: str
     email_list_id: int
@@ -1682,6 +1738,7 @@ class SequenceCreateRequest(BaseModel):
     tone: str = "Profesional"
     language: str = "Español"
     emails: list[SequenceEmailItem]
+    rules: list[SequenceRuleItem] = []
 
 
 @router.post("/email/sequences")
@@ -1690,10 +1747,21 @@ def create_email_sequence(
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
+    from services.email_sequence_rules import VALID_CONDITIONS, VALID_ACTIONS
+
     if not current_user.organization_id:
         raise HTTPException(status_code=400, detail="Sin organización")
     if not data.emails:
         raise HTTPException(status_code=400, detail="La secuencia necesita al menos un correo")
+    for rule in data.rules:
+        if rule.condition not in VALID_CONDITIONS:
+            raise HTTPException(status_code=400, detail=f"Condición inválida: {rule.condition}")
+        if rule.action not in VALID_ACTIONS:
+            raise HTTPException(status_code=400, detail=f"Acción inválida: {rule.action}")
+        if rule.action == "send_variant" and not (rule.variant_subject or "").strip():
+            raise HTTPException(status_code=400, detail="La acción 'send_variant' necesita un asunto de variante")
+        if not (1 <= rule.after_step < len(data.emails)):
+            raise HTTPException(status_code=400, detail=f"after_step fuera de rango: {rule.after_step}")
 
     sequence = EmailSequence(
         organization_id=current_user.organization_id,
@@ -1730,6 +1798,18 @@ def create_email_sequence(
             body_override=item.body,
         )
         session.add(job)
+
+    for rule in data.rules:
+        session.add(SequenceRule(
+            organization_id=current_user.organization_id,
+            sequence_id=sequence.id,
+            after_step=rule.after_step,
+            condition=rule.condition,
+            action=rule.action,
+            variant_subject=rule.variant_subject,
+            variant_body=rule.variant_body,
+        ))
+
     session.commit()
     return {"ok": True, "sequence_id": sequence.id}
 
@@ -1753,6 +1833,9 @@ def list_email_sequences(
             .where(ScheduledEmailSend.sequence_id == seq.id)
             .order_by(ScheduledEmailSend.sequence_step)
         ).all()
+        rules = session.exec(
+            select(SequenceRule).where(SequenceRule.sequence_id == seq.id).order_by(SequenceRule.after_step)
+        ).all()
         result.append({
             "id": seq.id,
             "name": seq.name,
@@ -1772,8 +1855,67 @@ def list_email_sequences(
                 }
                 for s in steps
             ],
+            "rules": [
+                {
+                    "id": r.id, "after_step": r.after_step, "condition": r.condition,
+                    "action": r.action, "variant_subject": r.variant_subject, "variant_body": r.variant_body,
+                }
+                for r in rules
+            ],
         })
     return result
+
+
+@router.post("/email/sequences/{sequence_id}/rules")
+def add_sequence_rule(
+    sequence_id: int,
+    data: SequenceRuleItem,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    from services.email_sequence_rules import VALID_CONDITIONS, VALID_ACTIONS
+
+    seq = session.get(EmailSequence, sequence_id)
+    if not seq or seq.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404, detail="Secuencia no encontrada")
+    if data.condition not in VALID_CONDITIONS:
+        raise HTTPException(status_code=400, detail=f"Condición inválida: {data.condition}")
+    if data.action not in VALID_ACTIONS:
+        raise HTTPException(status_code=400, detail=f"Acción inválida: {data.action}")
+    if data.action == "send_variant" and not (data.variant_subject or "").strip():
+        raise HTTPException(status_code=400, detail="La acción 'send_variant' necesita un asunto de variante")
+
+    rule = SequenceRule(
+        organization_id=current_user.organization_id,
+        sequence_id=sequence_id,
+        after_step=data.after_step,
+        condition=data.condition,
+        action=data.action,
+        variant_subject=data.variant_subject,
+        variant_body=data.variant_body,
+    )
+    session.add(rule)
+    session.commit()
+    session.refresh(rule)
+    return {
+        "id": rule.id, "after_step": rule.after_step, "condition": rule.condition,
+        "action": rule.action, "variant_subject": rule.variant_subject, "variant_body": rule.variant_body,
+    }
+
+
+@router.delete("/email/sequences/{sequence_id}/rules/{rule_id}")
+def delete_sequence_rule(
+    sequence_id: int,
+    rule_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    rule = session.get(SequenceRule, rule_id)
+    if not rule or rule.organization_id != current_user.organization_id or rule.sequence_id != sequence_id:
+        raise HTTPException(status_code=404, detail="Regla no encontrada")
+    session.delete(rule)
+    session.commit()
+    return {"ok": True}
 
 
 class SequenceStepUpdate(BaseModel):
@@ -1984,6 +2126,8 @@ async def sendgrid_events(
             prospect_email = event.get("email", "")
             org_id_str = event.get("org_id") or (event.get("unique_args") or {}).get("org_id", "")
             template_key = event.get("template_key") or (event.get("unique_args") or {}).get("template_key", "")
+            sequence_id_str = event.get("sequence_id") or (event.get("unique_args") or {}).get("sequence_id", "")
+            sequence_step_str = event.get("sequence_step") or (event.get("unique_args") or {}).get("sequence_step", "")
             sg_event_id = event.get("sg_event_id") or ""
             sg_message_id = event.get("sg_message_id") or ""
             url = event.get("url") or ""
@@ -1992,6 +2136,8 @@ async def sendgrid_events(
                 continue
 
             org_id = int(org_id_str)
+            sequence_id = int(sequence_id_str) if str(sequence_id_str).strip().isdigit() else None
+            sequence_step = int(sequence_step_str) if str(sequence_step_str).strip().isdigit() else None
 
             # Deduplicate by sg_event_id
             if sg_event_id:
@@ -2009,6 +2155,8 @@ async def sendgrid_events(
                 sg_message_id=sg_message_id or None,
                 sg_event_id=sg_event_id or None,
                 url=url or None,
+                sequence_id=sequence_id,
+                sequence_step=sequence_step,
             )
             session.add(ev)
 
@@ -2029,6 +2177,183 @@ async def sendgrid_events(
 
     session.commit()
     return {"ok": True}
+
+
+@router.get("/email/analytics/sequence/{sequence_id}")
+def get_sequence_analytics(
+    sequence_id: int,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Aggregate EmailEvent + EmailSendLog for one sequence into sent/delivered/
+    opens/clicks/bounces/unsubscribes/spam_reports and their rates, plus a
+    per-step breakdown for a simple timeline chart."""
+    seq = session.get(EmailSequence, sequence_id)
+    if not seq or seq.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404, detail="Secuencia no encontrada")
+    from services.email_analytics import compute_metrics, sequence_step_breakdown
+    metrics = compute_metrics(session, current_user.organization_id, sequence_id=sequence_id)
+    return {
+        "sequence_id": seq.id,
+        "name": seq.name,
+        "status": seq.status,
+        **metrics,
+        "by_step": sequence_step_breakdown(session, current_user.organization_id, sequence_id),
+    }
+
+
+@router.get("/email/analytics/overview")
+def get_email_analytics_overview(
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Org-wide totals plus a per-sequence breakdown, optionally filtered to a
+    date range (applied to EmailEvent.timestamp / EmailSendLog.sent_at)."""
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    from services.email_analytics import compute_metrics
+    try:
+        df = _parse_scheduled_dt(date_from) if date_from else None
+        dt_to = _parse_scheduled_dt(date_to) if date_to else None
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido")
+
+    overall = compute_metrics(session, current_user.organization_id, date_from=df, date_to=dt_to)
+
+    sequences = session.exec(
+        select(EmailSequence)
+        .where(EmailSequence.organization_id == current_user.organization_id)
+        .order_by(EmailSequence.created_at.desc())
+    ).all()
+    per_sequence = []
+    for seq in sequences:
+        m = compute_metrics(session, current_user.organization_id, sequence_id=seq.id, date_from=df, date_to=dt_to)
+        if m["sent"] == 0 and m["delivered"] == 0:
+            continue
+        per_sequence.append({"sequence_id": seq.id, "name": seq.name, "status": seq.status, **m})
+
+    return {"overview": overall, "sequences": per_sequence}
+
+
+class SendingDomainCreate(BaseModel):
+    email: str
+    name: Optional[str] = None
+
+
+class SendingDomainUpdate(BaseModel):
+    is_active: Optional[bool] = None
+    verified: Optional[bool] = None
+    name: Optional[str] = None
+
+
+@router.get("/email/domains")
+def list_sending_domains(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        return []
+    domains = session.exec(
+        select(SendingDomain)
+        .where(SendingDomain.organization_id == current_user.organization_id)
+        .order_by(SendingDomain.created_at)
+    ).all()
+    return [
+        {"id": d.id, "email": d.email, "name": d.name, "verified": d.verified, "is_active": d.is_active}
+        for d in domains
+    ]
+
+
+@router.post("/email/domains")
+def create_sending_domain(
+    data: SendingDomainCreate,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    email = data.email.strip().lower()
+    if "@" not in email:
+        raise HTTPException(status_code=400, detail="Email inválido")
+    domain = SendingDomain(organization_id=current_user.organization_id, email=email, name=(data.name or "").strip() or None)
+    session.add(domain)
+    session.commit()
+    session.refresh(domain)
+    return {"id": domain.id, "email": domain.email, "name": domain.name, "verified": domain.verified, "is_active": domain.is_active}
+
+
+@router.patch("/email/domains/{domain_id}")
+def update_sending_domain(
+    domain_id: int,
+    data: SendingDomainUpdate,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    domain = session.get(SendingDomain, domain_id)
+    if not domain or domain.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404, detail="Dominio no encontrado")
+    if data.is_active is not None:
+        domain.is_active = data.is_active
+    if data.verified is not None:
+        # 'verified' is a manual admin confirmation that SPF/DKIM auth was
+        # completed in SendGrid — this app has no way to check that itself.
+        domain.verified = data.verified
+    if data.name is not None:
+        domain.name = data.name.strip() or None
+    session.add(domain)
+    session.commit()
+    return {"id": domain.id, "email": domain.email, "name": domain.name, "verified": domain.verified, "is_active": domain.is_active}
+
+
+@router.delete("/email/domains/{domain_id}")
+def delete_sending_domain(
+    domain_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    domain = session.get(SendingDomain, domain_id)
+    if not domain or domain.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404, detail="Dominio no encontrado")
+    session.delete(domain)
+    session.commit()
+    return {"ok": True}
+
+
+class ThrottleUpdate(BaseModel):
+    email_daily_limit: Optional[int] = None  # None/0 = unlimited
+
+
+@router.get("/email/throttle")
+def get_email_throttle(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
+    if not org:
+        return {"email_daily_limit": None, "email_sent_today": 0}
+    today = datetime.utcnow().date()
+    sent_today = org.email_sent_today if (org.email_sent_today_date and org.email_sent_today_date.date() == today) else 0
+    return {"email_daily_limit": org.email_daily_limit, "email_sent_today": sent_today}
+
+
+@router.post("/email/throttle")
+def save_email_throttle(
+    data: ThrottleUpdate,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    if not current_user.organization_id:
+        raise HTTPException(status_code=400, detail="Sin organización")
+    org = session.get(Organization, current_user.organization_id)
+    if not org:
+        raise HTTPException(status_code=404, detail="Organización no encontrada")
+    limit = data.email_daily_limit
+    org.email_daily_limit = limit if (limit and limit > 0) else None
+    session.add(org)
+    session.commit()
+    return {"ok": True, "email_daily_limit": org.email_daily_limit}
 
 
 @router.get("/crm/logs")

@@ -187,6 +187,24 @@ async def _run_scheduled_email(job_id: int):
                     seen_emails.add(key)
                     prospects.append(p)
 
+            # Conditional segmentation: filter out prospects a SequenceRule
+            # excludes (stop_sequence/skip_step) and collect per-prospect
+            # subject/body overrides (send_variant), based on how each
+            # prospect behaved on the immediately preceding step.
+            variant_overrides: dict[str, tuple[str, str]] = {}
+            if job.sequence_id:
+                from services.email_sequence_rules import apply_rules_for_step
+                excluded_emails, variant_overrides = apply_rules_for_step(
+                    s, job.organization_id, job.sequence_id, job.sequence_step or 1, job.email_list_id,
+                )
+                if excluded_emails:
+                    prospects = [p for p in prospects if (p.email or "").strip().lower() not in excluded_emails]
+
+            # Sender rotation: if the org has more than one active SendingDomain,
+            # spread this job's sends round-robin across them.
+            from services.email_deliverability import get_active_domains, pick_sender, reserve_daily_send
+            active_domains = get_active_domains(s, job.organization_id)
+
             templates = {}
             if org.email_templates:
                 try: templates = json.loads(org.email_templates)
@@ -198,30 +216,47 @@ async def _run_scheduled_email(job_id: int):
                 att_b64 = _b64.b64encode(org.email_attachment).decode()
                 att_name = org.email_attachment_name
 
-            from_email = (org.email_from or "").strip() or __import__("os").getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
-            from_name = (org.email_from_name or "").strip() or "ZyraVoice"
+            default_from_email = (org.email_from or "").strip() or __import__("os").getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
+            default_from_name = (org.email_from_name or "").strip() or "ZyraVoice"
             delay_s = (org.email_send_delay_ms or 0) / 1000.0
             sg = SendGridAPIClient(api_key)
             sent = skipped = 0
             errors = []
 
-            for prospect in prospects:
+            for idx, prospect in enumerate(prospects):
+                # Daily throttle: stop sending further emails for this org today
+                # once the configured limit is hit. Remaining recipients are left
+                # unsent (recorded as skipped) — a sequence step has no built-in
+                # resume mechanism, so an admin needs to reschedule the remainder.
+                if not reserve_daily_send(s, org):
+                    for remaining in prospects[idx:]:
+                        errors.append({"email": remaining.email, "error": "daily_limit_reached"})
+                        skipped += 1
+                    break
                 try:
+                    from_email, from_name = pick_sender(active_domains, idx, default_from_email, default_from_name)
                     unsub = _unsub_url(prospect.id, org.id)
                     tmpl_vars = {
                         "nombre": prospect.name or "", "empresa": prospect.company or "",
                         "agente": from_name, "resumen": "", "telefono": prospect.phone or "",
                         "fecha": _dt.utcnow().strftime("%d/%m/%Y"),
                     }
-                    subject = _fill(job.subject_override or tmpl.get("subject") or DEFAULT_SUBJECT.get(job.template_key, "Mensaje de ZyraVoice"), tmpl_vars)
+                    variant = variant_overrides.get((prospect.email or "").strip().lower())
+                    default_subject = job.subject_override or tmpl.get("subject") or DEFAULT_SUBJECT.get(job.template_key, "Mensaje de ZyraVoice")
+                    default_body = job.body_override or tmpl.get("body") or ""
+                    subject = _fill(variant[0] if variant else default_subject, tmpl_vars)
                     color = tmpl.get("color") or "#4F46E5"
                     greeting = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
-                    body_text = _fill(job.body_override or tmpl.get("body") or "", tmpl_vars)
+                    body_text = _fill(variant[1] if variant else default_body, tmpl_vars)
                     signature = _fill(tmpl.get("signature") or f"El equipo de {from_name}", tmpl_vars)
                     html_body = _build_html(color, greeting, body_text, tmpl.get("cta_text") or "", tmpl.get("cta_url") or "", signature, unsubscribe_url=unsub,
                                              cta_text_2=tmpl.get("cta_text_2") or "", cta_url_2=tmpl.get("cta_url_2") or "")
                     message = Mail(from_email=(from_email, from_name), to_emails=prospect.email, subject=subject, html_content=html_body)
-                    message.custom_arg = [CustomArg(key="org_id", value=str(org.id)), CustomArg(key="template_key", value=job.template_key)]
+                    custom_args = [CustomArg(key="org_id", value=str(org.id)), CustomArg(key="template_key", value=job.template_key)]
+                    if job.sequence_id:
+                        custom_args.append(CustomArg(key="sequence_id", value=str(job.sequence_id)))
+                        custom_args.append(CustomArg(key="sequence_step", value=str(job.sequence_step or 1)))
+                    message.custom_arg = custom_args
                     if att_b64 and att_name:
                         ext = att_name.rsplit(".", 1)[-1].lower()
                         mime = "application/pdf" if ext == "pdf" else f"image/{ext}"
@@ -253,6 +288,7 @@ async def _run_scheduled_email(job_id: int):
                 initiated_by=job.initiated_by, source_email_only=job.email_only,
                 source_email_list_id=job.email_list_id,
                 sent_details=json.dumps(sent_details_list) if sent_details_list else None,
+                sequence_id=job.sequence_id, sequence_step=job.sequence_step,
             )
             s.add(log_entry)
             job.status = "done"
@@ -274,7 +310,8 @@ async def _run_scheduled_email(job_id: int):
 
 
 async def _campaign_scheduler():
-    """Poll every 30s: auto-start scheduled campaigns and fire scheduled email jobs."""
+    """Poll every 30s: auto-start scheduled campaigns, fire scheduled email jobs,
+    and resume bulk email jobs that were paused by the daily send throttle."""
     import asyncio as _asyncio
     from datetime import datetime as _dt, timezone as _tz
     from sqlmodel import Session as _S, select as _sel
@@ -335,6 +372,39 @@ async def _campaign_scheduler():
                     logger.info(f"[Scheduler] Firing email job {job.id} org={job.organization_id}")
         except Exception as e:
             logger.error(f"[Scheduler] Email job error: {e}")
+
+        # --- Resume bulk email jobs paused by the daily send throttle, once
+        #     the org's counter has rolled over to a new day ---
+        try:
+            from models import BulkEmailJob as _BulkJob, Organization as _Org5
+            from routes.settings import _run_bulk_send_job as _resume_bulk_job, _bulk_jobs_running as _running_ids
+            with _S(engine) as s:
+                paused_jobs = s.exec(
+                    _sel(_BulkJob).where(_BulkJob.status == "paused", _BulkJob.paused_reason == "daily_limit")
+                ).all()
+                for pj in paused_jobs:
+                    if str(pj.id) in _running_ids:
+                        continue  # a live sender task is already attached to this job
+                    org5 = s.get(_Org5, pj.organization_id)
+                    if not org5:
+                        continue
+                    today = now_utc.date()
+                    if org5.email_sent_today_date and org5.email_sent_today_date.date() == today:
+                        continue  # still today — counter hasn't rolled over yet
+                    if not pj.remaining or pj.remaining == "[]":
+                        continue
+                    api_key5 = (org5.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "")
+                    if not api_key5:
+                        continue
+                    pj.status = "running"
+                    pj.paused_reason = None
+                    pj.updated_at = _dt.utcnow()
+                    s.add(pj)
+                    s.commit()
+                    _asyncio.create_task(_resume_bulk_job(job_id=str(pj.id), api_key=api_key5))
+                    logger.info(f"[Scheduler] Resumed throttle-paused bulk email job {pj.id} org={pj.organization_id} (new day)")
+        except Exception as e:
+            logger.error(f"[Scheduler] Bulk email throttle-resume error: {e}")
 
 
 @asynccontextmanager

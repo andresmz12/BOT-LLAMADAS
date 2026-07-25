@@ -1,6 +1,6 @@
 import os
 from sqlmodel import SQLModel, create_engine, Session, select
-from models import AgentConfig, Organization, User, WebhookLog, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, LeadHunt, EmailSequence, BulkEmailJob  # noqa: F401 — ensures table is registered
+from models import AgentConfig, Organization, User, WebhookLog, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, LeadHunt, EmailSequence, BulkEmailJob, SequenceRule, SequenceProspectState, SendingDomain  # noqa: F401 — ensures table is registered
 
 _raw_url = os.getenv("DATABASE_URL", "sqlite:///./calls.db")
 # Railway PostgreSQL URLs start with "postgres://" but SQLAlchemy requires "postgresql://"
@@ -160,6 +160,9 @@ def run_migrations():
                 "minutes_limit": "INTEGER",
                 "minutes_used_month": "INTEGER DEFAULT 0",
                 "minutes_reset_at": "TIMESTAMP",
+                "email_daily_limit": "INTEGER",
+                "email_sent_today": "INTEGER DEFAULT 0",
+                "email_sent_today_date": "TIMESTAMP",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():
@@ -208,6 +211,12 @@ def run_migrations():
                 if "sent_details" not in log_cols:
                     conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN sent_details TEXT"))
                     log.info("Migration: added emailsendlog.sent_details")
+                if "sequence_id" not in log_cols:
+                    conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN sequence_id INTEGER"))
+                    log.info("Migration: added emailsendlog.sequence_id")
+                if "sequence_step" not in log_cols:
+                    conn.execute(text("ALTER TABLE emailsendlog ADD COLUMN sequence_step INTEGER"))
+                    log.info("Migration: added emailsendlog.sequence_step")
 
         if "prospect" in tables:
             prospect_cols = {c["name"] for c in insp.get_columns("prospect")}
@@ -219,6 +228,30 @@ def run_migrations():
                     conn.execute(text("ALTER TABLE prospect ADD COLUMN custom_context TEXT"))
                     log.info("Migration: added prospect.custom_context")
 
+        if "emailevent" in tables:
+            evt_cols = {c["name"] for c in insp.get_columns("emailevent")}
+            with engine.begin() as conn:
+                if "sequence_id" not in evt_cols:
+                    conn.execute(text("ALTER TABLE emailevent ADD COLUMN sequence_id INTEGER"))
+                    log.info("Migration: added emailevent.sequence_id")
+                if "sequence_step" not in evt_cols:
+                    conn.execute(text("ALTER TABLE emailevent ADD COLUMN sequence_step INTEGER"))
+                    log.info("Migration: added emailevent.sequence_step")
+
+        if "bulkemailjob" in tables:
+            bej_cols = {c["name"] for c in insp.get_columns("bulkemailjob")}
+            with engine.begin() as conn:
+                if "paused_reason" not in bej_cols:
+                    conn.execute(text("ALTER TABLE bulkemailjob ADD COLUMN paused_reason VARCHAR(50)"))
+                    log.info("Migration: added bulkemailjob.paused_reason")
+
+        if "leadhunt" in tables:
+            lh_cols = {c["name"] for c in insp.get_columns("leadhunt")}
+            with engine.begin() as conn:
+                if "email" not in lh_cols:
+                    conn.execute(text("ALTER TABLE leadhunt ADD COLUMN email VARCHAR(255)"))
+                    log.info("Migration: added leadhunt.email")
+
         # Indexes for performance on frequently filtered columns
         is_pg = not DATABASE_URL.startswith("sqlite")
         if is_pg:
@@ -229,6 +262,11 @@ def run_migrations():
                 ("ix_prospect_campaign_id",    "prospect", "campaign_id"),
                 ("ix_campaign_organization_id","campaign", "organization_id"),
                 ("ix_user_organization_id",    "user",     "organization_id"),
+                ("ix_emailevent_sequence_id",    "emailevent",    "sequence_id"),
+                ("ix_emailsendlog_sequence_id",  "emailsendlog",  "sequence_id"),
+                ("ix_sequencerule_sequence_id",  "sequencerule",  "sequence_id"),
+                ("ix_seqprospectstate_sequence_id", "sequenceprospectstate", "sequence_id"),
+                ("ix_sendingdomain_org_id",      "sendingdomain", "organization_id"),
             ]
             with engine.begin() as conn:
                 for idx_name, tbl, col in indexes:

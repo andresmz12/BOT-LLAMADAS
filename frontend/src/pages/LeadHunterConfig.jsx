@@ -139,7 +139,13 @@ export default function LeadHunterConfig() {
             >
               <option value="whatsapp">WhatsApp</option>
               <option value="email">Email</option>
+              <option value="both">WhatsApp + Email</option>
             </select>
+            {form.lh_channel !== 'whatsapp' && (
+              <p className="text-xs text-amber-400/80 mt-1">
+                ⚠ El envío por email requiere que el lead tenga un correo capturado. Google Maps no siempre lo entrega — podrás completarlo manualmente en la ficha del lead si falta.
+              </p>
+            )}
           </div>
         </div>
       </div>

@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from sqlalchemy import delete as sa_delete
 from sqlmodel import Session, select
 
@@ -21,6 +21,10 @@ class ScoutRequest(BaseModel):
     limit: int = 17
 
 
+VALID_LH_CHANNELS = {"whatsapp", "email", "both"}
+VALID_SEND_CHANNELS = {"whatsapp", "email"}
+
+
 class LHConfigRequest(BaseModel):
     lh_target_description: Optional[str] = None
     lh_offer_description: Optional[str] = None
@@ -29,16 +33,33 @@ class LHConfigRequest(BaseModel):
     lh_channel: Optional[str] = "whatsapp"
     lh_active: bool = False
 
+    @field_validator("lh_channel")
+    @classmethod
+    def channel_valid(cls, v: Optional[str]) -> str:
+        v = (v or "whatsapp").strip().lower()
+        if v not in VALID_LH_CHANNELS:
+            raise ValueError(f"Canal inválido: {v}. Usa 'whatsapp', 'email' o 'both'.")
+        return v
+
 
 class LeadPatchRequest(BaseModel):
     reply: Optional[str] = None
     reply_intent: Optional[str] = None   # positivo | negativo | pregunta
     is_hot: Optional[bool] = None
     channel: Optional[str] = None
+    email: Optional[str] = None
 
 
 class SendRequest(BaseModel):
     channel: str = "whatsapp"
+
+    @field_validator("channel")
+    @classmethod
+    def channel_valid(cls, v: str) -> str:
+        v = (v or "whatsapp").strip().lower()
+        if v not in VALID_SEND_CHANNELS:
+            raise ValueError(f"Canal inválido: {v}. Usa 'whatsapp' o 'email'.")
+        return v
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -48,6 +69,7 @@ def _lead_dict(lead: LeadHunt) -> dict:
         "id": lead.id,
         "name": lead.name,
         "phone": lead.phone,
+        "email": lead.email,
         "city": lead.city,
         "category": lead.category,
         "reviews_count": lead.reviews_count,

@@ -211,6 +211,20 @@ export const createEmailSequence = (data) => api.post('/settings/email/sequences
 export const getEmailSequences = () => api.get('/settings/email/sequences').then(r => r.data)
 export const updateSequenceStep = (seqId, jobId, data) => api.patch(`/settings/email/sequences/${seqId}/steps/${jobId}`, data).then(r => r.data)
 export const deleteEmailSequence = (id) => api.delete(`/settings/email/sequences/${id}`).then(r => r.data)
+export const addSequenceRule = (seqId, data) => api.post(`/settings/email/sequences/${seqId}/rules`, data).then(r => r.data)
+export const deleteSequenceRule = (seqId, ruleId) => api.delete(`/settings/email/sequences/${seqId}/rules/${ruleId}`).then(r => r.data)
+
+// Email analytics (aggregated from EmailEvent + EmailSendLog)
+export const getSequenceAnalytics = (sequenceId) => api.get(`/settings/email/analytics/sequence/${sequenceId}`).then(r => r.data)
+export const getEmailAnalyticsOverview = (params) => api.get('/settings/email/analytics/overview', { params }).then(r => r.data)
+
+// Sending domains + daily throttle (deliverability)
+export const getSendingDomains = () => api.get('/settings/email/domains').then(r => r.data)
+export const createSendingDomain = (data) => api.post('/settings/email/domains', data).then(r => r.data)
+export const updateSendingDomain = (id, data) => api.patch(`/settings/email/domains/${id}`, data).then(r => r.data)
+export const deleteSendingDomain = (id) => api.delete(`/settings/email/domains/${id}`).then(r => r.data)
+export const getEmailThrottle = () => api.get('/settings/email/throttle').then(r => r.data)
+export const saveEmailThrottle = (data) => api.post('/settings/email/throttle', data).then(r => r.data)
 
 // Admin — CRM
 export const testCRMWebhook = (orgId) =>

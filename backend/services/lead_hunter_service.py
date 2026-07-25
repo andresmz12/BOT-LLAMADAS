@@ -179,9 +179,15 @@ def scout(limit: int = 17, org_id: int = None, session: Session = None) -> list:
                 existing_phones.add(phone)
                 existing_names.add(name.lower().strip())
                 website = (item.get("site") or item.get("website") or "").strip()
+                # Outscraper's base Google Maps search only sometimes returns an
+                # email (depends on plan/enrichment options) — capture it when
+                # present, otherwise the lead stays without one until someone
+                # fills it in manually (PATCH /lead-hunter/leads/{id}).
+                email = (item.get("email") or item.get("business_email") or "").strip() or None
                 collected.append(LeadHunt(
                     name=name,
                     phone=phone,
+                    email=email,
                     city=city,
                     category=q,
                     reviews_count=reviews,
@@ -322,8 +328,13 @@ async def dispatch(lead: LeadHunt, org: Organization, channel: str, session=None
             to=lead.phone,
             text=message,
         )
+    elif channel == "email":
+        if not org.email_enabled:
+            raise ValueError("Email marketing no está habilitado para esta organización (actívalo en Configuración)")
+        from services.sendgrid_service import send_lead_hunter_email
+        await send_lead_hunter_email(org, lead, message)
     else:
-        raise ValueError(f"Canal '{channel}' no soportado. Usa 'whatsapp'.")
+        raise ValueError(f"Canal '{channel}' no soportado. Usa 'whatsapp' o 'email'.")
 
     lead.sent = True
     lead.sent_at = datetime.utcnow()

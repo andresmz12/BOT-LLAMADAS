@@ -1,4 +1,5 @@
 import os
+import asyncio
 import base64
 import json
 import logging
@@ -117,6 +118,35 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
 
     except Exception as e:
         log.error(f"[EMAIL] failed for outcome={outcome}: {e}", exc_info=True)
+
+
+async def send_lead_hunter_email(org, lead, message: str) -> None:
+    """Send a Lead Hunter outreach message by email. Reuses the same SendGrid
+    client/HTML builder as the rest of the email marketing module — no separate
+    integration. Raises ValueError on any configuration/validation problem so
+    the caller (routes/lead_hunter.py) can surface it to the user."""
+    api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "")
+    if not api_key:
+        raise ValueError("SendGrid no está configurado para esta organización (falta API key)")
+    if not lead.email:
+        raise ValueError("Este lead no tiene email — captúralo manualmente antes de enviar por este canal")
+
+    from_email = (org.email_from or "").strip() or os.getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
+    from_name = (org.email_from_name or "").strip() or "ZyraVoice"
+    subject = f"Una idea para {lead.name}"
+    html_body = _build_html(
+        "#4F46E5", f"Hola equipo de {lead.name},", message, "", "",
+        f"El equipo de {from_name}",
+    )
+
+    from sendgrid import SendGridAPIClient
+    from sendgrid.helpers.mail import Mail, CustomArg
+
+    msg = Mail(from_email=(from_email, from_name), to_emails=lead.email, subject=subject, html_content=html_body)
+    msg.custom_arg = [CustomArg(key="org_id", value=str(org.id)), CustomArg(key="template_key", value="lead_hunter")]
+    sg = SendGridAPIClient(api_key)
+    await asyncio.to_thread(sg.send, msg)
+    log.info(f"[EMAIL] lead_hunter sent to {lead.email} lead_id={lead.id}")
 
 
 def _fill(text: str, variables: dict) -> str:

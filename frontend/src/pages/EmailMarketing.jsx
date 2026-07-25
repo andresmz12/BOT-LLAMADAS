@@ -26,7 +26,7 @@ import {
   CheckCircleIcon, EnvelopeIcon, PaperClipIcon, ChevronDownIcon,
   PencilSquareIcon, SparklesIcon, PlusIcon, TrashIcon, EyeIcon,
   ClockIcon, UserMinusIcon, ListBulletIcon, Cog6ToothIcon, PaperAirplaneIcon,
-  ArrowDownTrayIcon, ChartBarIcon,
+  ArrowDownTrayIcon, ChartBarIcon, ShieldExclamationIcon,
 } from '@heroicons/react/24/outline'
 import {
   getEmailSettings, saveEmailSettings, uploadEmailAttachment, deleteEmailAttachment, deleteEmailTemplate,
@@ -37,6 +37,8 @@ import {
   getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList, deleteTemplateAttachment,
   getScheduledEmails, cancelScheduledEmail, rescheduleEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents, labelContact,
   generateEmailSequence, createEmailSequence, getEmailSequences, updateSequenceStep, deleteEmailSequence,
+  addSequenceRule, deleteSequenceRule, getSequenceAnalytics, getEmailAnalyticsOverview,
+  getSendingDomains, createSendingDomain, updateSendingDomain, deleteSendingDomain, getEmailThrottle, saveEmailThrottle,
 } from '../api/client'
 
 const FIXED_TEMPLATES = [
@@ -258,9 +260,27 @@ export default function EmailMarketing() {
   const [seqForm, setSeqForm] = useState({ name: '', email_list_id: '', objective: '', tone: 'Profesional', language: 'Español' })
   const [seqDates, setSeqDates] = useState([''])
   const [seqGenerating, setSeqGenerating] = useState(false)
-  const [seqGenerated, setSeqGenerated] = useState(null) // [{date, subject, body}]
+  const [seqGenerated, setSeqGenerated] = useState(null) // [{date, subject, body, variants?}]
+  const [seqIncludeVariants, setSeqIncludeVariants] = useState(false)
   const [seqCreating, setSeqCreating] = useState(false)
   const [seqError, setSeqError] = useState(null)
+
+  // Segmentación condicional (reglas por secuencia)
+  const [ruleForms, setRuleForms] = useState({}) // sequenceId -> draft rule
+  const [ruleSaving, setRuleSaving] = useState({}) // sequenceId -> bool
+
+  // Analítica agregada
+  const [seqAnalytics, setSeqAnalytics] = useState({}) // sequenceId -> metrics|null
+  const [seqAnalyticsOpen, setSeqAnalyticsOpen] = useState(null) // sequenceId currently expanded
+  const [overview, setOverview] = useState(null)
+  const [overviewLoading, setOverviewLoading] = useState(false)
+
+  // Entregabilidad (dominios + límite diario)
+  const [sendingDomains, setSendingDomains] = useState([])
+  const [newDomain, setNewDomain] = useState({ email: '', name: '' })
+  const [throttle, setThrottle] = useState({ email_daily_limit: null, email_sent_today: 0 })
+  const [throttleInput, setThrottleInput] = useState('')
+  const [throttleSaving, setThrottleSaving] = useState(false)
 
   // Tracking events
   const [trackingTab, setTrackingTab] = useState('all')
@@ -307,6 +327,81 @@ export default function EmailMarketing() {
   const loadEmailContactsCount = () => getEmailContactsCount().then(setEmailContactsCount).catch(() => {})
   const loadEmailLists = () => getEmailLists().then(setEmailLists).catch(() => {})
 
+  const loadOverview = () => {
+    setOverviewLoading(true)
+    getEmailAnalyticsOverview().then(setOverview).catch(() => setOverview(null)).finally(() => setOverviewLoading(false))
+  }
+  const toggleSeqAnalytics = async (sequenceId) => {
+    if (seqAnalyticsOpen === sequenceId) { setSeqAnalyticsOpen(null); return }
+    setSeqAnalyticsOpen(sequenceId)
+    if (!seqAnalytics[sequenceId]) {
+      try {
+        const data = await getSequenceAnalytics(sequenceId)
+        setSeqAnalytics(prev => ({ ...prev, [sequenceId]: data }))
+      } catch (e) { setSeqAnalytics(prev => ({ ...prev, [sequenceId]: { error: true } })) }
+    }
+  }
+
+  const loadSendingDomains = () => getSendingDomains().then(setSendingDomains).catch(() => {})
+  const loadThrottle = () => getEmailThrottle().then(t => { setThrottle(t); setThrottleInput(t.email_daily_limit ?? '') }).catch(() => {})
+
+  const handleAddDomain = async () => {
+    if (!newDomain.email.trim()) return
+    try {
+      const created = await createSendingDomain({ email: newDomain.email.trim(), name: newDomain.name.trim() || null })
+      setSendingDomains(prev => [...prev, created])
+      setNewDomain({ email: '', name: '' })
+    } catch (e) { alert(e.response?.data?.detail || 'Error al agregar el dominio') }
+  }
+  const handleToggleDomain = async (id, field, value) => {
+    try {
+      const updated = await updateSendingDomain(id, { [field]: value })
+      setSendingDomains(prev => prev.map(d => d.id === id ? updated : d))
+    } catch (e) { alert('Error al actualizar') }
+  }
+  const handleDeleteDomain = async (id) => {
+    if (!confirm('¿Quitar este remitente?')) return
+    try {
+      await deleteSendingDomain(id)
+      setSendingDomains(prev => prev.filter(d => d.id !== id))
+    } catch (e) { alert('Error al eliminar') }
+  }
+  const handleSaveThrottle = async () => {
+    setThrottleSaving(true)
+    try {
+      const limit = throttleInput === '' ? null : Number(throttleInput)
+      const updated = await saveEmailThrottle({ email_daily_limit: limit })
+      setThrottle(prev => ({ ...prev, email_daily_limit: updated.email_daily_limit }))
+    } catch (e) { alert(e.response?.data?.detail || 'Error al guardar el límite') }
+    finally { setThrottleSaving(false) }
+  }
+
+  const setRuleForm = (seqId, patch) => setRuleForms(prev => ({ ...prev, [seqId]: { ...(prev[seqId] || { after_step: 1, condition: 'no_open', action: 'stop_sequence', variant_subject: '', variant_body: '' }), ...patch } }))
+  const handleAddRule = async (seqId) => {
+    const draft = ruleForms[seqId]
+    if (!draft) return
+    setRuleSaving(prev => ({ ...prev, [seqId]: true }))
+    try {
+      await addSequenceRule(seqId, {
+        after_step: Number(draft.after_step),
+        condition: draft.condition,
+        action: draft.action,
+        variant_subject: draft.action === 'send_variant' ? draft.variant_subject : null,
+        variant_body: draft.action === 'send_variant' ? draft.variant_body : null,
+      })
+      setRuleForms(prev => { const next = { ...prev }; delete next[seqId]; return next })
+      loadSequences()
+    } catch (e) { alert(e.response?.data?.detail || 'Error al crear la regla') }
+    finally { setRuleSaving(prev => ({ ...prev, [seqId]: false })) }
+  }
+  const handleDeleteRule = async (seqId, ruleId) => {
+    try { await deleteSequenceRule(seqId, ruleId); loadSequences() }
+    catch (e) { alert('Error al eliminar la regla') }
+  }
+
+  const CONDITION_LABELS = { no_open: 'No abrió', opened_no_click: 'Abrió, sin click', clicked: 'Dio click', bounced: 'Rebotó' }
+  const ACTION_LABELS = { send_variant: 'Enviar variante', skip_step: 'Saltar este paso', mark_hot: 'Marcar como interesado', stop_sequence: 'Detener secuencia' }
+
   useEffect(() => {
     getEmailSettings().then(d => setCfg({
       email_enabled: d.email_enabled ?? false,
@@ -325,6 +420,8 @@ export default function EmailMarketing() {
     loadEmailLists()
     loadScheduled()
     loadSequences()
+    loadSendingDomains()
+    loadThrottle()
     // Reattach to an in-progress bulk send if one exists (survives page refresh)
     getActiveBulkSend().then(status => {
       if (status.job_id) {
@@ -729,6 +826,7 @@ export default function EmailMarketing() {
       const r = await generateEmailSequence({
         email_list_id: Number(seqForm.email_list_id), objective: seqForm.objective,
         tone: seqForm.tone, language: seqForm.language, dates,
+        include_variants: seqIncludeVariants,
       })
       setSeqGenerated(r.emails)
     } catch (e) { setSeqError(e.response?.data?.detail || 'Error generando la secuencia') }
@@ -742,10 +840,22 @@ export default function EmailMarketing() {
     if (!seqForm.name || !seqGenerated?.length) return
     setSeqCreating(true); setSeqError(null)
     try {
+      // Turn any Claude-generated variants into SequenceRule rows: step i's
+      // variants apply "after step i" (1-indexed), matched by condition.
+      const rules = []
+      seqGenerated.forEach((em, i) => {
+        if (!em.variants || i === 0) return  // the first email has no preceding step to branch on
+        Object.entries(em.variants).forEach(([condition, v]) => {
+          if (v?.subject?.trim()) {
+            rules.push({ after_step: i, condition, action: 'send_variant', variant_subject: v.subject, variant_body: v.body || '' })
+          }
+        })
+      })
       await createEmailSequence({
         name: seqForm.name, email_list_id: Number(seqForm.email_list_id),
         objective: seqForm.objective, tone: seqForm.tone, language: seqForm.language,
-        emails: seqGenerated,
+        emails: seqGenerated.map(({ date, subject, body }) => ({ date, subject, body })),
+        rules,
       })
       setSeqGenerated(null); setSeqForm({ name: '', email_list_id: '', objective: '', tone: 'Profesional', language: 'Español' }); setSeqDates([''])
       loadSequences()
@@ -1689,6 +1799,67 @@ export default function EmailMarketing() {
         </div>
       </Section>
 
+      {/* ── Entregabilidad: dominios remitentes + límite diario ── */}
+      <Section id="entregabilidad" label="Entregabilidad" icon={ShieldExclamationIcon} openSections={openSections} toggle={toggle}>
+        <div className="p-5 space-y-5">
+          <div>
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Límite diario de envíos</p>
+            <p className="text-xs text-slate-500 mb-2">
+              Protege tu dominio de filtros de spam limitando cuántos emails se envían por día. Se aplica a envíos masivos y secuencias. Hoy van {throttle.email_sent_today} enviados{throttle.email_daily_limit ? ` de ${throttle.email_daily_limit}` : ''}.
+            </p>
+            <div className="flex items-center gap-2">
+              <input type="number" min="0" placeholder="Sin límite" value={throttleInput}
+                onChange={e => setThrottleInput(e.target.value)} className="z-input-light text-sm w-40" />
+              <button onClick={handleSaveThrottle} disabled={throttleSaving} className="z-btn-primary text-xs disabled:opacity-50">
+                {throttleSaving ? 'Guardando...' : 'Guardar límite'}
+              </button>
+            </div>
+          </div>
+
+          <div className="border-t border-z-border pt-4">
+            <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">Remitentes verificados</p>
+            <p className="text-xs text-slate-500 mb-2">
+              Con más de un remitente activo, los envíos rotan entre ellos automáticamente para repartir volumen y reputación. Cada remitente debe estar autenticado (SPF/DKIM) en SendGrid antes de marcarlo como verificado aquí.
+            </p>
+            <div className="space-y-2">
+              {sendingDomains.map(d => (
+                <div key={d.id} className="flex items-center justify-between gap-2 bg-white/5 rounded-lg px-3 py-2">
+                  <div className="min-w-0">
+                    <p className="text-sm text-slate-200 truncate">{d.name || d.email}</p>
+                    <p className="text-xs text-slate-500 font-mono truncate">{d.email}</p>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer">
+                      <input type="checkbox" checked={d.verified} onChange={e => handleToggleDomain(d.id, 'verified', e.target.checked)} className="accent-green-500" />
+                      Verificado
+                    </label>
+                    <label className="flex items-center gap-1 text-xs text-slate-400 cursor-pointer">
+                      <input type="checkbox" checked={d.is_active} onChange={e => handleToggleDomain(d.id, 'is_active', e.target.checked)} className="accent-blue-500" />
+                      Activo
+                    </label>
+                    <button onClick={() => handleDeleteDomain(d.id)} className="text-slate-600 hover:text-red-400">
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {sendingDomains.length === 0 && (
+                <p className="text-xs text-slate-600">Sin remitentes adicionales — se usa el remitente único de "Configuración automática".</p>
+              )}
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <input type="email" placeholder="ventas@empresa.com" value={newDomain.email}
+                onChange={e => setNewDomain(p => ({ ...p, email: e.target.value }))} className="z-input-light text-sm flex-1" />
+              <input type="text" placeholder="Nombre (opcional)" value={newDomain.name}
+                onChange={e => setNewDomain(p => ({ ...p, name: e.target.value }))} className="z-input-light text-sm flex-1" />
+              <button onClick={handleAddDomain} disabled={!newDomain.email.trim()} className="z-btn-primary text-xs disabled:opacity-50 whitespace-nowrap">
+                Agregar
+              </button>
+            </div>
+          </div>
+        </div>
+      </Section>
+
       </>)}
 
       {/* ── TAB: ENVIAR (continuación) ── */}
@@ -1841,6 +2012,17 @@ export default function EmailMarketing() {
                 </button>
               </div>
 
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input type="checkbox" checked={seqIncludeVariants} onChange={e => setSeqIncludeVariants(e.target.checked)}
+                  className="w-4 h-4 rounded accent-blue-500" />
+                <span className="text-sm text-slate-300">Generar variantes condicionales (segmentación por comportamiento)</span>
+              </label>
+              {seqIncludeVariants && (
+                <p className="text-xs text-slate-500">
+                  Para cada correo a partir del 2do, la IA propondrá una versión alternativa para quienes no abrieron el correo anterior y otra para quienes lo abrieron sin dar click. Se convierten en reglas automáticamente al confirmar.
+                </p>
+              )}
+
               {seqError && <p className="text-xs text-red-400">{seqError}</p>}
               <button onClick={handleGenerateSequence} disabled={seqGenerating}
                 className="z-btn-primary disabled:opacity-50 flex items-center gap-1.5">
@@ -1859,6 +2041,16 @@ export default function EmailMarketing() {
                     className="z-input-light text-sm w-full" placeholder="Asunto" />
                   <textarea value={em.body} onChange={e => updateGeneratedEmail(i, 'body', e.target.value)}
                     rows={4} className="z-input-light text-sm w-full" placeholder="Cuerpo del correo" />
+                  {em.variants && Object.keys(em.variants).length > 0 && (
+                    <div className="pl-3 border-l-2 border-amber-500/30 space-y-2">
+                      <p className="text-xs text-amber-400/90 font-medium">Variantes condicionales generadas:</p>
+                      {Object.entries(em.variants).map(([cond, v]) => (
+                        <div key={cond} className="text-xs text-slate-400">
+                          <span className="text-slate-300 font-medium">{CONDITION_LABELS[cond] || cond} (en correo anterior):</span> {v.subject}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
               {seqError && <p className="text-xs text-red-400">{seqError}</p>}
@@ -1874,7 +2066,9 @@ export default function EmailMarketing() {
 
           {sequences.length > 0 && (
             <div className="space-y-3 pt-3 border-t border-z-border">
-              {sequences.map(seq => (
+              {sequences.map(seq => {
+                const draft = ruleForms[seq.id] || { after_step: 1, condition: 'no_open', action: 'stop_sequence', variant_subject: '', variant_body: '' }
+                return (
                 <div key={seq.id} className="border border-z-border rounded-lg overflow-hidden">
                   <div className="px-4 py-3 flex items-center justify-between bg-white/5">
                     <div>
@@ -1904,8 +2098,109 @@ export default function EmailMarketing() {
                       </div>
                     ))}
                   </div>
+
+                  {/* Reglas condicionales */}
+                  <div className="border-t border-z-border px-4 py-3 space-y-2 bg-black/10">
+                    <p className="text-xs font-medium text-slate-400">Reglas condicionales (segmentación)</p>
+                    {seq.rules?.length > 0 ? (
+                      <div className="space-y-1">
+                        {seq.rules.map(r => (
+                          <div key={r.id} className="flex items-center justify-between gap-2 text-xs bg-white/5 rounded px-2 py-1.5">
+                            <span className="text-slate-300">
+                              Después del paso {r.after_step}, si <b>{CONDITION_LABELS[r.condition] || r.condition}</b> → <b>{ACTION_LABELS[r.action] || r.action}</b>
+                              {r.action === 'send_variant' && r.variant_subject && <span className="text-slate-500"> ("{r.variant_subject}")</span>}
+                            </span>
+                            <button onClick={() => handleDeleteRule(seq.id, r.id)} className="text-slate-600 hover:text-red-400 flex-shrink-0">
+                              <TrashIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-600">Sin reglas — todos los pasos se envían linealmente.</p>
+                    )}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-xs text-slate-500">Después del paso</span>
+                      <select value={draft.after_step} onChange={e => setRuleForm(seq.id, { after_step: e.target.value })}
+                        className="z-input-light text-xs w-14 py-1">
+                        {seq.steps.slice(0, -1).map(s => <option key={s.step} value={s.step}>{s.step}</option>)}
+                      </select>
+                      <span className="text-xs text-slate-500">si</span>
+                      <select value={draft.condition} onChange={e => setRuleForm(seq.id, { condition: e.target.value })}
+                        className="z-input-light text-xs py-1">
+                        {Object.entries(CONDITION_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                      </select>
+                      <span className="text-xs text-slate-500">→</span>
+                      <select value={draft.action} onChange={e => setRuleForm(seq.id, { action: e.target.value })}
+                        className="z-input-light text-xs py-1">
+                        {Object.entries(ACTION_LABELS).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                      </select>
+                      <button onClick={() => handleAddRule(seq.id)} disabled={ruleSaving[seq.id]}
+                        className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:bg-blue-500/10 px-2 py-1 rounded-lg disabled:opacity-50">
+                        + Agregar
+                      </button>
+                    </div>
+                    {draft.action === 'send_variant' && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                        <input type="text" placeholder="Asunto de la variante" value={draft.variant_subject}
+                          onChange={e => setRuleForm(seq.id, { variant_subject: e.target.value })} className="z-input-light text-xs" />
+                        <input type="text" placeholder="Cuerpo de la variante" value={draft.variant_body}
+                          onChange={e => setRuleForm(seq.id, { variant_body: e.target.value })} className="z-input-light text-xs" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Analítica */}
+                  <div className="border-t border-z-border">
+                    <button onClick={() => toggleSeqAnalytics(seq.id)}
+                      className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-slate-400 hover:bg-white/5 transition-colors">
+                      <span className="flex items-center gap-1.5"><ChartBarIcon className="w-3.5 h-3.5" /> Analítica de esta secuencia</span>
+                      <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${seqAnalyticsOpen === seq.id ? 'rotate-180' : ''}`} />
+                    </button>
+                    {seqAnalyticsOpen === seq.id && (
+                      <div className="px-4 pb-4">
+                        {!seqAnalytics[seq.id] ? (
+                          <p className="text-xs text-slate-600 animate-pulse">Cargando métricas...</p>
+                        ) : seqAnalytics[seq.id].error ? (
+                          <p className="text-xs text-red-400">Error al cargar la analítica.</p>
+                        ) : (
+                          <>
+                            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
+                              {[
+                                ['Enviados', seqAnalytics[seq.id].sent],
+                                ['Entregados', seqAnalytics[seq.id].delivered],
+                                ['Aperturas', `${seqAnalytics[seq.id].opens_unique} (${seqAnalytics[seq.id].open_rate}%)`],
+                                ['Clicks', `${seqAnalytics[seq.id].clicks_unique} (${seqAnalytics[seq.id].click_rate}%)`],
+                                ['Rebotes', `${seqAnalytics[seq.id].bounces} (${seqAnalytics[seq.id].bounce_rate}%)`],
+                                ['Bajas', seqAnalytics[seq.id].unsubscribes],
+                              ].map(([label, val]) => (
+                                <div key={label} className="bg-white/5 rounded-lg py-2">
+                                  <p className="text-sm font-bold text-slate-200">{val}</p>
+                                  <p className="text-xs text-slate-500">{label}</p>
+                                </div>
+                              ))}
+                            </div>
+                            {seqAnalytics[seq.id].by_step?.length > 0 && (
+                              <div className="mt-3 space-y-1">
+                                <p className="text-xs text-slate-500">Por paso (aperturas / clicks únicos):</p>
+                                {seqAnalytics[seq.id].by_step.map(st => (
+                                  <div key={st.step} className="flex items-center gap-2 text-xs">
+                                    <span className="text-slate-500 w-16 flex-shrink-0">Paso {st.step}</span>
+                                    <div className="flex-1 h-2 bg-white/5 rounded-full overflow-hidden flex">
+                                      <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, st.opens_unique * 8)}%` }} />
+                                    </div>
+                                    <span className="text-slate-400 w-24 flex-shrink-0 text-right">{st.opens_unique} / {st.clicks_unique}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              ))}
+              )})}
             </div>
           )}
         </div>
@@ -1948,6 +2243,68 @@ export default function EmailMarketing() {
 
       {/* ── TAB: ANALÍTICA ── */}
       {activeTab === 'analitica' && (<>
+
+      {/* ── Resumen general (agregado org-wide + por secuencia) ── */}
+      <Section id="analitica-resumen" label="Resumen general" icon={ChartBarIcon} openSections={openSections} toggle={toggle}>
+        <div className="p-5 space-y-4">
+          <p className="text-xs text-slate-500">
+            Métricas agregadas a partir de los eventos de SendGrid (aperturas, clicks, rebotes, bajas) y los envíos registrados.
+          </p>
+          {!overview && (
+            <button onClick={loadOverview} disabled={overviewLoading} className="z-btn-primary disabled:opacity-50">
+              {overviewLoading ? 'Cargando...' : 'Cargar resumen'}
+            </button>
+          )}
+          {overview && (
+            <>
+              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 text-center">
+                {[
+                  ['Enviados', overview.overview.sent],
+                  ['Entregados', overview.overview.delivered],
+                  ['Aperturas', `${overview.overview.opens_unique} (${overview.overview.open_rate}%)`],
+                  ['Clicks', `${overview.overview.clicks_unique} (${overview.overview.click_rate}%)`],
+                  ['Rebotes', `${overview.overview.bounces} (${overview.overview.bounce_rate}%)`],
+                  ['Bajas', overview.overview.unsubscribes],
+                ].map(([label, val]) => (
+                  <div key={label} className="bg-white/5 rounded-lg py-2">
+                    <p className="text-sm font-bold text-slate-200">{val}</p>
+                    <p className="text-xs text-slate-500">{label}</p>
+                  </div>
+                ))}
+              </div>
+              {overview.sequences?.length > 0 && (
+                <div className="overflow-x-auto rounded-xl border border-z-border">
+                  <table className="w-full text-xs min-w-[560px]">
+                    <thead className="bg-black/20">
+                      <tr>
+                        {['Secuencia', 'Estado', 'Enviados', 'Entregados', 'Open rate', 'Click rate', 'Bounce rate'].map(h => (
+                          <th key={h} className="px-3 py-2 text-left font-medium text-slate-500 uppercase">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-z-border">
+                      {overview.sequences.map(s => (
+                        <tr key={s.sequence_id} className="hover:bg-white/[0.02]">
+                          <td className="px-3 py-2 text-slate-200 font-medium">{s.name}</td>
+                          <td className="px-3 py-2 text-slate-400">{s.status}</td>
+                          <td className="px-3 py-2 text-slate-300">{s.sent}</td>
+                          <td className="px-3 py-2 text-slate-300">{s.delivered}</td>
+                          <td className="px-3 py-2 text-blue-400">{s.open_rate}%</td>
+                          <td className="px-3 py-2 text-purple-400">{s.click_rate}%</td>
+                          <td className="px-3 py-2 text-red-400">{s.bounce_rate}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <button onClick={loadOverview} disabled={overviewLoading} className="text-xs text-slate-500 hover:text-slate-300">
+                {overviewLoading ? 'Actualizando...' : '↻ Actualizar'}
+              </button>
+            </>
+          )}
+        </div>
+      </Section>
 
       {/* ── 7. SEGUIMIENTO DE EMAILS ── */}
       <Section id="seguimiento" label="Seguimiento de emails" icon={ChartBarIcon} openSections={openSections} toggle={toggle}>

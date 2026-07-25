@@ -54,6 +54,10 @@ class Organization(SQLModel, table=True):
     minutes_limit: Optional[int] = None        # None = unlimited
     minutes_used_month: int = Field(default=0) # cumulative minutes this billing month
     minutes_reset_at: Optional[datetime] = None
+    # Email deliverability / throttling
+    email_daily_limit: Optional[int] = None     # None = unlimited
+    email_sent_today: int = Field(default=0)
+    email_sent_today_date: Optional[datetime] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
     users: List["User"] = Relationship(back_populates="organization")
@@ -232,12 +236,15 @@ class EmailSendLog(SQLModel, table=True):
     source_email_list_id: Optional[int] = None
     source_batch_size: Optional[int] = None
     sent_details: Optional[str] = None  # JSON list of {name, email}
+    sequence_id: Optional[int] = Field(default=None, index=True)
+    sequence_step: Optional[int] = None
 
 
 class BulkEmailJob(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     organization_id: int = Field(index=True)
     status: str = Field(default="running")  # running / paused / done / error
+    paused_reason: Optional[str] = None  # "daily_limit" when the scheduler paused it — distinguishes from a manual pause so only throttle-pauses auto-resume
     template_key: str = Field(default="")
     from_email: str = Field(default="")
     from_name: str = Field(default="")
@@ -268,6 +275,8 @@ class EmailEvent(SQLModel, table=True):
     sg_event_id: Optional[str] = Field(default=None, index=True)  # deduplication
     url: Optional[str] = None             # for click events
     timestamp: datetime = Field(default_factory=datetime.utcnow)
+    sequence_id: Optional[int] = Field(default=None, index=True)
+    sequence_step: Optional[int] = None
 
 
 class ScheduledEmailSend(SQLModel, table=True):
@@ -302,11 +311,49 @@ class EmailSequence(SQLModel, table=True):
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 
+class SequenceRule(SQLModel, table=True):
+    """A conditional branch evaluated after a given sequence step, based on the
+    recipient's EmailEvent behavior on that step (open/click/bounce)."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: int = Field(index=True)
+    sequence_id: int = Field(foreign_key="emailsequence.id", index=True)
+    after_step: int  # the sequence_step whose behavior this rule evaluates
+    condition: str   # no_open | opened_no_click | clicked | bounced
+    action: str      # send_variant | skip_step | mark_hot | stop_sequence
+    variant_subject: Optional[str] = None
+    variant_body: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SequenceProspectState(SQLModel, table=True):
+    """Persists a per-prospect 'stopped' flag so a stop_sequence rule keeps
+    suppressing all later steps, not just the one right after it fired."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    sequence_id: int = Field(foreign_key="emailsequence.id", index=True)
+    prospect_email: str = Field(index=True)
+    stopped: bool = Field(default=True)
+    reason: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class SendingDomain(SQLModel, table=True):
+    """A verified sender identity for an org. When more than one active domain
+    exists, sends rotate across them round-robin to spread volume/reputation."""
+    id: Optional[int] = Field(default=None, primary_key=True)
+    organization_id: int = Field(foreign_key="organization.id", index=True)
+    email: str
+    name: Optional[str] = None
+    verified: bool = Field(default=False)  # set manually once SPF/DKIM is confirmed in SendGrid
+    is_active: bool = Field(default=True)
+    created_at: datetime = Field(default_factory=datetime.utcnow)
+
+
 class LeadHunt(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     org_id: int = Field(foreign_key="organization.id", index=True)
     name: str
     phone: Optional[str] = None
+    email: Optional[str] = None
     city: str
     category: str
     reviews_count: int = Field(default=0)
