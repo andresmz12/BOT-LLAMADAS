@@ -21,7 +21,16 @@ Devuelve SOLO un JSON válido con este schema:
 
 REGLAS ESTRICTAS PARA outcome (aplica en orden de prioridad):
 
-1. "appointment_scheduled" — el prospecto aceptó una cita o reunión con fecha/hora concreta.
+1. "appointment_scheduled" — el prospecto aceptó una cita, reunión, o servicio con fecha/hora concreta. Incluye, entre otros:
+   - Cita o reunión de ventas con fecha/hora acordada (caso general).
+   - Recogida de paquetería (pickup): el cliente confirmó la DIRECCIÓN donde pasarán a recoger el paquete/envío
+     Y una fecha u hora (aunque sea aproximada: "mañana en la tarde", "el viernes a las 3", "hoy antes de las 6")
+     para que el mensajero pase por él. No hace falta lenguaje de "cita" o "reunión" — confirmar dirección + horario
+     de recogida ya cuenta como appointment_scheduled.
+   Cuando el outcome sea "appointment_scheduled", el campo booleano "appointment_scheduled" del JSON debe ser true;
+   en cualquier otro outcome debe ser false. Si detectaste fecha/hora, usa "appointment_date" en formato ISO 8601
+   (ej. "2026-08-05T15:00:00"); si el cliente solo dio una referencia aproximada sin fecha exacta, infiere la fecha
+   más razonable a partir de la duración/fecha de la llamada o usa null si es imposible de determinar.
 
 2. "interested" — SOLO si el cliente muestra interés CONCRETO y ACTIVO. Requiere al menos uno:
    - Proporcionó su correo electrónico, WhatsApp u otro dato de contacto para recibir información.
