@@ -66,6 +66,10 @@ REGLAS ESTRICTAS PARA outcome (aplica en orden de prioridad):
      "deje un mensaje después del tono", "marque para dejar un mensaje",
      "please leave a message", "leave a message after the tone", "not available right now".
    - El transcript es solo frases automáticas sin ninguna respuesta humana real.
+   NO uses "voicemail" si hay un intercambio real: si la otra persona responde
+   preguntas, saluda de vuelta, da información o conversa con el agente, entonces
+   SÍ contestó — clasifica según su respuesta, aunque un detector automático haya
+   marcado la llamada como buzón. Un buzón real no responde preguntas.
 
 7. "no_answer" — no contestaron o la llamada no conectó:
    - La llamada duró menos de 10 segundos Y el transcript está vacío o solo contiene palabras del agente.
@@ -124,7 +128,12 @@ def _extract_json(text: str) -> dict:
     return json.loads(text.strip())
 
 
-async def analyze_transcript(transcript: str, api_key: str = "", duration_seconds: int = 0) -> dict:
+async def analyze_transcript(
+    transcript: str,
+    api_key: str = "",
+    duration_seconds: int = 0,
+    voicemail_hint: bool = False,
+) -> dict:
     if not transcript or not transcript.strip():
         return _empty_result()
 
@@ -136,9 +145,18 @@ async def analyze_transcript(transcript: str, api_key: str = "", duration_second
         logger.error("No Anthropic API key available for transcript analysis")
         return _empty_result(error="Sin API key de Anthropic configurada")
 
-    content = transcript
+    header = []
     if duration_seconds:
-        content = f"[Duración de la llamada: {duration_seconds} segundos]\n\n{transcript}"
+        header.append(f"[Duración de la llamada: {duration_seconds} segundos]")
+    if voicemail_hint:
+        # Retell's answering-machine detector fired. It false-positives on real
+        # conversations, so pass it as evidence to weigh — not as a verdict.
+        header.append(
+            "[El detector automático de la telefonía marcó esta llamada como buzón. "
+            "Es una señal poco fiable: verifícala contra el transcript y descártala "
+            "si hay una persona real conversando.]"
+        )
+    content = ("\n".join(header) + "\n\n" + transcript) if header else transcript
 
     client = AsyncAnthropic(api_key=api_key)
     messages = [{"role": "user", "content": content}]

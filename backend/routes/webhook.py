@@ -48,18 +48,31 @@ async def _bg_analyze_and_sync(
         org_api_key = ((org.anthropic_api_key if org else "") or "").strip()
         analysis_failed = False
 
-        if in_voicemail:
+        # Only take the telephony voicemail flag at face value when there is no
+        # transcript to check it against. Retell's answering-machine detection
+        # false-positives on real conversations, and this branch used to discard
+        # the transcript outright — labelling genuine multi-minute calls as
+        # voicemail with empty client_said/agent_said. When a transcript exists,
+        # let the analyzer decide (its prompt has explicit voicemail rules) and
+        # pass the flag along as a hint.
+        if in_voicemail and not transcript.strip():
             call.outcome = "voicemail"
             call.sentiment = "neutral"
             call.client_said = json.dumps([])
             call.agent_said = json.dumps([])
             call.services_mentioned = json.dumps([])
             call.notes = "Llamada derivada a buzón de voz"
-            logger.info(f"[BG] call_id={call_id} voicemail")
+            logger.info(f"[BG] call_id={call_id} voicemail (no transcript)")
         elif transcript.strip():
-            logger.info(f"[BG] call_id={call_id} analyzing {len(transcript)} chars with Claude...")
+            logger.info(
+                f"[BG] call_id={call_id} analyzing {len(transcript)} chars with Claude... "
+                f"(retell_voicemail_flag={in_voicemail})"
+            )
             try:
-                analysis = await summary_generator.analyze_transcript(transcript, api_key=org_api_key, duration_seconds=duration_seconds)
+                analysis = await summary_generator.analyze_transcript(
+                    transcript, api_key=org_api_key, duration_seconds=duration_seconds,
+                    voicemail_hint=in_voicemail,
+                )
                 analysis_error = analysis.get("_error")
                 logger.info(
                     f"[BG] call_id={call_id} outcome={analysis.get('outcome')} "
