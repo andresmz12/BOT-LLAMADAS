@@ -115,7 +115,7 @@ export default function ImportCSVModal({ campaigns, onClose, onImported }) {
           >
             <CloudArrowUpIcon className="w-10 h-10 mx-auto text-slate-600 mb-2" />
             <p className="text-sm text-slate-300">{file ? file.name : 'Arrastra tu archivo aquí o haz clic'}</p>
-            <p className="text-xs text-slate-500 mt-1">Columnas: <span className="font-mono">name, phone, company</span> — o — <span className="font-mono">Contact, Phone Number, Name</span></p>
+            <p className="text-xs text-slate-500 mt-1">Columnas: <span className="font-mono">name, phone, company</span> — o — <span className="font-mono">Contact, Phone Number, Name</span> — o — <span className="font-mono">Nombre, Teléfono, Empresa</span></p>
             <input ref={inputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={e => handleFile(e.target.files[0])} />
           </div>
           {preview.length > 0 && (

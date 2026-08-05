@@ -1,6 +1,7 @@
 import csv
 import io
 import re
+import unicodedata
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlmodel import Session, select
@@ -27,6 +28,11 @@ def normalize_phone(phone: str, country_code: str = "+1") -> str:
     if digits.startswith(cc_digits) and len(digits) > len(cc_digits):
         return '+' + digits
     return country_code + digits
+
+
+def _normalize_header(h: str) -> str:
+    h = unicodedata.normalize("NFKD", h).encode("ascii", "ignore").decode("ascii")
+    return h.strip().lower()
 
 
 def _validate_phone(v: str) -> str:
@@ -177,13 +183,13 @@ async def import_file(
         headers = None
         for excel_row in ws.iter_rows(values_only=True):
             if headers is None:
-                headers = [str(c).strip().lower() if c else "" for c in excel_row]
+                headers = [_normalize_header(str(c)) if c else "" for c in excel_row]
             else:
                 rows.append(dict(zip(headers, [str(c).strip() if c is not None else "" for c in excel_row])))
     else:
         text = content.decode("utf-8-sig")
         reader = csv.DictReader(io.StringIO(text))
-        rows = [{k.strip().lower(): v for k, v in r.items()} for r in reader]
+        rows = [{_normalize_header(k): v for k, v in r.items()} for r in reader]
 
     # Pre-load existing phones in the org to skip duplicates (only the phone column)
     existing_phones: set[str] = set()
@@ -200,12 +206,19 @@ async def import_file(
     imported = 0
     skipped_existing = 0
     for row in rows:
-        # Phone: "phone" or "phone number"
-        phone = (row.get("phone") or row.get("phone number") or "").strip()
+        # Phone: "phone", "phone number", or Spanish "telefono", "numero", "celular", "movil"
+        phone = (
+            row.get("phone") or row.get("phone number")
+            or row.get("telefono") or row.get("numero") or row.get("numero de telefono")
+            or row.get("celular") or row.get("movil") or ""
+        ).strip()
         has_contact = "contact" in row
-        name = (row.get("contact") or row.get("name") or "").strip()
-        company = (row.get("company") or (row.get("name") if has_contact else "") or "").strip()
-        email = (row.get("email") or "").strip()
+        name = (row.get("contact") or row.get("name") or row.get("nombre") or "").strip()
+        company = (
+            row.get("company") or row.get("empresa")
+            or (row.get("name") if has_contact else "") or ""
+        ).strip()
+        email = (row.get("email") or row.get("correo") or row.get("correo electronico") or "").strip()
         import re
         if not phone or not re.match(r"^\+?[\d\s\-().]{7,20}$", phone):
             continue
