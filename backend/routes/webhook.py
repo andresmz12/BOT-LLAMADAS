@@ -311,10 +311,13 @@ async def retell_webhook(request: Request, background_tasks: BackgroundTasks, se
         session.add(call)
         session.commit()
 
-        # Schedule Claude analysis + CRM in background — Retell gets 200 immediately
+        # Schedule Claude analysis + CRM in background — Retell gets 200 immediately.
+        # call_analyzed sometimes omits "transcript" even though call_ended already
+        # saved one to raw_transcript; fall back to it so analysis doesn't get skipped.
+        analysis_transcript = transcript or (call.raw_transcript or "")
         background_tasks.add_task(
             _bg_analyze_and_sync,
-            call.id, transcript, in_voicemail, call.organization_id,
+            call.id, analysis_transcript, in_voicemail, call.organization_id,
             call.prospect_id, call.campaign_id, call.duration_seconds or 0,
         )
 
