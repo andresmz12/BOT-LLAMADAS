@@ -129,7 +129,9 @@ def save_settings(
                     continue
                 if key in SECRET_FIELDS and str(value).startswith("***"):
                     continue
-                setattr(org, key, str(value))
+                # Strip whitespace — pasted API keys often carry a trailing
+                # newline, which makes the credential unusable as an auth header.
+                setattr(org, key, str(value).strip())
             session.add(org)
             session.commit()
     return {"ok": True}
