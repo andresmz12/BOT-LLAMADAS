@@ -294,6 +294,8 @@ async def call_prospect(
     prospect = session.get(Prospect, prospect_id)
     if not prospect:
         raise HTTPException(status_code=404, detail="Prospecto no encontrado")
+    if current_user.role != "superadmin" and prospect.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
     if not prospect.phone:
         raise HTTPException(status_code=400, detail="Este prospecto no tiene teléfono y no puede ser llamado")
     if not prospect.campaign_id:
@@ -302,6 +304,8 @@ async def call_prospect(
     campaign = session.get(Campaign, prospect.campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaña no encontrada")
+    if current_user.role != "superadmin" and campaign.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
 
     agent = session.get(AgentConfig, campaign.agent_config_id)
     if not agent:

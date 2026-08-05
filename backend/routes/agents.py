@@ -312,6 +312,8 @@ def set_default(
     agent = session.get(AgentConfig, agent_id)
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+    if current_user.role != "superadmin" and agent.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=403, detail="Acceso denegado")
     query = select(AgentConfig)
     if current_user.role != "superadmin":
         query = query.where(AgentConfig.organization_id == current_user.organization_id)
