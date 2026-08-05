@@ -71,8 +71,31 @@ REGLAS ESTRICTAS PARA outcome (aplica en orden de prioridad):
    - La llamada duró menos de 10 segundos Y el transcript está vacío o solo contiene palabras del agente.
    - Nadie respondió, línea ocupada, o llamada desconectada antes de que alguien hablara.
 
-Si el transcript está vacío o tiene menos de 10 palabras, usa "no_answer".
-Responde SOLO con el JSON válido, sin texto adicional, sin markdown, sin backticks."""
+Si el transcript está vacío o tiene menos de 10 palabras, usa "no_answer"."""
+
+_OUTCOMES = [
+    "appointment_scheduled", "interested", "callback_requested",
+    "not_interested", "wrong_number", "voicemail", "no_answer",
+]
+
+RESPONSE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "client_said": {"type": "array", "items": {"type": "string"}},
+        "agent_said": {"type": "array", "items": {"type": "string"}},
+        "outcome": {"type": ["string", "null"], "enum": _OUTCOMES + [None]},
+        "services_mentioned": {"type": "array", "items": {"type": "string"}},
+        "sentiment": {"type": "string", "enum": ["positive", "neutral", "negative"]},
+        "appointment_scheduled": {"type": "boolean"},
+        "appointment_date": {"type": ["string", "null"]},
+        "notes": {"type": "string"},
+    },
+    "required": [
+        "client_said", "agent_said", "outcome", "services_mentioned",
+        "sentiment", "appointment_scheduled", "appointment_date", "notes",
+    ],
+    "additionalProperties": False,
+}
 
 
 async def analyze_transcript(transcript: str, api_key: str = "", duration_seconds: int = 0) -> dict:
@@ -83,8 +106,8 @@ async def analyze_transcript(transcript: str, api_key: str = "", duration_second
         api_key = os.getenv("ANTHROPIC_API_KEY", "")
 
     if not api_key:
-        logger.warning("No Anthropic API key available for transcript analysis")
-        return _empty_result()
+        logger.error("No Anthropic API key available for transcript analysis")
+        return _empty_result(error="Sin API key de Anthropic configurada")
 
     content = transcript
     if duration_seconds:
@@ -93,19 +116,20 @@ async def analyze_transcript(transcript: str, api_key: str = "", duration_second
     client = AsyncAnthropic(api_key=api_key)
     try:
         message = await client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5",
             max_tokens=1024,
             system=SYSTEM_PROMPT,
+            output_config={"format": {"type": "json_schema", "schema": RESPONSE_SCHEMA}},
             messages=[{"role": "user", "content": content}],
         )
         text = message.content[0].text.strip()
         return json.loads(text)
     except Exception as e:
-        logger.error(f"Error analyzing transcript: {e}")
-        return _empty_result()
+        logger.error(f"Error analyzing transcript: {e}", exc_info=True)
+        return _empty_result(error=f"{type(e).__name__}: {e}")
 
 
-def _empty_result() -> dict:
+def _empty_result(error: str = "") -> dict:
     return {
         "client_said": [],
         "agent_said": [],
@@ -115,4 +139,5 @@ def _empty_result() -> dict:
         "appointment_scheduled": False,
         "appointment_date": None,
         "notes": "",
+        "_error": error,
     }
