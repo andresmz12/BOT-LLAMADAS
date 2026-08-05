@@ -56,22 +56,33 @@ async def _bg_analyze_and_sync(
             logger.info(f"[BG] call_id={call_id} analyzing {len(transcript)} chars with Claude...")
             try:
                 analysis = await summary_generator.analyze_transcript(transcript, api_key=org_api_key, duration_seconds=duration_seconds)
-                logger.info(f"[BG] call_id={call_id} outcome={analysis.get('outcome')} sentiment={analysis.get('sentiment')}")
-                call.client_said = json.dumps(analysis.get("client_said", []))
-                call.agent_said = json.dumps(analysis.get("agent_said", []))
-                call.outcome = analysis.get("outcome") or call.outcome
-                call.services_mentioned = json.dumps(analysis.get("services_mentioned", []))
-                call.sentiment = analysis.get("sentiment")
-                call.appointment_scheduled = analysis.get("appointment_scheduled", False)
-                call.notes = analysis.get("notes", "")
-                appt_date = analysis.get("appointment_date")
-                if appt_date:
-                    try:
-                        call.appointment_date = datetime.fromisoformat(appt_date)
-                    except Exception:
-                        pass
+                analysis_error = analysis.get("_error")
+                logger.info(
+                    f"[BG] call_id={call_id} outcome={analysis.get('outcome')} "
+                    f"sentiment={analysis.get('sentiment')} error={analysis_error}"
+                )
+                if analysis_error:
+                    # Real failure (bad/missing key, API error, etc.) — surface it instead
+                    # of silently writing the empty-result defaults (sentiment "neutral",
+                    # no outcome), which looked identical to a legitimately analyzed call.
+                    call.notes = f"Análisis de IA falló: {analysis_error}"
+                else:
+                    call.client_said = json.dumps(analysis.get("client_said", []))
+                    call.agent_said = json.dumps(analysis.get("agent_said", []))
+                    call.outcome = analysis.get("outcome") or call.outcome
+                    call.services_mentioned = json.dumps(analysis.get("services_mentioned", []))
+                    call.sentiment = analysis.get("sentiment")
+                    call.appointment_scheduled = analysis.get("appointment_scheduled", False)
+                    call.notes = analysis.get("notes", "")
+                    appt_date = analysis.get("appointment_date")
+                    if appt_date:
+                        try:
+                            call.appointment_date = datetime.fromisoformat(appt_date)
+                        except Exception:
+                            pass
             except Exception as exc:
-                logger.error(f"[BG] Claude analysis failed: {exc}")
+                logger.error(f"[BG] Claude analysis failed: {exc}", exc_info=True)
+                call.notes = f"Análisis de IA falló: {type(exc).__name__}: {exc}"
         else:
             logger.warning(f"[BG] call_id={call_id} empty transcript — skipping analysis")
 
