@@ -42,7 +42,10 @@ async def _bg_analyze_and_sync(
             org = s.get(Organization, org_id) if org_id else None
         except Exception as e:
             logger.error(f"[BG] org load failed: {e}")
-        org_api_key = (org.anthropic_api_key if org else "") or ""
+        # Must be stripped: a key with surrounding whitespace is both unusable as an
+        # auth header and still truthy, so it would suppress the env-var fallback.
+        # Every other read site in the codebase strips; this one did not.
+        org_api_key = ((org.anthropic_api_key if org else "") or "").strip()
         analysis_failed = False
 
         if in_voicemail:
