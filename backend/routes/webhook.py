@@ -43,6 +43,7 @@ async def _bg_analyze_and_sync(
         except Exception as e:
             logger.error(f"[BG] org load failed: {e}")
         org_api_key = (org.anthropic_api_key if org else "") or ""
+        analysis_failed = False
 
         if in_voicemail:
             call.outcome = "voicemail"
@@ -66,6 +67,7 @@ async def _bg_analyze_and_sync(
                     # of silently writing the empty-result defaults (sentiment "neutral",
                     # no outcome), which looked identical to a legitimately analyzed call.
                     call.notes = f"Análisis de IA falló: {analysis_error}"
+                    analysis_failed = True
                 else:
                     call.client_said = json.dumps(analysis.get("client_said", []))
                     call.agent_said = json.dumps(analysis.get("agent_said", []))
@@ -83,6 +85,7 @@ async def _bg_analyze_and_sync(
             except Exception as exc:
                 logger.error(f"[BG] Claude analysis failed: {exc}", exc_info=True)
                 call.notes = f"Análisis de IA falló: {type(exc).__name__}: {exc}"
+                analysis_failed = True
         else:
             logger.warning(f"[BG] call_id={call_id} empty transcript — skipping analysis")
 
@@ -91,34 +94,43 @@ async def _bg_analyze_and_sync(
         if prospect_id:
             prospect = s.get(Prospect, prospect_id)
             if prospect:
-                outcome = call.outcome or "no_answer"
-                if outcome == "voicemail":
-                    prospect.status = "voicemail"
-                elif outcome in ("interested", "callback_requested", "appointment_scheduled",
-                                 "not_interested", "wrong_number"):
+                if analysis_failed:
+                    # A transcript existed (someone answered) but the AI couldn't
+                    # classify the outcome — don't report "no_answer", which would
+                    # wrongly look like nobody picked up.
                     prospect.status = "answered"
-                elif outcome == "no_answer":
-                    prospect.status = "no_answer"
                 else:
-                    prospect.status = "answered"
+                    outcome = call.outcome or "no_answer"
+                    if outcome == "voicemail":
+                        prospect.status = "voicemail"
+                    elif outcome in ("interested", "callback_requested", "appointment_scheduled",
+                                     "not_interested", "wrong_number"):
+                        prospect.status = "answered"
+                    elif outcome == "no_answer":
+                        prospect.status = "no_answer"
+                    else:
+                        prospect.status = "answered"
                 s.add(prospect)
 
         if campaign_id:
             from sqlalchemy import update as _sql_update
-            outcome = call.outcome or "no_answer"
             extra: dict = {"total_calls": Campaign.total_calls + 1}
-            if outcome == "voicemail":
-                extra["voicemail"] = Campaign.voicemail + 1
-            elif outcome == "interested":
-                extra["interested"] = Campaign.interested + 1
+            if analysis_failed:
                 extra["answered"] = Campaign.answered + 1
-            elif outcome in ("not_interested", "callback_requested", "wrong_number"):
-                extra["answered"] = Campaign.answered + 1
-            elif outcome == "appointment_scheduled":
-                extra["appointments_scheduled"] = Campaign.appointments_scheduled + 1
-                extra["answered"] = Campaign.answered + 1
-            elif outcome in ("failed", "no_answer"):
-                extra["failed"] = Campaign.failed + 1
+            else:
+                outcome = call.outcome or "no_answer"
+                if outcome == "voicemail":
+                    extra["voicemail"] = Campaign.voicemail + 1
+                elif outcome == "interested":
+                    extra["interested"] = Campaign.interested + 1
+                    extra["answered"] = Campaign.answered + 1
+                elif outcome in ("not_interested", "callback_requested", "wrong_number"):
+                    extra["answered"] = Campaign.answered + 1
+                elif outcome == "appointment_scheduled":
+                    extra["appointments_scheduled"] = Campaign.appointments_scheduled + 1
+                    extra["answered"] = Campaign.answered + 1
+                elif outcome in ("failed", "no_answer"):
+                    extra["failed"] = Campaign.failed + 1
             s.execute(_sql_update(Campaign).where(Campaign.id == campaign_id).values(**extra))
 
         s.commit()
