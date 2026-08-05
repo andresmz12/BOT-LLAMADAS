@@ -57,7 +57,10 @@ async def set_inbound_agent(phone_number: str, agent_id: Optional[str], api_key:
     if not phone_number or not api_key:
         return
     headers = {"Authorization": f"Bearer {api_key}"}
-    payload = {"inbound_agent_id": agent_id}
+    # Retell deprecated the single-agent "inbound_agent_id" field in favor of a
+    # weighted agent list (docs.retellai.com/deprecation-notice/2026/03-31_phone_number_agent_fields).
+    # We only ever route to one agent per number, so it's a single entry at weight 1.
+    payload = {"inbound_agents": [{"agent_id": agent_id, "weight": 1}] if agent_id else []}
     async with httpx.AsyncClient(timeout=30) as client:
         resp = await client.patch(
             f"{RETELL_API_URL}/update-phone-number/{phone_number}",
