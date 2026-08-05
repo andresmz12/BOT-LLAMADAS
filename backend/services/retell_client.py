@@ -217,9 +217,20 @@ async def sync_to_retell(
     }
     if agent_config.retell_knowledge_base_id:
         outbound_llm_payload["knowledge_base_ids"] = [agent_config.retell_knowledge_base_id]
+    # Voicemail detection is OFF unless voicemail_option is present on the agent:
+    # without it Retell never notices the answering machine and the agent delivers
+    # its whole pitch to the beep. Leave the configured message if there is one,
+    # otherwise hang up immediately rather than burning minutes.
+    voicemail_text = (agent_config.voicemail_message or "").strip()
     outbound_agent_payload = {
         "agent_name": agent_config.name,
         **base_agent_settings,
+        "voicemail_option": {
+            "action": (
+                {"type": "static_text", "text": voicemail_text}
+                if voicemail_text else {"type": "hangup"}
+            )
+        },
     }
 
     async with httpx.AsyncClient(timeout=30) as client:
@@ -367,8 +378,9 @@ async def create_call_direct(
             **custom_vars,
         },
     }
-    if voicemail_message:
-        payload["voicemail_message"] = voicemail_message
+    # NOTE: "voicemail_message" is not a field on /v2/create-phone-call — Retell
+    # silently ignored it. Voicemail behaviour comes from the agent's
+    # voicemail_option, set during sync_to_retell.
 
     headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=30) as client:
