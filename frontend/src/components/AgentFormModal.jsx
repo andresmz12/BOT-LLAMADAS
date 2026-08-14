@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
-import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon, DocumentArrowUpIcon, ExclamationTriangleIcon, EyeIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
-import { createAgent, updateAgent, syncAgent, uploadKnowledgeBase, getAgentPromptPreview, listVoices } from '../api/client'
+import { useNavigate } from 'react-router-dom'
+import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon, DocumentArrowUpIcon, ExclamationTriangleIcon, EyeIcon, ChevronDownIcon, ChevronUpIcon, SparklesIcon, PhoneIcon } from '@heroicons/react/24/outline'
+import { createAgent, updateAgent, syncAgent, uploadKnowledgeBase, getAgentPromptPreview, listVoices, generateAgentFromDescription } from '../api/client'
 
 const VOICES = [
   { value: 'retell-Andrea',    label: 'Andrea (Mexicana · Adulta)' },
@@ -97,6 +98,7 @@ function formatBytes(bytes) {
 }
 
 export default function AgentFormModal({ agent, onClose, onSaved }) {
+  const navigate = useNavigate()
   const [form, setForm] = useState(agent ? { ...EMPTY, ...agent } : { ...EMPTY })
   const [syncOnSave, setSyncOnSave] = useState(true)
   const [loading, setLoading] = useState(false)
@@ -106,6 +108,26 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewData, setPreviewData] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+
+  // "Describe your business, we fill the form" — quick-start for new agents.
+  const [description, setDescription] = useState('')
+  const [generating, setGenerating] = useState(false)
+  const [generateError, setGenerateError] = useState('')
+  const [savedAgentId, setSavedAgentId] = useState(agent?.id || null)
+
+  const runGenerate = async () => {
+    if (!description.trim()) return
+    setGenerating(true)
+    setGenerateError('')
+    try {
+      const data = await generateAgentFromDescription(description.trim())
+      setForm(f => ({ ...f, ...data }))
+    } catch (err) {
+      setGenerateError(err.response?.data?.detail || err.message || 'No se pudo generar el agente')
+    } finally {
+      setGenerating(false)
+    }
+  }
 
   // Voice catalog — pulled live from Retell so new voices show up on their own.
   const [voices, setVoices] = useState([])
@@ -209,6 +231,8 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
       } else {
         saved = await createAgent(form)
       }
+      setSavedAgentId(saved.id)
+      let syncSucceeded = false
 
       // Step 2: Sync agent
       if (syncOnSave) {
@@ -222,6 +246,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
             return
           }
           setSyncStatus('ok')
+          syncSucceeded = true
         } catch (syncErr) {
           setSyncStatus('error')
           setSyncError(syncErr.response?.data?.detail || syncErr.message)
@@ -250,7 +275,13 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
         }
       }
 
-      setTimeout(() => onSaved(), 800)
+      // If the sync succeeded, keep the modal open so the user can jump straight
+      // into a demo call with the agent they just configured, instead of losing
+      // that context and having to find it again from the list.
+      if (!syncSucceeded) {
+        setTimeout(() => onSaved(), 800)
+      }
+      setLoading(false)
     } catch (err) {
       const status = err.response?.status
       const detail = err.response?.data?.detail || err.response?.data || err.message
@@ -276,6 +307,49 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
           <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
+
+          {/* Quick-start: describe the business, let Claude fill the form */}
+          {!agent && (
+            <div className="rounded-xl border border-z-blue/30 bg-z-blue/5 p-4 space-y-2">
+              <label className="flex items-center gap-1.5 text-sm font-medium text-slate-200">
+                <SparklesIcon className="w-4 h-4 text-z-blue-light" />
+                Describe tu negocio y llenamos el formulario por ti
+              </label>
+              <textarea
+                className="z-input w-full"
+                rows={3}
+                placeholder="Ej: Somos una empresa de limpieza de alfombras en Houston. Atendemos dueños de casa de clase media. Queremos que el agente agende citas por teléfono."
+                value={description}
+                onChange={e => setDescription(e.target.value)}
+              />
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={runGenerate}
+                  disabled={generating || !description.trim()}
+                  className="z-btn-primary text-sm disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {generating ? (
+                    <>
+                      <div className="w-3.5 h-3.5 border-2 border-white/40 border-t-white rounded-full animate-spin" />
+                      Generando...
+                    </>
+                  ) : (
+                    <>
+                      <SparklesIcon className="w-4 h-4" />
+                      Generar agente
+                    </>
+                  )}
+                </button>
+                <p className="text-xs text-slate-500">Puedes revisar y ajustar todo antes de guardar.</p>
+              </div>
+              {generateError && (
+                <p className="text-xs text-red-400 flex items-center gap-1">
+                  <ExclamationCircleIcon className="w-3.5 h-3.5 flex-shrink-0" /> {generateError}
+                </p>
+              )}
+            </div>
+          )}
 
           {/* Score bar */}
           {(() => {
@@ -590,6 +664,21 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
               <span className="flex items-center gap-1.5 text-sm text-amber-400">
                 <ExclamationTriangleIcon className="w-4 h-4 flex-shrink-0" /> {kbWarning}
               </span>
+            )}
+            {syncStatus === 'ok' && savedAgentId && kbStatus !== 'uploading' && (
+              <div className="flex items-center gap-3 pt-1">
+                <button
+                  type="button"
+                  onClick={() => navigate(`/demo?agent=${savedAgentId}`)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white text-sm font-medium rounded-lg transition-colors"
+                >
+                  <PhoneIcon className="w-4 h-4" />
+                  Escuchar demo ahora
+                </button>
+                <button type="button" onClick={() => onSaved()} className="text-sm text-slate-400 hover:text-slate-200">
+                  Listo, cerrar
+                </button>
+              </div>
             )}
           </div>
 

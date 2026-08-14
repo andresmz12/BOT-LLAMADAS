@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { RetellWebClient } from 'retell-client-js-sdk'
 import { PhoneIcon, StopIcon, MicrophoneIcon, ArrowDownTrayIcon } from '@heroicons/react/24/outline'
 import UpgradeBanner from '../components/UpgradeBanner'
@@ -7,6 +8,8 @@ import { getDemoStatus, startDemoCall } from '../api/client'
 const MAX_DEMOS = 10
 
 export default function DemoCall() {
+  const [searchParams] = useSearchParams()
+  const agentId = searchParams.get('agent')
   const [status, setStatus] = useState(null) // { plan, demo_calls_used, limit_reached }
   const [callState, setCallState] = useState('idle') // idle | connecting | active | ended
   const [transcript, setTranscript] = useState([])
@@ -26,7 +29,7 @@ export default function DemoCall() {
     setCallState('connecting')
     setTranscript([])
     try {
-      const data = await startDemoCall()
+      const data = await startDemoCall(agentId)
       setStatus(s => ({ ...s, demo_calls_used: data.demo_calls_used, demo_calls_remaining: data.demo_calls_remaining, limit_reached: data.demo_calls_remaining <= 0 }))
 
       const client = new RetellWebClient()

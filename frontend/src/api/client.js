@@ -59,6 +59,7 @@ export const setDefaultAgent = (id) => api.post(`/agents/${id}/set-default`).the
 export const syncAgent = (id) => api.post(`/agents/${id}/sync`).then(r => r.data)
 export const getAgentPromptPreview = (id) => api.get(`/agents/${id}/prompt-preview`).then(r => r.data)
 export const listVoices = () => api.get('/agents/voices').then(r => r.data)
+export const generateAgentFromDescription = (description) => api.post('/agents/generate', { description }).then(r => r.data)
 export const uploadKnowledgeBase = (id, file) => {
   const form = new FormData()
   form.append('file', file)
@@ -102,7 +103,7 @@ export const makeDemoCall = (phone, agentId) =>
 
 // Demo
 export const getDemoStatus = () => api.get('/demo/status').then(r => r.data)
-export const startDemoCall = () => api.post('/demo/start-call').then(r => r.data)
+export const startDemoCall = (agentId) => api.post('/demo/start-call', null, { params: agentId ? { agent_id: agentId } : {} }).then(r => r.data)
 
 // Stats
 export const getStats = (params) => api.get('/stats', { params }).then(r => r.data)

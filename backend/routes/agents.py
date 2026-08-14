@@ -1,3 +1,5 @@
+import os
+import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlmodel import Session, select
@@ -133,6 +135,105 @@ def list_agents(
     if current_user.role != "superadmin":
         query = query.where(AgentConfig.organization_id == current_user.organization_id)
     return [a.dict(exclude={"campaigns"}) for a in session.exec(query).all()]
+
+
+class GenerateFromDescription(BaseModel):
+    description: str
+
+
+_GENERATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "name": {"type": "string"},
+        "agent_name": {"type": "string"},
+        "company_name": {"type": "string"},
+        "company_info": {"type": "string"},
+        "services": {"type": "string"},
+        "target_audience": {"type": "string"},
+        "call_objective": {
+            "type": "string",
+            "enum": ["agendar_cita", "calificar_interes", "cerrar_venta", "informar_promocion"],
+        },
+        "custom_objections": {"type": "string"},
+        "voicemail_message": {"type": "string"},
+        "outbound_first_message": {"type": "string"},
+        "language": {"type": "string", "enum": ["español", "english", "bilingüe"]},
+    },
+    "required": [
+        "name", "agent_name", "company_name", "company_info", "services",
+        "target_audience", "call_objective", "custom_objections",
+        "voicemail_message", "outbound_first_message", "language",
+    ],
+    "additionalProperties": False,
+}
+
+_GENERATE_PROMPT = """Eres un experto en configurar agentes de voz IA para ventas telefónicas.
+A partir de la descripción del negocio que da el usuario, completa la ficha de un agente de ventas.
+
+Reglas:
+- "name" es un identificador interno corto (ej. "ventas-limpieza-houston"), sin espacios ni acentos, en minúsculas con guiones.
+- "agent_name" es el nombre de pila con el que el agente se presenta al hablar (ej. "Sofía", "Andrea").
+- "company_info" e "services" deben ser específicos y accionables, no genéricos — inclúyelos como si fueran a usarse
+  directamente en un guión de ventas real, con detalles concretos (usa lo que el usuario haya dado; si falta algo,
+  infiere algo razonable para ese tipo de negocio, sin inventar precios exactos que no te dieron).
+- "target_audience" describe el cliente ideal en una frase concreta (tipo de persona/negocio, tamaño, ubicación si aplica).
+- "custom_objections" da 3-4 objeciones típicas de ESE negocio específico con su respuesta, en el formato:
+  - "objeción": respuesta
+- "voicemail_message" es un mensaje corto y natural para dejar en buzón de voz si nadie contesta.
+- "outbound_first_message" es la primera frase que dice el agente al contestar la llamada, incluyendo {{customer_name}}
+  para el nombre del prospecto, ej: "Hola, buenos días, ¿hablo con {{customer_name}}?"
+- "call_objective" elige el más adecuado de: agendar_cita, calificar_interes, cerrar_venta, informar_promocion.
+- "language" es "español" salvo que el usuario pida explícitamente inglés o un mercado bilingüe.
+- Todo el texto en español salvo que el usuario pida inglés."""
+
+
+@router.post("/generate")
+async def generate_agent_from_description(
+    data: GenerateFromDescription,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    """Fill the agent form from a plain-language description, so creating an
+    agent doesn't require knowing what each of the ~15 fields is for."""
+    if not (data.description or "").strip():
+        raise HTTPException(status_code=400, detail="Describe el negocio primero")
+
+    org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
+    api_key = ((org.anthropic_api_key if org else "") or "").strip() or os.getenv("ANTHROPIC_API_KEY", "").strip()
+    if not api_key:
+        raise HTTPException(status_code=503, detail="Anthropic API key no configurada.")
+
+    from anthropic import AsyncAnthropic
+    client = AsyncAnthropic(api_key=api_key)
+    messages = [{"role": "user", "content": data.description.strip()}]
+
+    async def _call(use_schema: bool):
+        kwargs = {}
+        if use_schema:
+            kwargs["output_config"] = {"format": {"type": "json_schema", "schema": _GENERATE_SCHEMA}}
+        message = await client.messages.create(
+            model="claude-sonnet-5",
+            max_tokens=1536,
+            system=_GENERATE_PROMPT,
+            messages=messages,
+            **kwargs,
+        )
+        text = message.content[0].text.strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.lstrip().lower().startswith("json"):
+                text = text.lstrip()[4:]
+        return json.loads(text.strip())
+
+    try:
+        try:
+            return await _call(use_schema=True)
+        except Exception as e:
+            logger.warning(f"[Agents] generate: structured output failed ({type(e).__name__}: {e}); retrying plain")
+            return await _call(use_schema=False)
+    except Exception as e:
+        logger.error(f"[Agents] generate failed: {e}", exc_info=True)
+        raise HTTPException(status_code=502, detail=f"No se pudo generar el agente: {e}")
 
 
 @router.get("/voices")
