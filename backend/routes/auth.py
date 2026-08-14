@@ -64,6 +64,7 @@ class RegisterRequest(BaseModel):
     email: str
     password: str
     company_name: str
+    phone: str
 
     @field_validator("email")
     @classmethod
@@ -71,6 +72,16 @@ class RegisterRequest(BaseModel):
         if len(v) > 254:
             raise ValueError("Email demasiado largo")
         return v.strip().lower()
+
+    @field_validator("phone")
+    @classmethod
+    def phone_valid(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 7:
+            raise ValueError("Ingresa un teléfono de contacto válido")
+        if len(v) > 30:
+            raise ValueError("Teléfono demasiado largo")
+        return v
 
     @field_validator("password")
     @classmethod
@@ -152,6 +163,7 @@ def register(data: RegisterRequest, request: Request, session: Session = Depends
         email=data.email,
         password_hash=hash_password(data.password),
         full_name=data.full_name,
+        phone=data.phone,
         role="admin",
         organization_id=org.id,
     )

@@ -64,6 +64,7 @@ class User(SQLModel, table=True):
     email: str = Field(unique=True)
     password_hash: str
     full_name: str
+    phone: Optional[str] = None
     role: str = Field(default="agent")  # superadmin/admin/agent/viewer
     organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
     is_active: bool = Field(default=True)

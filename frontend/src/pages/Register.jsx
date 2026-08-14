@@ -4,7 +4,7 @@ import { WaveformIcon } from '../components/Sidebar'
 import { register, getMe } from '../api/client'
 
 export default function Register() {
-  const [form, setForm] = useState({ full_name: '', email: '', password: '', company_name: '' })
+  const [form, setForm] = useState({ full_name: '', email: '', phone: '', password: '', company_name: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
@@ -56,6 +56,13 @@ export default function Register() {
             <input
               type="email" value={form.email} onChange={e => set('email', e.target.value)}
               className="z-input" placeholder="juan@empresa.com" required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">Teléfono</label>
+            <input
+              type="tel" value={form.phone} onChange={e => set('phone', e.target.value)}
+              className="z-input" placeholder="+52 55 1234 5678" required
             />
           </div>
           <div>

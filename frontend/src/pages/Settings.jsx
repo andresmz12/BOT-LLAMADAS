@@ -23,6 +23,7 @@ export default function Settings() {
   const isSuperAdmin = JSON.parse(localStorage.getItem('user') || '{}').role === 'superadmin'
 
   const [form, setForm] = useState({ retell_api_key: '', retell_phone_number: '', anthropic_api_key: '' })
+  const [touched, setTouched] = useState({ retell_api_key: false, anthropic_api_key: false })
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState(false)
   const [crmConfig, setCrmConfig] = useState(null)
@@ -41,12 +42,32 @@ export default function Settings() {
     getCRMSettings().then(setCrmConfig).catch(() => {})
   }, [])
 
+  // Secret fields are pre-filled with a masked placeholder ("***ab12"). If the
+  // user clicks in and types without first clearing it, the real key gets
+  // appended to the mask instead of replacing it — and since the result still
+  // starts with "***", the backend silently skips saving it, leaving the old
+  // (possibly invalid) key in place while the UI reports success. Clearing on
+  // focus prevents the concatenation; only sending touched fields prevents an
+  // accidental blank-out if the user focuses but never actually types.
+  const clearMaskOnFocus = (key) => (e) => {
+    if (e.target.value.startsWith('***')) {
+      setForm(f => ({ ...f, [key]: '' }))
+    }
+  }
+  const markTouched = (key) => (e) => {
+    setForm(f => ({ ...f, [key]: e.target.value }))
+    setTouched(t => ({ ...t, [key]: true }))
+  }
+
   const submit = async (e) => {
     e.preventDefault()
     setLoading(true)
     setSaved(false)
     try {
-      await saveSettings(form)
+      const payload = { ...form }
+      if (!touched.retell_api_key) delete payload.retell_api_key
+      if (!touched.anthropic_api_key) delete payload.anthropic_api_key
+      await saveSettings(payload)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)
     } catch (err) {
@@ -84,7 +105,8 @@ export default function Settings() {
             <input
               type="password"
               value={form.retell_api_key}
-              onChange={e => setForm(f => ({ ...f, retell_api_key: e.target.value }))}
+              onFocus={clearMaskOnFocus('retell_api_key')}
+              onChange={markTouched('retell_api_key')}
               placeholder="key_••••••••"
               className="z-input font-mono"
             />
@@ -116,7 +138,8 @@ export default function Settings() {
             <input
               type="password"
               value={form.anthropic_api_key}
-              onChange={e => setForm(f => ({ ...f, anthropic_api_key: e.target.value }))}
+              onFocus={clearMaskOnFocus('anthropic_api_key')}
+              onChange={markTouched('anthropic_api_key')}
               placeholder="sk-ant-••••••••"
               className="z-input font-mono"
             />

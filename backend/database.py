@@ -65,6 +65,13 @@ def run_migrations():
 
         is_pg = not DATABASE_URL.startswith("sqlite")
 
+        if "user" in tables:
+            user_cols = {c["name"] for c in insp.get_columns("user")}
+            with engine.begin() as conn:
+                if "phone" not in user_cols:
+                    conn.execute(text("ALTER TABLE \"user\" ADD COLUMN phone VARCHAR(50)"))
+                    log.info("Migration: added user.phone")
+
         if "prospect" in tables:
             prospect_cols = {c["name"] for c in insp.get_columns("prospect")}
             prospect_new = {
