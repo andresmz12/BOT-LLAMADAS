@@ -212,6 +212,13 @@ async def sync_to_retell(
         "stt_mode": "accurate",
     }
 
+    # voice_model was never set, so Retell used its default engine. The flash tier
+    # is a large naturalness gain for roughly +$0.01/min. Only applied to platform
+    # ("retell-") voices — a cloned/custom voice may sit on another provider, and
+    # forcing an ElevenLabs model there would fail the sync.
+    if voice_id.startswith("retell-"):
+        base_agent_settings["voice_model"] = "eleven_flash_v2_5"
+
     # ── OUTBOUND ─────────────────────────────────────────────────
     outbound_prompt = (
         agent_config.outbound_system_prompt
