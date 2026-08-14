@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 from datetime import datetime
+from typing import Optional
 from sqlmodel import Session, select
 from models import Campaign, Prospect, Call, AgentConfig, Organization
 from database import engine
@@ -12,9 +13,19 @@ logger = logging.getLogger(__name__)
 running_tasks: dict[int, asyncio.Task] = {}
 
 
+def is_bilingual(language: Optional[str]) -> bool:
+    """The agent form has always offered a 'Bilingüe' option; it used to fall
+    through to the Spanish-only branch and do nothing."""
+    lang = (language or "").lower()
+    return "biling" in lang or lang == "multi"
+
+
 def build_system_prompt(agent_config: AgentConfig) -> str:
     lang = (agent_config.language or "español").lower()
-    is_english = "english" in lang or lang == "en"
+    bilingual = is_bilingual(lang)
+    # Bilingual agents open in Spanish and follow the prospect from there, so
+    # they build on the Spanish script rather than the English one.
+    is_english = (not bilingual) and ("english" in lang or lang == "en")
 
     objective = agent_config.call_objective or ""
     audience = agent_config.target_audience or ""
@@ -88,7 +99,23 @@ IMPORTANT RULES:
         objective_instruction = objective_map.get(objective, "Termina siempre con un siguiente paso concreto: una llamada agendada, una cita o el envío de información específica.")
         custom_obj_section = f"\nRESPUESTAS A OBJECIONES ESPECÍFICAS (úsalas primero antes que las genéricas):\n{custom_obj}\n" if custom_obj else ""
 
-        return f"""IDIOMA: Habla SIEMPRE en español.
+        language_rule = (
+            """IDIOMA: Eres bilingüe (español e inglés) y hablas ambos como nativa.
+- Abre SIEMPRE en español.
+- Desde el primer momento, adáptate al idioma de la persona: si te contesta en
+  inglés, continúa TODA la llamada en inglés; si te contesta en español, sigue
+  en español.
+- Si te pide cambiar de idioma ("English please", "en español por favor"),
+  cámbiate de inmediato y ya no regreses al anterior.
+- Si mezcla los dos (spanglish), usa el idioma en el que dijo la mayor parte.
+- Nunca traduzcas ni repitas la misma frase en los dos idiomas, y nunca comentes
+  que cambiaste de idioma: simplemente sigue en el que corresponde.
+- Los nombres propios de la empresa y de los productos se dicen igual en ambos."""
+            if bilingual else
+            "IDIOMA: Habla SIEMPRE en español."
+        )
+
+        return f"""{language_rule}
 
 Eres {agent_config.agent_name}, asesora virtual de {agent_config.company_name}. Haces llamadas de ventas salientes de forma natural y profesional — no como un robot leyendo un guión.
 
