@@ -45,7 +45,7 @@ async def generate_reply(org, conversation_history: list[dict], new_message: str
         "No uses asteriscos, markdown ni listas. Escribe como en un chat."
     )
 
-    api_key = (org.anthropic_api_key or "").strip() or os.getenv("ANTHROPIC_API_KEY", "")
+    api_key = (org.anthropic_api_key or "").strip() or os.getenv("ANTHROPIC_API_KEY", "").strip()
     if not api_key:
         logger.error(f"[WhatsApp] No Anthropic API key for org={org.id}")
         return "Hola, en este momento no podemos atenderte. Por favor intenta más tarde."
