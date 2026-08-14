@@ -66,7 +66,7 @@ def _generate_queries_sync(org: Organization, api_key: str) -> list[str]:
     try:
         client = Anthropic(api_key=api_key)
         resp = client.messages.create(
-            model="claude-sonnet-4-6",
+            model="claude-sonnet-5",
             max_tokens=300,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -276,7 +276,7 @@ async def craft_messages(lead: LeadHunt, org: Organization, session=None) -> Lea
 
     client = AsyncAnthropic(api_key=api_key)
     resp = await client.messages.create(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-5",
         max_tokens=600,
         messages=[{"role": "user", "content": prompt}],
     )
