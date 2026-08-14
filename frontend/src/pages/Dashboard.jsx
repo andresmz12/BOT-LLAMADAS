@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, PieChart, Pie, Cell, LabelList } from 'recharts'
 import { UserGroupIcon, StarIcon, CalendarIcon, XCircleIcon, ClockIcon, PhoneArrowDownLeftIcon, ArrowPathIcon, EnvelopeIcon, CursorArrowRaysIcon, ArrowTrendingUpIcon, NoSymbolIcon } from '@heroicons/react/24/outline'
 import { WaveformIcon } from '../components/Sidebar'
@@ -319,6 +320,7 @@ function EmailDashboard({ selectedOrg }) {
 }
 
 export default function Dashboard() {
+  const { t } = useTranslation()
   const isSuperAdmin = JSON.parse(localStorage.getItem('user') || '{}').role === 'superadmin'
 
   const [tab, setTab] = useState('calls')
@@ -340,10 +342,10 @@ export default function Dashboard() {
   const fmtDur = (s) => s ? (s >= 60 ? `${Math.floor(s/60)}m ${s%60}s` : `${s}s`) : '—'
 
   const funnelData = stats ? [
-    { name: 'Total llamadas', value: stats.total_calls ?? 0 },
-    { name: 'Contactados', value: stats.contacted ?? 0 },
-    { name: 'Interesados', value: stats.interested ?? 0 },
-    { name: 'Citas', value: stats.appointments ?? 0 },
+    { name: t('dashboard.totalCalls'), value: stats.total_calls ?? 0 },
+    { name: t('dashboard.contacted'), value: stats.contacted ?? 0 },
+    { name: t('dashboard.interested'), value: stats.interested ?? 0 },
+    { name: t('dashboard.appointments'), value: stats.appointments ?? 0 },
   ] : []
 
   const bestHour = stats?.calls_by_hour?.length
@@ -353,14 +355,14 @@ export default function Dashboard() {
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-2xl font-bold text-slate-100">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-slate-100">{t('dashboard.title')}</h1>
         {isSuperAdmin && orgs.length > 0 && (
           <select
             value={selectedOrg}
             onChange={e => setSelectedOrg(e.target.value)}
             className="z-input w-auto text-sm"
           >
-            <option value="">Todas las organizaciones</option>
+            <option value="">{t('dashboard.allOrgs')}</option>
             {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
           </select>
         )}
@@ -369,10 +371,10 @@ export default function Dashboard() {
       {/* Tab switcher */}
       <div className="flex gap-2 p-1 bg-black/20 border border-z-border rounded-xl w-fit">
         <TabButton active={tab === 'calls'} onClick={() => setTab('calls')}>
-          Llamadas
+          {t('dashboard.callsTab')}
         </TabButton>
         <TabButton active={tab === 'email'} onClick={() => setTab('email')}>
-          Email Marketing
+          {t('dashboard.emailTab')}
         </TabButton>
       </div>
 
@@ -380,28 +382,28 @@ export default function Dashboard() {
         <div className="space-y-6">
           {/* KPI Cards — 8 metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <KPI title="Total llamadas" value={stats?.total_calls ?? 0} icon={WaveformIcon} iconColor="text-z-blue" />
-            <KPI title="Contactados" value={stats?.contacted ?? 0} icon={UserGroupIcon} iconColor="text-blue-400"
-              sub={`${stats?.contact_rate ?? 0}% tasa de contacto`} />
-            <KPI title="Interesados" value={stats?.interested ?? 0} icon={StarIcon}
+            <KPI title={t('dashboard.totalCalls')} value={stats?.total_calls ?? 0} icon={WaveformIcon} iconColor="text-z-blue" />
+            <KPI title={t('dashboard.contacted')} value={stats?.contacted ?? 0} icon={UserGroupIcon} iconColor="text-blue-400"
+              sub={t('dashboard.contactRateSub', { rate: stats?.contact_rate ?? 0 })} />
+            <KPI title={t('dashboard.interested')} value={stats?.interested ?? 0} icon={StarIcon}
               color="text-green-400" iconColor="text-green-400" />
-            <KPI title="No interesados" value={stats?.not_interested ?? 0} icon={XCircleIcon}
+            <KPI title={t('dashboard.notInterested')} value={stats?.not_interested ?? 0} icon={XCircleIcon}
               color="text-red-400" iconColor="text-red-400" />
-            <KPI title="Callback pendiente" value={stats?.callback_requested ?? 0} icon={ArrowPathIcon}
+            <KPI title={t('dashboard.callbackPending')} value={stats?.callback_requested ?? 0} icon={ArrowPathIcon}
               color="text-yellow-400" iconColor="text-yellow-400" />
-            <KPI title="Buzón de voz" value={stats?.voicemail_count ?? 0} icon={PhoneArrowDownLeftIcon}
+            <KPI title={t('dashboard.voicemail')} value={stats?.voicemail_count ?? 0} icon={PhoneArrowDownLeftIcon}
               color="text-slate-400" iconColor="text-slate-500" />
-            <KPI title="Citas agendadas" value={stats?.appointments ?? 0} icon={CalendarIcon}
+            <KPI title={t('dashboard.appointments')} value={stats?.appointments ?? 0} icon={CalendarIcon}
               color="text-z-blue-light" iconColor="text-z-blue-light" />
-            <KPI title="Duración promedio" value={fmtDur(stats?.avg_duration)} icon={ClockIcon}
-              iconColor="text-slate-400" sub="llamadas contestadas" />
+            <KPI title={t('dashboard.avgDuration')} value={fmtDur(stats?.avg_duration)} icon={ClockIcon}
+              iconColor="text-slate-400" sub={t('dashboard.answeredCalls')} />
           </div>
 
           {/* Minutes usage widget — only shown when limit is set */}
           {stats?.minutes_limit && (
             <div className="bg-z-card rounded-xl border border-z-border p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">Minutos usados este mes</span>
+                <span className="text-xs font-medium text-slate-400 uppercase tracking-wide">{t('dashboard.minutesUsedMonth')}</span>
                 <span className={`text-xs font-bold ${stats.minutes_used_month >= stats.minutes_limit ? 'text-red-400' : 'text-slate-300'}`}>
                   {stats.minutes_used_month} / {stats.minutes_limit} min
                 </span>
@@ -413,23 +415,23 @@ export default function Dashboard() {
                 />
               </div>
               {stats.minutes_used_month >= stats.minutes_limit && (
-                <p className="text-xs text-red-400 mt-1.5">⚠ Límite alcanzado — las campañas están pausadas. Contacta soporte.</p>
+                <p className="text-xs text-red-400 mt-1.5">{t('dashboard.limitReached')}</p>
               )}
             </div>
           )}
 
           {/* Chart — 3 series */}
           <div className="bg-z-card rounded-xl p-5 border border-z-border">
-            <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wide">Llamadas últimos 7 días</h2>
+            <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wide">{t('dashboard.last7Days')}</h2>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={stats?.calls_per_day || []} barGap={2}>
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip contentStyle={{ background: '#111827', border: '1px solid #1E293B', borderRadius: 8, color: '#F1F5F9', fontSize: 12 }} />
                 <Legend iconSize={8} formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 11 }}>{v}</span>} />
-                <Bar dataKey="calls" name="Realizadas" fill="#334155" radius={[3,3,0,0]} />
-                <Bar dataKey="contacted" name="Contactados" fill="#2563EB" radius={[3,3,0,0]} />
-                <Bar dataKey="interested" name="Interesados" fill="#10b981" radius={[3,3,0,0]} />
+                <Bar dataKey="calls" name={t('dashboard.made')} fill="#334155" radius={[3,3,0,0]} />
+                <Bar dataKey="contacted" name={t('dashboard.contacted2')} fill="#2563EB" radius={[3,3,0,0]} />
+                <Bar dataKey="interested" name={t('dashboard.interested2')} fill="#10b981" radius={[3,3,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -438,7 +440,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {funnelData.some(d => d.value > 0) && (
               <div className="bg-z-card rounded-xl p-5 border border-z-border">
-                <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wide">Embudo de conversión</h2>
+                <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wide">{t('dashboard.funnel')}</h2>
                 <ResponsiveContainer width="100%" height={180}>
                   <BarChart data={funnelData} layout="vertical">
                     <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} allowDecimals={false} />
@@ -454,18 +456,17 @@ export default function Dashboard() {
             )}
             {(stats?.total_calls ?? 0) >= 50 && stats?.calls_by_hour?.length > 0 && (
               <div className="bg-z-card rounded-xl p-5 border border-z-border">
-                <h2 className="text-sm font-semibold text-slate-400 mb-1 uppercase tracking-wide">Mejor momento para llamar</h2>
+                <h2 className="text-sm font-semibold text-slate-400 mb-1 uppercase tracking-wide">{t('dashboard.bestTime')}</h2>
                 {bestHour && (
                   <p className="text-xs text-slate-500 mb-3">
-                    Mejor hora: <span className="text-z-blue-light font-medium">{bestHour.hour}:00–{bestHour.hour + 1}:00</span>{' '}
-                    <span className="text-green-400">({bestHour.contact_rate}% contacto)</span>
+                    {t('dashboard.bestHourLabel', { h: bestHour.hour, hNext: bestHour.hour + 1, rate: bestHour.contact_rate })}
                   </p>
                 )}
                 <ResponsiveContainer width="100%" height={120}>
                   <BarChart data={stats.calls_by_hour} barGap={1}>
                     <XAxis dataKey="hour" tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={h => `${h}h`} />
                     <YAxis hide />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [v, n === 'calls' ? 'Llamadas' : 'Contactados']} labelFormatter={h => `${h}:00–${+h+1}:00`} />
+                    <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v, n) => [v, n === 'calls' ? t('dashboard.callsLabel') : t('dashboard.contacted')]} labelFormatter={h => `${h}:00–${+h+1}:00`} />
                     <Bar dataKey="calls" radius={[2, 2, 0, 0]}>
                       {stats.calls_by_hour.map((h, i) => (
                         <Cell key={i} fill={`rgba(37,99,235,${0.2 + (h.contact_rate / 100) * 0.8})`} />
@@ -480,7 +481,7 @@ export default function Dashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Pie chart */}
             <div className="bg-z-card rounded-xl p-5 border border-z-border">
-              <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wide">Distribución de outcomes</h2>
+              <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wide">{t('dashboard.outcomeDistribution')}</h2>
               <ResponsiveContainer width="100%" height={200}>
                 <PieChart>
                   <Pie data={stats?.outcome_distribution || []} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80}>
@@ -495,13 +496,13 @@ export default function Dashboard() {
             {/* Active campaigns */}
             <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
               <div className="p-4 border-b border-z-border">
-                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Campañas activas</h2>
+                <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">{t('dashboard.activeCampaigns')}</h2>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm min-w-[360px]">
                   <thead className="bg-black/20">
                     <tr>
-                      {['Nombre', 'Estado', 'Progreso', 'Interesados'].map(h => (
+                      {[t('dashboard.headers.name'), t('dashboard.headers.status'), t('dashboard.headers.progress'), t('dashboard.headers.interested')].map(h => (
                         <th key={h} className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                       ))}
                     </tr>
@@ -525,7 +526,7 @@ export default function Dashboard() {
                         </tr>
                       )
                     })}
-                    {campaigns.length === 0 && <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">No hay campañas</td></tr>}
+                    {campaigns.length === 0 && <tr><td colSpan={4} className="px-4 py-8 text-center text-slate-500">{t('dashboard.noCampaigns')}</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -537,14 +538,14 @@ export default function Dashboard() {
             <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
               <div className="p-4 border-b border-z-border">
                 <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">
-                  Últimos interesados <span className="ml-2 px-1.5 py-0.5 bg-green-500/15 text-green-400 text-xs rounded-full">{stats.recent_interested.length}</span>
+                  {t('dashboard.recentInterested')} <span className="ml-2 px-1.5 py-0.5 bg-green-500/15 text-green-400 text-xs rounded-full">{stats.recent_interested.length}</span>
                 </h2>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm min-w-[520px]">
                   <thead className="bg-black/20">
                     <tr>
-                      {['Nombre', 'Empresa', 'Teléfono', 'Campaña', 'Fecha'].map(h => (
+                      {[t('dashboard.headers.name2'), t('dashboard.headers.company'), t('dashboard.headers.phone'), t('dashboard.headers.campaign'), t('dashboard.headers.date')].map(h => (
                         <th key={h} className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                       ))}
                     </tr>

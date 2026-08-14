@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { login, getMe } from '../api/client'
 import api from '../api/client'
+import LanguageSwitcher from '../components/LanguageSwitcher'
 
 function WaveformIcon({ className }) {
   const bars = [
@@ -25,6 +27,7 @@ function WaveformIcon({ className }) {
 }
 
 export default function Login() {
+  const { t } = useTranslation()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -51,7 +54,7 @@ export default function Login() {
       localStorage.setItem('user', JSON.stringify(user))
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error al iniciar sesión')
+      setError(err.response?.data?.detail || t('auth.loginError'))
       setLoading(false)
     }
   }
@@ -65,14 +68,17 @@ export default function Login() {
       setSetupDone(true)
       setEmail('admin@ismconsulting.com')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error al configurar')
+      setError(err.response?.data?.detail || t('auth.setupError'))
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="min-h-screen bg-z-bg flex items-center justify-center p-4">
+    <div className="min-h-screen bg-z-bg flex items-center justify-center p-4 relative">
+      <div className="absolute top-4 right-4">
+        <LanguageSwitcher />
+      </div>
       <div className="w-full max-w-sm">
         {/* Logo */}
         <div className="text-center mb-8">
@@ -82,41 +88,41 @@ export default function Login() {
           <h1 className="text-2xl font-black">
             <span className="text-white">Zyra</span><span className="text-z-blue">Voice</span>
           </h1>
-          <p className="text-slate-500 text-sm mt-1">Plataforma de llamadas con IA</p>
+          <p className="text-slate-500 text-sm mt-1">{t('auth.platformSubtitle')}</p>
         </div>
 
         {needsSetup && (
           <div className="mb-4 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-sm text-amber-300">
-            <p className="font-semibold mb-2">Sistema no inicializado</p>
-            <p className="mb-3 text-amber-400/80">No hay usuarios configurados. Inicializa el sistema primero.</p>
+            <p className="font-semibold mb-2">{t('auth.notInitialized')}</p>
+            <p className="mb-3 text-amber-400/80">{t('auth.notInitializedHint')}</p>
             <button
               onClick={handleSetup}
               disabled={loading}
               className="w-full py-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold rounded-lg text-sm disabled:opacity-50"
             >
-              {loading ? 'Configurando...' : 'Inicializar sistema'}
+              {loading ? t('auth.initializing') : t('auth.initialize')}
             </button>
           </div>
         )}
 
         {setupDone && (
           <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-xl text-sm text-green-400">
-            Sistema inicializado. Contraseña por defecto: <strong>ISMadmin2024!</strong>
+            {t('auth.defaultPassword')} <strong>ISMadmin2024!</strong>
           </div>
         )}
 
         <form onSubmit={submit} className="bg-z-card border border-z-border rounded-2xl p-8 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Email</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('auth.email')}</label>
             <input
               type="email" value={email} onChange={e => setEmail(e.target.value)}
               className="z-input"
-              placeholder="usuario@empresa.com"
+              placeholder={t('auth.emailPlaceholder')}
               required autoFocus
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1.5">Contraseña</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1.5">{t('auth.password')}</label>
             <input
               type="password" value={password} onChange={e => setPassword(e.target.value)}
               className="z-input"
@@ -132,14 +138,14 @@ export default function Login() {
             type="submit" disabled={loading}
             className="w-full py-2.5 bg-z-blue hover:bg-z-blue-dark text-white font-semibold rounded-lg text-sm disabled:opacity-50 transition-colors"
           >
-            {loading ? 'Entrando...' : 'Iniciar sesión'}
+            {loading ? t('auth.loggingIn') : t('auth.loginTitle')}
           </button>
         </form>
 
         <p className="text-center text-sm text-slate-500 mt-4">
-          ¿No tienes cuenta?{' '}
+          {t('auth.noAccount')}{' '}
           <Link to="/register" className="text-z-blue-light hover:underline font-medium">
-            Crear cuenta gratis
+            {t('auth.createAccount')}
           </Link>
         </p>
       </div>

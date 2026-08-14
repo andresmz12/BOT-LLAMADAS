@@ -11,7 +11,11 @@
     "settings": "Settings",
     "admin": "Admin Panel",
     "logout": "Log out",
-    "demoCall": "Demo Call"
+    "demoCall": "Demo Call",
+    "marketing": "AI Marketing",
+    "emailMarketing": "Email Marketing",
+    "leadHunter": "Lead Hunter",
+    "leadHunterConfig": "Settings"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -47,7 +51,12 @@
     },
     "made": "Made",
     "contacted2": "Contacted",
-    "interested2": "Interested"
+    "interested2": "Interested",
+    "callsTab": "Calls",
+    "callsLabel": "Calls",
+    "emailTab": "Email Marketing",
+    "minutesUsedMonth": "Minutes used this month",
+    "limitReached": "⚠ Limit reached — campaigns are paused. Contact support."
   },
   "agents": {
     "title": "Voice Agents",
@@ -322,10 +331,13 @@
     "fullNamePlaceholder": "John Smith",
     "companyName": "Company name",
     "companyNamePlaceholder": "Acme Corp",
+    "phone": "Phone",
+    "phonePlaceholder": "+1 555 123 4567",
     "minPassword": "Minimum 6 characters",
     "passwordTooShort": "Password must be at least 6 characters.",
     "loginError": "Error logging in",
     "registerError": "Error creating account",
+    "setupError": "Setup failed",
     "loggingIn": "Logging in...",
     "registering": "Creating account...",
     "createAccount": "Create free account",

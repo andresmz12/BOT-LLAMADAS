@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import {
   HomeIcon, UserGroupIcon, MegaphoneIcon,
   UsersIcon, PhoneIcon, Cog6ToothIcon,
@@ -10,42 +11,43 @@ import {
   SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { logout } from '../api/client'
+import LanguageSwitcher from './LanguageSwitcher'
 
 const NAV_BY_ROLE = {
   superadmin: [
-    { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
-    { to: '/admin', label: 'Admin Panel', Icon: KeyIcon },
-    { to: '/marketing', label: 'Marketing IA', Icon: SparklesIcon },
-    { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
-    { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
+    { to: '/dashboard', labelKey: 'sidebar.dashboard', Icon: HomeIcon },
+    { to: '/admin', labelKey: 'sidebar.admin', Icon: KeyIcon },
+    { to: '/marketing', labelKey: 'sidebar.marketing', Icon: SparklesIcon },
+    { to: '/chatbot', labelKey: 'sidebar.chatbot', Icon: ChatBubbleLeftRightIcon },
+    { to: '/settings', labelKey: 'sidebar.settings', Icon: Cog6ToothIcon },
   ],
   admin: [
-    { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
-    { to: '/leads', label: 'Centro de Leads', Icon: FireIcon },
-    { to: '/lead-hunter', label: 'Lead Hunter', Icon: MagnifyingGlassIcon },
-    { to: '/agents', label: 'Agentes de Voz', Icon: UserGroupIcon },
-    { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
-    { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
-    { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
-    { to: '/email-marketing', label: 'Email Marketing', Icon: EnvelopeIcon },
-    { to: '/marketing', label: 'Marketing IA', Icon: SparklesIcon },
-    { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
-    { to: '/team', label: 'Asesores', Icon: UsersIcon },
-    { to: '/settings', label: 'Configuración', Icon: Cog6ToothIcon },
+    { to: '/dashboard', labelKey: 'sidebar.dashboard', Icon: HomeIcon },
+    { to: '/leads', labelKey: 'sidebar.leads', Icon: FireIcon },
+    { to: '/lead-hunter', labelKey: 'sidebar.leadHunter', Icon: MagnifyingGlassIcon },
+    { to: '/agents', labelKey: 'sidebar.agents', Icon: UserGroupIcon },
+    { to: '/campaigns', labelKey: 'sidebar.campaigns', Icon: MegaphoneIcon },
+    { to: '/prospects', labelKey: 'sidebar.prospects', Icon: UsersIcon },
+    { to: '/calls', labelKey: 'sidebar.calls', Icon: PhoneIcon },
+    { to: '/email-marketing', labelKey: 'sidebar.emailMarketing', Icon: EnvelopeIcon },
+    { to: '/marketing', labelKey: 'sidebar.marketing', Icon: SparklesIcon },
+    { to: '/chatbot', labelKey: 'sidebar.chatbot', Icon: ChatBubbleLeftRightIcon },
+    { to: '/team', labelKey: 'sidebar.team', Icon: UsersIcon },
+    { to: '/settings', labelKey: 'sidebar.settings', Icon: Cog6ToothIcon },
   ],
   agent: [
-    { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
-    { to: '/leads', label: 'Centro de Leads', Icon: FireIcon },
-    { to: '/lead-hunter', label: 'Lead Hunter', Icon: MagnifyingGlassIcon },
-    { to: '/campaigns', label: 'Campañas', Icon: MegaphoneIcon },
-    { to: '/prospects', label: 'Prospectos', Icon: UsersIcon },
-    { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
-    { to: '/email-marketing', label: 'Email Marketing', Icon: EnvelopeIcon },
-    { to: '/chatbot', label: 'Chatbot', Icon: ChatBubbleLeftRightIcon },
+    { to: '/dashboard', labelKey: 'sidebar.dashboard', Icon: HomeIcon },
+    { to: '/leads', labelKey: 'sidebar.leads', Icon: FireIcon },
+    { to: '/lead-hunter', labelKey: 'sidebar.leadHunter', Icon: MagnifyingGlassIcon },
+    { to: '/campaigns', labelKey: 'sidebar.campaigns', Icon: MegaphoneIcon },
+    { to: '/prospects', labelKey: 'sidebar.prospects', Icon: UsersIcon },
+    { to: '/calls', labelKey: 'sidebar.calls', Icon: PhoneIcon },
+    { to: '/email-marketing', labelKey: 'sidebar.emailMarketing', Icon: EnvelopeIcon },
+    { to: '/chatbot', labelKey: 'sidebar.chatbot', Icon: ChatBubbleLeftRightIcon },
   ],
   viewer: [
-    { to: '/dashboard', label: 'Dashboard', Icon: HomeIcon },
-    { to: '/calls', label: 'Llamadas', Icon: PhoneIcon },
+    { to: '/dashboard', labelKey: 'sidebar.dashboard', Icon: HomeIcon },
+    { to: '/calls', labelKey: 'sidebar.calls', Icon: PhoneIcon },
   ],
 }
 
@@ -71,6 +73,7 @@ export function WaveformIcon({ className }) {
 }
 
 export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
+  const { t } = useTranslation()
   const [collapsed, setCollapsed] = useState(false)
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   const role = user.role || 'viewer'
@@ -82,8 +85,8 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const navItems = (role === 'admin' || role === 'agent')
     ? isLimitedPlan
       ? [...baseItems.filter(i => i.to !== '/campaigns' && i.to !== '/lead-hunter' && i.to !== '/prospects'),
-         { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon }]
-      : [...baseItems, { to: '/demo', label: 'Llamada Demo', Icon: PhoneIcon }]
+         { to: '/demo', labelKey: 'sidebar.demoCall', Icon: PhoneIcon }]
+      : [...baseItems, { to: '/demo', labelKey: 'sidebar.demoCall', Icon: PhoneIcon }]
     : baseItems
   const initials = (user.full_name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
 
@@ -112,12 +115,12 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
       </div>
 
       <nav className="flex-1 px-2 py-3 space-y-0.5 overflow-y-auto">
-        {navItems.map(({ to, label, Icon }) => (
-          <div key={to + label}>
+        {navItems.map(({ to, labelKey, Icon }) => (
+          <div key={to + labelKey}>
             <NavLink
               to={to}
               end={to === '/dashboard'}
-              title={collapsed ? label : undefined}
+              title={collapsed ? t(labelKey) : undefined}
               onClick={onClose}
               className={({ isActive }) =>
                 `flex items-center ${collapsed ? 'justify-center' : 'gap-3'} px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
@@ -128,7 +131,7 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
               }
             >
               <Icon className="w-5 h-5 flex-shrink-0" />
-              {!collapsed && label}
+              {!collapsed && t(labelKey)}
             </NavLink>
             {to === '/lead-hunter' && !collapsed && (role === 'admin' || role === 'superadmin') && (
               <NavLink
@@ -142,14 +145,14 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
                   }`
                 }
               >
-                <Cog6ToothIcon className="w-3.5 h-3.5 flex-shrink-0" /> Configuración
+                <Cog6ToothIcon className="w-3.5 h-3.5 flex-shrink-0" /> {t('sidebar.leadHunterConfig')}
               </NavLink>
             )}
           </div>
         ))}
       </nav>
 
-      <div className="px-2 py-3 border-t border-z-border space-y-1">
+      <div className="px-2 py-3 border-t border-z-border space-y-2">
         {!collapsed && (
           <div className="flex items-center gap-2.5 px-3 py-2">
             <div className="w-7 h-7 bg-z-blue/20 rounded-full flex items-center justify-center flex-shrink-0">
@@ -161,13 +164,18 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
             </div>
           </div>
         )}
+        {!collapsed && (
+          <div className="px-1">
+            <LanguageSwitcher className="w-full justify-center" />
+          </div>
+        )}
         <button
           onClick={logout}
-          title="Cerrar sesión"
+          title={t('sidebar.logout')}
           className={`flex items-center ${collapsed ? 'justify-center' : 'gap-2'} w-full px-3 py-2 text-xs text-slate-500 hover:text-red-400 rounded-lg hover:bg-white/5 transition-colors`}
         >
           <ArrowRightOnRectangleIcon className="w-4 h-4 flex-shrink-0" />
-          {!collapsed && 'Cerrar sesión'}
+          {!collapsed && t('sidebar.logout')}
         </button>
         <button
           onClick={() => setCollapsed(c => !c)}
