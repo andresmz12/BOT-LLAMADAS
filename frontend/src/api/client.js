@@ -51,7 +51,7 @@ export const deleteUser = (id) => api.delete(`/admin/users/${id}`).then(r => r.d
 export const upgradeOrg = (id, plan) => api.post(`/admin/organizations/${id}/upgrade`, { plan: plan || 'pro' }).then(r => r.data)
 
 // Agents
-export const getAgents = () => api.get('/agents').then(r => r.data)
+export const getAgents = (params) => api.get('/agents', { params }).then(r => r.data)
 export const createAgent = (data) => api.post('/agents', data).then(r => r.data)
 export const updateAgent = (id, data) => api.put(`/agents/${id}`, data).then(r => r.data)
 export const deleteAgent = (id) => api.delete(`/agents/${id}`).then(r => r.data)
@@ -67,7 +67,7 @@ export const uploadKnowledgeBase = (id, file) => {
 }
 
 // Campaigns
-export const getCampaigns = () => api.get('/campaigns').then(r => r.data)
+export const getCampaigns = (params) => api.get('/campaigns', { params }).then(r => r.data)
 export const createCampaign = (data) => api.post('/campaigns', data).then(r => r.data)
 export const updateCampaign = (id, data) => api.put(`/campaigns/${id}`, data).then(r => r.data)
 export const startCampaign = (id) => api.post(`/campaigns/${id}/start`).then(r => r.data)

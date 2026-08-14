@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon, ClockIcon, ArrowDownTrayIcon, MagnifyingGlassIcon, SparklesIcon, UsersIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
 import UpgradeBanner from '../components/UpgradeBanner'
 import CallDetailModal from '../components/CallDetailModal'
+import OrgScopeBanner from '../components/OrgScopeBanner'
 import { getProspects, deleteProspect, deleteAllProspects, retryProspects, getCampaigns, createProspect, callProspect, getDemoStatus, getCalls, expandKeywords } from '../api/client'
 import { exportToCsv } from '../utils/exportCsv'
 import { fmtDate } from '../utils/date'
@@ -159,6 +161,9 @@ function ProspectHistoryModal({ prospect, onClose }) {
 }
 
 export default function Prospects() {
+  const [searchParams] = useSearchParams()
+  const orgId = searchParams.get('org') ? Number(searchParams.get('org')) : null
+  const orgName = searchParams.get('orgName') || ''
   const [prospects, setProspects] = useState([])
   const [campaigns, setCampaigns] = useState([])
   const [filterCampaign, setFilterCampaign] = useState('')
@@ -184,14 +189,15 @@ export default function Prospects() {
     if (filterCampaign === 'email_only') params.email_only = true
     else if (filterCampaign) params.campaign_id = filterCampaign
     if (filterStatus) params.status = filterStatus
+    if (orgId) params.organization_id = orgId
     getProspects(params).then(setProspects).catch(() => {})
   }
 
   useEffect(() => {
-    getCampaigns().then(setCampaigns).catch(() => {})
+    getCampaigns(orgId ? { organization_id: orgId } : undefined).then(setCampaigns).catch(() => {})
     if (isFree) getDemoStatus().then(setDemoStatus).catch(() => {})
-  }, [])
-  useEffect(() => { load() }, [filterCampaign, filterStatus])
+  }, [orgId])
+  useEffect(() => { load() }, [filterCampaign, filterStatus, orgId])
 
   const handleDelete = async (p) => {
     if (!confirm(`¿Eliminar a "${p.name}"?`)) return
@@ -250,6 +256,7 @@ export default function Prospects() {
 
   return (
     <div className="p-6 space-y-6">
+      <OrgScopeBanner orgId={orgId} orgName={orgName} />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Prospectos</h1>

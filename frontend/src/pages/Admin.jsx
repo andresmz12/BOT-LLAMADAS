@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, EyeIcon } from '@heroicons/react/24/outline'
 import {
   getOrganizations, createOrganization, updateOrganization, deleteOrganization,
@@ -103,11 +104,33 @@ const CRM_EVENTS_OPTIONS = [
   { value: 'campaign_email_sent', label: 'Email de campaña enviado' },
 ]
 
+const ORG_DATA_LINKS = [
+  ['Agentes', '/agents'],
+  ['Llamadas', '/calls'],
+  ['Prospectos', '/prospects'],
+  ['Campañas', '/campaigns'],
+]
+
 export default function Admin() {
+  const navigate = useNavigate()
   const [tab, setTab] = useState('orgs')
   const [orgs, setOrgs] = useState([])
   const [users, setUsers] = useState([])
   const [modal, setModal] = useState(null)
+  const [dataMenuOrgId, setDataMenuOrgId] = useState(null)
+  const [dataMenuPos, setDataMenuPos] = useState({ top: 0, left: 0 })
+
+  const toggleDataMenu = (org, e) => {
+    if (dataMenuOrgId === org.id) { setDataMenuOrgId(null); return }
+    const rect = e.currentTarget.getBoundingClientRect()
+    setDataMenuPos({ top: rect.bottom + 4, left: rect.left })
+    setDataMenuOrgId(org.id)
+  }
+
+  const goToOrgData = (org, path) => {
+    setDataMenuOrgId(null)
+    navigate(`${path}?org=${org.id}&orgName=${encodeURIComponent(org.name)}`)
+  }
 
   const loadOrgs = () => getOrganizations().then(setOrgs).catch(() => {})
   const loadUsers = () => getUsers().then(setUsers).catch(() => {})
@@ -200,6 +223,31 @@ export default function Admin() {
                     </td>
                     <td className="px-6 py-3">
                       <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => toggleDataMenu(org, e)}
+                          onBlur={() => setTimeout(() => setDataMenuOrgId(null), 150)}
+                          title="Ver datos de esta organización"
+                          className="text-slate-500 hover:text-slate-300"
+                        >
+                          <EyeIcon className="w-4 h-4" />
+                        </button>
+                        {dataMenuOrgId === org.id && (
+                          <div
+                            style={{ position: 'fixed', top: dataMenuPos.top, left: dataMenuPos.left }}
+                            className="w-36 bg-z-card border border-z-border rounded-lg shadow-lg z-50 overflow-hidden"
+                          >
+                            {ORG_DATA_LINKS.map(([label, path]) => (
+                              <button
+                                key={path}
+                                onMouseDown={(e) => e.preventDefault()}
+                                onClick={() => goToOrgData(org, path)}
+                                className="block w-full text-left px-3 py-2 text-xs text-slate-300 hover:bg-white/5"
+                              >
+                                {label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                         {org.plan !== 'enterprise' && (
                           <button onClick={() => handleUpgrade(org)}
                             className="px-2 py-0.5 bg-green-500/15 hover:bg-green-500/25 text-green-400 text-xs font-medium rounded-lg transition-colors">

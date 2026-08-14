@@ -1,18 +1,22 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { PlusIcon, PencilIcon, TrashIcon, StarIcon, ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon, PhoneArrowDownLeftIcon, DocumentDuplicateIcon, UserGroupIcon, PhoneIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { getAgents, deleteAgent, setDefaultAgent, syncAgent } from '../api/client'
 import AgentFormModal from '../components/AgentFormModal'
+import OrgScopeBanner from '../components/OrgScopeBanner'
 
 export default function Agents() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const orgId = searchParams.get('org') ? Number(searchParams.get('org')) : null
+  const orgName = searchParams.get('orgName') || ''
   const [agents, setAgents] = useState([])
   const [modal, setModal] = useState(null)
   const [syncingId, setSyncingId] = useState(null)
 
-  const load = () => getAgents().then(setAgents).catch(() => {})
-  useEffect(() => { load() }, [])
+  const load = () => getAgents(orgId ? { organization_id: orgId } : undefined).then(setAgents).catch(() => {})
+  useEffect(() => { load() }, [orgId])
 
   const handleDelete = async (agent) => {
     if (!confirm(`¿Eliminar "${agent.agent_name}"?`)) return
@@ -43,6 +47,7 @@ export default function Agents() {
 
   return (
     <div className="p-6 space-y-6">
+      <OrgScopeBanner orgId={orgId} orgName={orgName} />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Agentes de Voz</h1>

@@ -60,12 +60,15 @@ def create_campaign(
 
 @router.get("")
 def list_campaigns(
+    organization_id: int | None = None,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
     query = select(Campaign)
     if current_user.role != "superadmin":
         query = query.where(Campaign.organization_id == current_user.organization_id)
+    elif organization_id is not None:
+        query = query.where(Campaign.organization_id == organization_id)
     campaigns = session.exec(query).all()
     if not campaigns:
         return []

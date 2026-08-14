@@ -119,6 +119,7 @@ def list_calls(
     campaign_id: int | None = None,
     outcome: str | None = None,
     prospect_id: int | None = None,
+    organization_id: int | None = None,
     limit: int = 200,
     offset: int = 0,
     current_user: User = Depends(get_current_user),
@@ -127,6 +128,8 @@ def list_calls(
     query = select(Call).options(selectinload(Call.prospect))
     if current_user.role != "superadmin":
         query = query.where(Call.organization_id == current_user.organization_id)
+    elif organization_id is not None:
+        query = query.where(Call.organization_id == organization_id)
     if campaign_id:
         query = query.where(Call.campaign_id == campaign_id)
     if outcome:

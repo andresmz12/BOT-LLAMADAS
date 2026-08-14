@@ -1,10 +1,15 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { PlusIcon, PlayIcon, PauseIcon, TrashIcon, XMarkIcon, PencilSquareIcon, MegaphoneIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import UpgradeBanner from '../components/UpgradeBanner'
+import OrgScopeBanner from '../components/OrgScopeBanner'
 import { getCampaigns, createCampaign, updateCampaign, startCampaign, pauseCampaign, deleteCampaign, getAgents, getDemoStatus } from '../api/client'
 
 export default function Campaigns() {
+  const [searchParams] = useSearchParams()
+  const orgId = searchParams.get('org') ? Number(searchParams.get('org')) : null
+  const orgName = searchParams.get('orgName') || ''
   const [campaigns, setCampaigns] = useState([])
   const [agents, setAgents] = useState([])
   const [showModal, setShowModal] = useState(false)
@@ -13,13 +18,13 @@ export default function Campaigns() {
   const isFree = user.plan === 'free' || user.plan === 'starter'
   const [demoStatus, setDemoStatus] = useState(null)
 
-  const load = () => getCampaigns().then(setCampaigns).catch(() => {})
+  const load = () => getCampaigns(orgId ? { organization_id: orgId } : undefined).then(setCampaigns).catch(() => {})
 
   useEffect(() => {
     load()
-    getAgents().then(setAgents).catch(() => {})
+    getAgents(orgId ? { organization_id: orgId } : undefined).then(setAgents).catch(() => {})
     if (isFree) getDemoStatus().then(setDemoStatus).catch(() => {})
-  }, [])
+  }, [orgId])
 
   const handleStart = async (id) => {
     try { await startCampaign(id); load() }
@@ -38,6 +43,7 @@ export default function Campaigns() {
 
   return (
     <div className="p-6 space-y-6">
+      <OrgScopeBanner orgId={orgId} orgName={orgName} />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Campañas</h1>
