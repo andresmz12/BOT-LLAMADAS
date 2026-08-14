@@ -5,8 +5,9 @@ from sqlmodel import Session, select, func
 from pydantic import BaseModel, Field
 from typing import Optional
 from database import get_session
-from models import Campaign, Prospect, User
+from models import Campaign, Prospect, User, Organization
 from services import call_orchestrator
+from services.notification_emails import send_notification_email
 from routes.auth import get_current_user, require_write_access, require_pro_plan
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
@@ -34,6 +35,7 @@ class CampaignUpdate(BaseModel):
 @router.post("")
 def create_campaign(
     data: CampaignCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
@@ -55,6 +57,16 @@ def create_campaign(
     session.add(campaign)
     session.commit()
     session.refresh(campaign)
+
+    org = session.get(Organization, campaign.organization_id) if campaign.organization_id else None
+    background_tasks.add_task(
+        send_notification_email,
+        org=org,
+        to_email=current_user.email,
+        subject=f"Campaña creada: {campaign.name}",
+        greeting=f"Hola {current_user.full_name},",
+        body=f"Creaste la campaña \"{campaign.name}\" ({campaign.calls_per_minute} llamadas/min). Estado actual: {campaign.status}.",
+    )
     return campaign
 
 
@@ -194,6 +206,16 @@ async def start_campaign(
     if campaign_id not in call_orchestrator.running_tasks:
         task = asyncio.create_task(call_orchestrator.start_campaign(campaign_id))
         call_orchestrator.running_tasks[campaign_id] = task
+
+    org = session.get(Organization, campaign.organization_id) if campaign.organization_id else None
+    background_tasks.add_task(
+        send_notification_email,
+        org=org,
+        to_email=current_user.email,
+        subject=f"Campaña iniciada: {campaign.name}",
+        greeting=f"Hola {current_user.full_name},",
+        body=f"La campaña \"{campaign.name}\" está corriendo ahora — {campaign.calls_per_minute} llamadas por minuto.",
+    )
     return {"ok": True, "status": "running"}
 
 
