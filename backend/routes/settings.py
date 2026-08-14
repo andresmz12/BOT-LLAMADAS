@@ -16,6 +16,7 @@ from sqlalchemy import desc, func
 from database import get_session
 from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, EmailSequence, BulkEmailJob
 from routes.auth import get_current_user, require_write_access, require_superadmin
+from services.audit_log import log_action
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +73,7 @@ def save_settings(
     if current_user.organization_id:
         org = session.get(Organization, current_user.organization_id)
         if org:
+            changed_fields = []
             for key, value in data.dict(exclude_unset=True).items():
                 if value is None:
                     continue
@@ -80,8 +82,12 @@ def save_settings(
                 # Strip whitespace — pasted API keys often carry a trailing
                 # newline, which makes the credential unusable as an auth header.
                 setattr(org, key, str(value).strip())
+                changed_fields.append(key)
             session.add(org)
             session.commit()
+            if changed_fields:
+                # Never log the actual secret values — only which fields changed.
+                log_action(session, current_user, "settings.credentials_update", details=f"fields: {', '.join(changed_fields)}")
     return {"ok": True}
 
 

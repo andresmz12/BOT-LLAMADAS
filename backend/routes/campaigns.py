@@ -8,6 +8,7 @@ from database import get_session
 from models import Campaign, Prospect, User, Organization
 from services import call_orchestrator
 from services.notification_emails import send_notification_email
+from services.audit_log import log_action
 from routes.auth import get_current_user, require_write_access, require_pro_plan
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
@@ -67,6 +68,7 @@ def create_campaign(
         greeting=f"Hola {current_user.full_name},",
         body=f"Creaste la campaña \"{campaign.name}\" ({campaign.calls_per_minute} llamadas/min). Estado actual: {campaign.status}.",
     )
+    log_action(session, current_user, "campaign.create", details=f"{campaign.name} (id={campaign.id})")
     return campaign
 
 
@@ -172,6 +174,7 @@ def update_campaign(
     session.add(campaign)
     session.commit()
     session.refresh(campaign)
+    log_action(session, current_user, "campaign.update", details=f"{campaign.name} (id={campaign.id})")
     return campaign
 
 
@@ -216,6 +219,7 @@ async def start_campaign(
         greeting=f"Hola {current_user.full_name},",
         body=f"La campaña \"{campaign.name}\" está corriendo ahora — {campaign.calls_per_minute} llamadas por minuto.",
     )
+    log_action(session, current_user, "campaign.start", details=f"{campaign.name} (id={campaign.id})")
     return {"ok": True, "status": "running"}
 
 
@@ -257,6 +261,8 @@ def delete_campaign(
     # Delete associated prospects first to avoid FK constraint issues
     for p in session.exec(select(Prospect).where(Prospect.campaign_id == campaign_id)).all():
         session.delete(p)
+    campaign_name = campaign.name
     session.delete(campaign)
     session.commit()
+    log_action(session, current_user, "campaign.delete", details=f"{campaign_name} (id={campaign_id})")
     return {"ok": True}

@@ -11,6 +11,7 @@ from database import get_session
 from models import Prospect, Campaign, AgentConfig, Call, User, Organization
 from routes.auth import get_current_user, require_write_access, require_pro_plan
 from services.notification_emails import send_notification_email
+from services.audit_log import log_action
 
 router = APIRouter(prefix="/prospects", tags=["prospects"])
 
@@ -252,6 +253,8 @@ async def import_file(
                 f" ({skipped_existing} se omitieron por estar duplicados)." if skipped_existing else "."
             ),
         )
+    if imported > 0:
+        log_action(session, current_user, "prospects.import", details=f"{imported} desde {file.filename}")
     return {"imported": imported, "skipped_existing": skipped_existing}
 
 
@@ -416,6 +419,8 @@ def delete_all_prospects(
     for p in prospects:
         session.delete(p)
     session.commit()
+    if prospects:
+        log_action(session, current_user, "prospects.delete_all", details=f"{len(prospects)} deleted (campaign_id={campaign_id}, email_only={email_only})")
     return {"deleted": len(prospects)}
 
 

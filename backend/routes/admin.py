@@ -8,6 +8,7 @@ from database import get_session
 from models import Organization, User, WebhookLog
 from services.auth import hash_password
 from routes.auth import require_superadmin
+from services.audit_log import log_action
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -75,13 +76,14 @@ class UserUpdate(BaseModel):
 @router.post("/organizations")
 def create_org(
     data: OrgCreate,
-    _: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
 ):
     org = Organization(**data.dict())
     session.add(org)
     session.commit()
     session.refresh(org)
+    log_action(session, current_user, "org.create", details=f"{org.name} (id={org.id})")
     return _safe_org(org)
 
 
@@ -97,20 +99,25 @@ def list_orgs(
 def update_org(
     org_id: int,
     data: OrgCreate,
-    _: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
 ):
     org = session.get(Organization, org_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
+    changed_fields = []
     for k, v in data.dict().items():
         # Never overwrite a real secret with a masked placeholder (e.g. "****xxxx")
         if k in _SENSITIVE and isinstance(v, str) and v.startswith("***"):
             continue
         setattr(org, k, v)
+        changed_fields.append(k)
     session.add(org)
     session.commit()
     session.refresh(org)
+    # Never log actual secret values — only which fields changed.
+    logged_fields = [f for f in changed_fields if f not in _SENSITIVE] + [f"{f}(secret)" for f in changed_fields if f in _SENSITIVE]
+    log_action(session, current_user, "org.update", details=f"{org.name} (id={org.id}) fields: {', '.join(logged_fields)}")
     return _safe_org(org)
 
 
@@ -171,7 +178,7 @@ class UpgradePlanRequest(BaseModel):
 def upgrade_org(
     org_id: int,
     data: UpgradePlanRequest = UpgradePlanRequest(),
-    _: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
 ):
     """Change an organization's plan."""
@@ -181,9 +188,11 @@ def upgrade_org(
     org = session.get(Organization, org_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
+    old_plan = org.plan
     org.plan = data.plan
     session.add(org)
     session.commit()
+    log_action(session, current_user, "org.upgrade", details=f"{org.name} (id={org.id}) {old_plan} → {org.plan}")
     return {"ok": True, "plan": org.plan}
 
 
@@ -221,7 +230,7 @@ def get_org_crm_logs(
 @router.delete("/organizations/{org_id}")
 def delete_org(
     org_id: int,
-    _: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
 ):
     from models import Campaign, Call, Prospect
@@ -235,15 +244,17 @@ def delete_org(
             status_code=400,
             detail=f"La organización tiene {user_count} usuario(s) y {campaign_count} campaña(s). Elimínalos primero."
         )
+    org_name = org.name
     session.delete(org)
     session.commit()
+    log_action(session, current_user, "org.delete", details=f"{org_name} (id={org_id})")
     return {"ok": True}
 
 
 @router.post("/users")
 def create_user(
     data: UserCreate,
-    _: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
 ):
     existing = session.exec(select(User).where(User.email == data.email)).first()
@@ -259,6 +270,7 @@ def create_user(
     session.add(user)
     session.commit()
     session.refresh(user)
+    log_action(session, current_user, "user.create", details=f"{user.full_name} <{user.email}> role={user.role} org_id={user.organization_id}")
     result = user.dict(exclude={"password_hash"})
     org = session.get(Organization, user.organization_id) if user.organization_id else None
     result["organization_name"] = org.name if org else ""
@@ -284,29 +296,77 @@ def list_users(
 def update_user(
     user_id: int,
     data: UserUpdate,
-    _: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
 ):
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    changed = list(data.dict(exclude_unset=True).keys())
     for k, v in data.dict(exclude_unset=True).items():
         setattr(user, k, v)
     session.add(user)
     session.commit()
     session.refresh(user)
+    log_action(session, current_user, "user.update", details=f"{user.full_name} <{user.email}> fields: {', '.join(changed)}")
     return user.dict(exclude={"password_hash"})
 
 
 @router.delete("/users/{user_id}")
 def delete_user(
     user_id: int,
-    _: User = Depends(require_superadmin),
+    current_user: User = Depends(require_superadmin),
     session: Session = Depends(get_session),
 ):
     user = session.get(User, user_id)
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    deleted_email = user.email
     session.delete(user)
     session.commit()
+    log_action(session, current_user, "user.delete", details=deleted_email)
     return {"ok": True}
+
+
+@router.get("/audit-log")
+def list_audit_log(
+    user_id: Optional[int] = None,
+    organization_id: Optional[int] = None,
+    action: Optional[str] = None,
+    limit: int = 200,
+    offset: int = 0,
+    _: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    from models import AuditLog
+
+    query = select(AuditLog)
+    if user_id is not None:
+        query = query.where(AuditLog.user_id == user_id)
+    if organization_id is not None:
+        query = query.where(AuditLog.organization_id == organization_id)
+    if action:
+        query = query.where(AuditLog.action == action)
+    query = query.order_by(desc(AuditLog.created_at)).offset(offset).limit(min(limit, 500))
+    entries = session.exec(query).all()
+
+    org_ids = {e.organization_id for e in entries if e.organization_id}
+    orgs = {}
+    if org_ids:
+        for org in session.exec(select(Organization).where(Organization.id.in_(org_ids))).all():
+            orgs[org.id] = org.name
+
+    return [
+        {
+            "id": e.id,
+            "user_id": e.user_id,
+            "user_email": e.user_email,
+            "organization_id": e.organization_id,
+            "organization_name": orgs.get(e.organization_id, ""),
+            "action": e.action,
+            "details": e.details,
+            "ip_address": e.ip_address,
+            "created_at": e.created_at,
+        }
+        for e in entries
+    ]

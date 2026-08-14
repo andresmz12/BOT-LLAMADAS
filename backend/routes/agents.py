@@ -9,6 +9,7 @@ from database import get_session
 from models import AgentConfig, Campaign, User, Organization
 from routes.auth import get_current_user, require_write_access, require_superadmin
 from services.notification_emails import send_notification_email
+from services.audit_log import log_action
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -136,6 +137,7 @@ def create_agent(
             greeting=f"Hola {current_user.full_name},",
             body=f"Creaste el agente \"{agent.agent_name}\" para {agent.company_name}. Sincronízalo con Retell para empezar a usarlo.",
         )
+    log_action(session, current_user, "agent.create", details=f"{agent.agent_name} (id={agent.id})")
     return agent.dict(exclude={"campaigns"})
 
 
@@ -327,6 +329,7 @@ def update_agent(
     session.add(agent)
     session.commit()
     session.refresh(agent)
+    log_action(session, current_user, "agent.update", details=f"{agent.agent_name} (id={agent.id})")
     return agent.dict(exclude={"campaigns"})
 
 
@@ -372,6 +375,7 @@ async def sync_agent(
                 greeting=f"Hola {current_user.full_name},",
                 body=f"El agente \"{agent.agent_name}\" quedó sincronizado con Retell y ya puede recibir/hacer llamadas.",
             )
+        log_action(session, current_user, "agent.sync", details=f"{agent.agent_name} (id={agent.id})")
     except Exception as e:
         retell_error = str(e)
         logger.error(f"POST /agents/{agent_id}/sync — error: {retell_error}")
@@ -393,8 +397,10 @@ def delete_agent(
     campaigns = session.exec(select(Campaign).where(Campaign.agent_config_id == agent_id)).all()
     if campaigns:
         raise HTTPException(status_code=400, detail="Agent has associated campaigns")
+    agent_name = agent.agent_name
     session.delete(agent)
     session.commit()
+    log_action(session, current_user, "agent.delete", details=f"{agent_name} (id={agent_id})")
     return {"ok": True}
 
 

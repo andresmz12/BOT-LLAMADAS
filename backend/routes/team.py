@@ -7,6 +7,7 @@ from models import User, Organization
 from routes.auth import get_current_user, require_write_access
 from services.auth import hash_password
 from services.notification_emails import send_notification_email
+from services.audit_log import log_action
 
 router = APIRouter(prefix="/team", tags=["team"])
 
@@ -103,6 +104,7 @@ def create_team_member(
         greeting=f"Hola {current_user.full_name},",
         body=f"Agregaste a {user.full_name} ({user.email}) como {user.role} a tu equipo en ZyraVoice.",
     )
+    log_action(session, current_user, "team_member.create", details=f"{user.full_name} <{user.email}> role={user.role}")
     return {"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role}
 
 
@@ -124,6 +126,7 @@ def update_team_member(
         user.is_active = data.is_active
     session.add(user)
     session.commit()
+    log_action(session, current_user, "team_member.update", details=f"{user.full_name} <{user.email}>")
     return {"ok": True}
 
 
@@ -140,6 +143,8 @@ def delete_team_member(
         raise HTTPException(403, "No puedes eliminar administradores")
     if user.id == current_user.id:
         raise HTTPException(400, "No puedes eliminarte a ti mismo")
+    deleted_email = user.email
     session.delete(user)
     session.commit()
+    log_action(session, current_user, "team_member.delete", details=deleted_email)
     return {"ok": True}
