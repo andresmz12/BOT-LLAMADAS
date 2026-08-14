@@ -233,7 +233,8 @@ async def generate_agent_from_description(
             return await _call(use_schema=False)
     except Exception as e:
         logger.error(f"[Agents] generate failed: {e}", exc_info=True)
-        raise HTTPException(status_code=502, detail=f"No se pudo generar el agente: {e}")
+        from services.anthropic_errors import friendly_anthropic_error
+        raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
 
 
 @router.get("/voices")

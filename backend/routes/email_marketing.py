@@ -1413,7 +1413,8 @@ async def generate_email_sequence(
         if not isinstance(emails, list):
             raise ValueError("Respuesta no es una lista")
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error generando la secuencia con Claude: {str(e)[:200]}")
+        from services.anthropic_errors import friendly_anthropic_error
+        raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
 
     result = []
     for i, d in enumerate(data.dates):
