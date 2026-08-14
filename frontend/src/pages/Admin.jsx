@@ -184,16 +184,29 @@ export default function Admin() {
             <table className="w-full text-sm">
               <thead className="bg-black/20">
                 <tr>
-                  {['ID', 'Nombre', 'Plan', 'Demos', 'CRM', 'Activa', 'Acciones'].map(h => (
+                  {['ID', 'Nombre', 'Contacto', 'Plan', 'Demos', 'CRM', 'Activa', 'Acciones'].map(h => (
                     <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-z-border">
-                {orgs.map(org => (
+                {orgs.map(org => {
+                  const contact = users.find(u => u.organization_id === org.id)
+                  return (
                   <tr key={org.id} className="hover:bg-white/[0.02]">
                     <td className="px-6 py-3 text-slate-500 text-xs">{org.id}</td>
                     <td className="px-6 py-3 font-medium text-slate-200">{org.name}</td>
+                    <td className="px-6 py-3 text-xs">
+                      {contact ? (
+                        <div>
+                          <div className="text-slate-300">{contact.full_name}</div>
+                          <div className="text-slate-500">{contact.email}</div>
+                          <div className="text-slate-500">{contact.phone || '—'}</div>
+                        </div>
+                      ) : (
+                        <span className="text-slate-600">—</span>
+                      )}
+                    </td>
                     <td className="px-6 py-3">
                       <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
                         org.plan === 'free' ? 'bg-slate-700/60 text-slate-400'
@@ -265,9 +278,10 @@ export default function Admin() {
                       </div>
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
                 {orgs.length === 0 && (
-                  <tr><td colSpan={7} className="px-6 py-10 text-center text-slate-500">No hay organizaciones</td></tr>
+                  <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-500">No hay organizaciones</td></tr>
                 )}
               </tbody>
             </table>
@@ -288,7 +302,7 @@ export default function Admin() {
             <table className="w-full text-sm">
               <thead className="bg-black/20">
                 <tr>
-                  {['Nombre', 'Email', 'Rol', 'Organización', 'Activo', 'Acciones'].map(h => (
+                  {['Nombre', 'Email', 'Teléfono', 'Rol', 'Organización', 'Activo', 'Acciones'].map(h => (
                     <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                   ))}
                 </tr>
@@ -298,6 +312,7 @@ export default function Admin() {
                   <tr key={user.id} className="hover:bg-white/[0.02]">
                     <td className="px-6 py-3 font-medium text-slate-200">{user.full_name}</td>
                     <td className="px-6 py-3 text-slate-400 text-xs">{user.email}</td>
+                    <td className="px-6 py-3 text-slate-400 text-xs">{user.phone || '—'}</td>
                     <td className="px-6 py-3">
                       <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full font-medium">{user.role}</span>
                     </td>
@@ -322,7 +337,7 @@ export default function Admin() {
                   </tr>
                 ))}
                 {users.length === 0 && (
-                  <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-500">No hay usuarios</td></tr>
+                  <tr><td colSpan={7} className="px-6 py-10 text-center text-slate-500">No hay usuarios</td></tr>
                 )}
               </tbody>
             </table>
