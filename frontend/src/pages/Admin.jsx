@@ -7,6 +7,7 @@ import {
   testCRMWebhook, upgradeOrg, getOrgSecrets,
 } from '../api/client'
 import SecretInput from '../components/SecretInput'
+import { fmtDate } from '../utils/date'
 
 const ROLES = ['superadmin', 'admin', 'agent']
 const PLANS = ['free', 'starter', 'pro', 'enterprise']
@@ -202,6 +203,7 @@ export default function Admin() {
                           <div className="text-slate-300">{contact.full_name}</div>
                           <div className="text-slate-500">{contact.email}</div>
                           <div className="text-slate-500">{contact.phone || '—'}</div>
+                          <div className="text-slate-600">Desde {fmtDate(contact.created_at)}</div>
                         </div>
                       ) : (
                         <span className="text-slate-600">—</span>
@@ -302,7 +304,7 @@ export default function Admin() {
             <table className="w-full text-sm">
               <thead className="bg-black/20">
                 <tr>
-                  {['Nombre', 'Email', 'Teléfono', 'Rol', 'Organización', 'Activo', 'Acciones'].map(h => (
+                  {['Nombre', 'Email', 'Teléfono', 'Rol', 'Organización', 'Registrado', 'Activo', 'Acciones'].map(h => (
                     <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                   ))}
                 </tr>
@@ -317,6 +319,7 @@ export default function Admin() {
                       <span className="px-2 py-0.5 bg-purple-500/20 text-purple-400 text-xs rounded-full font-medium">{user.role}</span>
                     </td>
                     <td className="px-6 py-3 text-slate-500 text-xs">{user.organization_name || '—'}</td>
+                    <td className="px-6 py-3 text-slate-500 text-xs">{fmtDate(user.created_at)}</td>
                     <td className="px-6 py-3">
                       <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${user.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
                         {user.is_active ? 'Activo' : 'Inactivo'}
@@ -337,7 +340,7 @@ export default function Admin() {
                   </tr>
                 ))}
                 {users.length === 0 && (
-                  <tr><td colSpan={7} className="px-6 py-10 text-center text-slate-500">No hay usuarios</td></tr>
+                  <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-500">No hay usuarios</td></tr>
                 )}
               </tbody>
             </table>
