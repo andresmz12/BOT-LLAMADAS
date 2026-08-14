@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { TrashIcon, PhoneArrowUpRightIcon, ChevronRightIcon, XMarkIcon, ForwardIcon, PhoneIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import CallDetailModal from '../components/CallDetailModal'
+import OrgScopeBanner from '../components/OrgScopeBanner'
 import { getCalls, getCallDetail, getCampaigns, deleteCalls, callProspect } from '../api/client'
 import { fmtDate } from '../utils/date'
 
@@ -9,6 +11,9 @@ const OUTCOMES = ['', 'interested', 'not_interested', 'callback_requested', 'app
 const SENTIMENT_EMOJI = { positive: '😊', neutral: '😐', negative: '😞' }
 
 export default function Calls() {
+  const [searchParams] = useSearchParams()
+  const orgId = searchParams.get('org') ? Number(searchParams.get('org')) : null
+  const orgName = searchParams.get('orgName') || ''
   const [calls, setCalls] = useState([])
   const [campaigns, setCampaigns] = useState([])
   const [filterCampaign, setFilterCampaign] = useState('')
@@ -22,11 +27,12 @@ export default function Calls() {
     const params = {}
     if (filterCampaign) params.campaign_id = filterCampaign
     if (filterOutcome) params.outcome = filterOutcome
+    if (orgId) params.organization_id = orgId
     getCalls(params).then(data => { setCalls(data); setSelected(new Set()) }).catch(() => {})
   }
 
-  useEffect(() => { getCampaigns().then(setCampaigns).catch(() => {}) }, [])
-  useEffect(() => { load() }, [filterCampaign, filterOutcome])
+  useEffect(() => { getCampaigns(orgId ? { organization_id: orgId } : undefined).then(setCampaigns).catch(() => {}) }, [orgId])
+  useEffect(() => { load() }, [filterCampaign, filterOutcome, orgId])
 
   const toggleAll = (e) => {
     setSelected(e.target.checked ? new Set(calls.map(c => c.id)) : new Set())
@@ -107,6 +113,7 @@ export default function Calls() {
 
   return (
     <div className="p-6 space-y-6">
+      <OrgScopeBanner orgId={orgId} orgName={orgName} />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-100">Llamadas</h1>

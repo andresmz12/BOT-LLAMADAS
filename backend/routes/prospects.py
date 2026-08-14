@@ -245,6 +245,7 @@ def list_prospects(
     campaign_id: int | None = None,
     email_only: bool = False,
     status: str | None = None,
+    organization_id: int | None = None,
     limit: int = 500,
     offset: int = 0,
     current_user: User = Depends(get_current_user),
@@ -253,6 +254,8 @@ def list_prospects(
     query = select(Prospect)
     if current_user.role != "superadmin":
         query = query.where(Prospect.organization_id == current_user.organization_id)
+    elif organization_id is not None:
+        query = query.where(Prospect.organization_id == organization_id)
     if email_only:
         query = query.where(Prospect.campaign_id == None)  # noqa: E711
     elif campaign_id:

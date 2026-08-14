@@ -128,12 +128,15 @@ def create_agent(
 
 @router.get("")
 def list_agents(
+    organization_id: int | None = None,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
     query = select(AgentConfig)
     if current_user.role != "superadmin":
         query = query.where(AgentConfig.organization_id == current_user.organization_id)
+    elif organization_id is not None:
+        query = query.where(AgentConfig.organization_id == organization_id)
     return [a.dict(exclude={"campaigns"}) for a in session.exec(query).all()]
 
 
