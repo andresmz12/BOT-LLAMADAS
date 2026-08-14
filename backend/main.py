@@ -337,6 +337,25 @@ async def _campaign_scheduler():
             logger.error(f"[Scheduler] Email job error: {e}")
 
 
+async def _audit_log_cleanup():
+    """Delete audit log entries older than 60 days. Runs once immediately at
+    startup (so a container that never stays up 24h still gets cleaned), then
+    once a day thereafter."""
+    import asyncio as _asyncio
+    from sqlmodel import Session as _S
+    from services.audit_log import purge_old_entries
+
+    while True:
+        try:
+            with _S(engine) as s:
+                deleted = purge_old_entries(s)
+                if deleted:
+                    logger.info(f"[AuditLog] Purged {deleted} entr{'y' if deleted == 1 else 'ies'} older than 60 days")
+        except Exception as e:
+            logger.error(f"[AuditLog] Cleanup error: {e}")
+        await _asyncio.sleep(24 * 60 * 60)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("=== ZYRAVOICE BACKEND v6 STARTING ===")
@@ -488,8 +507,10 @@ async def lifespan(app: FastAPI):
         logger.error(f"[Startup] Failed to resume running campaigns: {e}")
 
     scheduler = asyncio.create_task(_campaign_scheduler())
+    audit_cleanup = asyncio.create_task(_audit_log_cleanup())
     yield
     scheduler.cancel()
+    audit_cleanup.cancel()
 
 
 app = FastAPI(title="Voice Agent API", lifespan=lifespan, docs_url=None, redoc_url=None)

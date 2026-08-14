@@ -185,11 +185,25 @@ def login(req: LoginRequest, request: Request, session: Session = Depends(get_se
         raise HTTPException(status_code=401, detail="Usuario desactivado")
     token = create_token(user.id, user.role, user.organization_id)
     logger.info(f"Login: {user.email} ({user.role})")
+    from services.audit_log import log_action
+    log_action(session, user, "login", ip_address=_get_client_ip(request))
     return {"access_token": token, "token_type": "bearer"}
 
 
 @router.post("/logout")
-def logout():
+def logout(
+    credentials: HTTPAuthorizationCredentials = Depends(security),
+    session: Session = Depends(get_session),
+):
+    if credentials:
+        try:
+            payload = decode_token(credentials.credentials)
+            user = session.get(User, int(payload["sub"]))
+            if user:
+                from services.audit_log import log_action
+                log_action(session, user, "logout")
+        except Exception:
+            pass
     return {"ok": True}
 
 

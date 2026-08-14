@@ -73,6 +73,17 @@ class User(SQLModel, table=True):
     organization: Optional[Organization] = Relationship(back_populates="users")
 
 
+class AuditLog(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id")
+    user_email: str = Field(default="")
+    organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+    action: str
+    details: str = Field(default="")
+    ip_address: Optional[str] = None
+    created_at: datetime = Field(default_factory=datetime.utcnow, index=True)
+
+
 class AgentConfig(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     name: str

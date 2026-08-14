@@ -4,10 +4,44 @@ import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, EyeIcon } from '@heroicons/
 import {
   getOrganizations, createOrganization, updateOrganization, deleteOrganization,
   getUsers, createUser, updateUser, deleteUser,
-  testCRMWebhook, upgradeOrg, getOrgSecrets,
+  testCRMWebhook, upgradeOrg, getOrgSecrets, getAuditLog,
 } from '../api/client'
 import SecretInput from '../components/SecretInput'
 import { fmtDate } from '../utils/date'
+
+const AUDIT_ACTION_LABELS = {
+  login: 'Inicio de sesión',
+  logout: 'Cierre de sesión',
+  'team_member.create': 'Asesor creado',
+  'team_member.update': 'Asesor editado',
+  'team_member.delete': 'Asesor eliminado',
+  'campaign.create': 'Campaña creada',
+  'campaign.update': 'Campaña editada',
+  'campaign.start': 'Campaña iniciada',
+  'campaign.delete': 'Campaña eliminada',
+  'agent.create': 'Agente creado',
+  'agent.update': 'Agente editado',
+  'agent.sync': 'Agente sincronizado',
+  'agent.delete': 'Agente eliminado',
+  'prospects.import': 'Prospectos importados',
+  'prospects.delete_all': 'Prospectos eliminados (masivo)',
+  'settings.credentials_update': 'Credenciales actualizadas',
+  'org.create': 'Organización creada',
+  'org.update': 'Organización editada',
+  'org.upgrade': 'Plan cambiado',
+  'org.delete': 'Organización eliminada',
+  'user.create': 'Usuario creado',
+  'user.update': 'Usuario editado',
+  'user.delete': 'Usuario eliminado',
+}
+
+const AUDIT_ACTION_COLOR = (action) => {
+  if (action.endsWith('.delete') || action === 'user.delete') return 'bg-red-500/15 text-red-400'
+  if (action.endsWith('.create')) return 'bg-green-500/15 text-green-400'
+  if (action === 'login' || action === 'logout') return 'bg-slate-700 text-slate-300'
+  if (action === 'settings.credentials_update' || action === 'org.upgrade') return 'bg-amber-500/15 text-amber-400'
+  return 'bg-blue-500/15 text-blue-400'
+}
 
 const ROLES = ['superadmin', 'admin', 'agent']
 const PLANS = ['free', 'starter', 'pro', 'enterprise']
@@ -133,10 +167,23 @@ export default function Admin() {
     navigate(`${path}?org=${org.id}&orgName=${encodeURIComponent(org.name)}`)
   }
 
+  const [auditLog, setAuditLog] = useState([])
+  const [auditLoading, setAuditLoading] = useState(false)
+  const [auditFilterOrg, setAuditFilterOrg] = useState('')
+  const [auditFilterAction, setAuditFilterAction] = useState('')
+
   const loadOrgs = () => getOrganizations().then(setOrgs).catch(() => {})
   const loadUsers = () => getUsers().then(setUsers).catch(() => {})
+  const loadAuditLog = () => {
+    setAuditLoading(true)
+    const params = {}
+    if (auditFilterOrg) params.organization_id = auditFilterOrg
+    if (auditFilterAction) params.action = auditFilterAction
+    getAuditLog(params).then(setAuditLog).catch(() => setAuditLog([])).finally(() => setAuditLoading(false))
+  }
 
   useEffect(() => { loadOrgs(); loadUsers() }, [])
+  useEffect(() => { if (tab === 'audit') loadAuditLog() }, [tab, auditFilterOrg, auditFilterAction])
 
   const handleDeleteUser = async (user) => {
     if (!confirm(`¿Eliminar permanentemente a "${user.full_name}" (${user.email})?`)) return
@@ -162,7 +209,7 @@ export default function Admin() {
       <h1 className="text-2xl font-bold text-slate-100">Panel de Administración</h1>
 
       <div className="flex gap-1 bg-black/30 rounded-lg p-1 w-fit border border-z-border">
-        {[['orgs', 'Organizaciones'], ['users', 'Usuarios']].map(([key, label]) => (
+        {[['orgs', 'Organizaciones'], ['users', 'Usuarios'], ['audit', 'Audit Log']].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
               tab === key ? 'bg-z-card text-slate-100 shadow' : 'text-slate-500 hover:text-slate-300'
@@ -342,6 +389,60 @@ export default function Admin() {
                 {users.length === 0 && (
                   <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-500">No hay usuarios</td></tr>
                 )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'audit' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center flex-wrap gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-slate-200">Audit Log</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Cada entrada se elimina automáticamente a los 60 días.</p>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <select value={auditFilterOrg} onChange={e => setAuditFilterOrg(e.target.value)} className="z-input w-auto text-sm">
+                <option value="">Todas las organizaciones</option>
+                {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </select>
+              <select value={auditFilterAction} onChange={e => setAuditFilterAction(e.target.value)} className="z-input w-auto text-sm">
+                <option value="">Todas las acciones</option>
+                {Object.entries(AUDIT_ACTION_LABELS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-black/20">
+                <tr>
+                  {['Fecha', 'Usuario', 'Organización', 'Acción', 'Detalles', 'IP'].map(h => (
+                    <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-z-border">
+                {auditLoading ? (
+                  <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-500">Cargando...</td></tr>
+                ) : auditLog.length === 0 ? (
+                  <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-500">Sin entradas</td></tr>
+                ) : auditLog.map(entry => (
+                  <tr key={entry.id} className="hover:bg-white/[0.02]">
+                    <td className="px-6 py-3 text-slate-500 text-xs whitespace-nowrap">{fmtDate(entry.created_at)}</td>
+                    <td className="px-6 py-3 text-slate-300 text-xs">{entry.user_email || '—'}</td>
+                    <td className="px-6 py-3 text-slate-500 text-xs">{entry.organization_name || '—'}</td>
+                    <td className="px-6 py-3">
+                      <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${AUDIT_ACTION_COLOR(entry.action)}`}>
+                        {AUDIT_ACTION_LABELS[entry.action] || entry.action}
+                      </span>
+                    </td>
+                    <td className="px-6 py-3 text-slate-400 text-xs max-w-[320px] truncate" title={entry.details}>{entry.details || '—'}</td>
+                    <td className="px-6 py-3 text-slate-600 text-xs font-mono">{entry.ip_address || '—'}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
