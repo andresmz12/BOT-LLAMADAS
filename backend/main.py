@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from database import create_db_and_tables, run_migrations, seed_initial_data, engine
-from routes import agents, campaigns, prospects, calls, stats, webhook, settings, leads
+from routes import agents, campaigns, prospects, calls, stats, webhook, settings, leads, email_marketing
 from routes import auth, admin
 from routes import demo
 from routes import whatsapp_webhook
@@ -159,7 +159,7 @@ async def _run_scheduled_email(job_id: int):
             import json, base64 as _b64
             from datetime import datetime as _dt
             from services.sendgrid_service import _fill, _build_html, DEFAULT_SUBJECT
-            from routes.settings import _unsub_url
+            from routes.email_marketing import _unsub_url
             from sendgrid import SendGridAPIClient
             from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition, CustomArg
 
@@ -398,7 +398,7 @@ async def lifespan(app: FastAPI):
         from sqlmodel import Session as _S2, select as _sel2
         from sqlalchemy import update as _bulk_upd
         from models import BulkEmailJob as _BulkEmailJob, Organization as _Org
-        from routes.settings import _run_bulk_send_job as _resume_bulk_job
+        from routes.email_marketing import _run_bulk_send_job as _resume_bulk_job
         STALE_AFTER = _timedelta(seconds=120)
         with _S2(engine) as s:
             cutoff = datetime.utcnow() - STALE_AFTER
@@ -519,6 +519,7 @@ app.include_router(whatsapp_webhook.router)
 app.include_router(whatsapp.router)
 app.include_router(team.router)
 app.include_router(settings.router)
+app.include_router(email_marketing.router)
 app.include_router(leads.router)
 app.include_router(lead_hunter.router)
 app.include_router(marketing.router)

@@ -72,7 +72,7 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
         signature = _fill(tmpl.get("signature") or f"El equipo de {tmpl_vars['agente']}", tmpl_vars)
 
         try:
-            from routes.settings import _unsub_url
+            from routes.email_marketing import _unsub_url
             unsub = _unsub_url(prospect.id, org.id)
         except Exception:
             unsub = ""
