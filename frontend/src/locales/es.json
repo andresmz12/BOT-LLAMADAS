@@ -11,7 +11,11 @@
     "settings": "Configuración",
     "admin": "Admin Panel",
     "logout": "Cerrar sesión",
-    "demoCall": "Llamada Demo"
+    "demoCall": "Llamada Demo",
+    "marketing": "Marketing IA",
+    "emailMarketing": "Email Marketing",
+    "leadHunter": "Lead Hunter",
+    "leadHunterConfig": "Configuración"
   },
   "dashboard": {
     "title": "Dashboard",
@@ -47,7 +51,12 @@
     },
     "made": "Realizadas",
     "contacted2": "Contactados",
-    "interested2": "Interesados"
+    "interested2": "Interesados",
+    "callsTab": "Llamadas",
+    "callsLabel": "Llamadas",
+    "emailTab": "Email Marketing",
+    "minutesUsedMonth": "Minutos usados este mes",
+    "limitReached": "⚠ Límite alcanzado — las campañas están pausadas. Contacta soporte."
   },
   "agents": {
     "title": "Agentes de Voz",
@@ -322,10 +331,13 @@
     "fullNamePlaceholder": "Juan Pérez",
     "companyName": "Nombre de la empresa",
     "companyNamePlaceholder": "Mi Empresa S.A.",
+    "phone": "Teléfono",
+    "phonePlaceholder": "+52 55 1234 5678",
     "minPassword": "Mínimo 6 caracteres",
     "passwordTooShort": "La contraseña debe tener al menos 6 caracteres.",
     "loginError": "Error al iniciar sesión",
     "registerError": "Error al crear cuenta",
+    "setupError": "Error al configurar",
     "loggingIn": "Entrando...",
     "registering": "Creando cuenta...",
     "createAccount": "Crear cuenta gratis",
