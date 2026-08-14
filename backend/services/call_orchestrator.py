@@ -31,8 +31,14 @@ def build_system_prompt(agent_config: AgentConfig) -> str:
     audience = agent_config.target_audience or ""
     custom_obj = agent_config.custom_objections or ""
 
+    # Never reachable from the agent form — instructions has no UI field — but
+    # still accepted by the API, so keep it out of the prompt rather than
+    # printing an empty section header on every single call.
+    instructions = (agent_config.instructions or "").strip()
+
     if is_english:
         audience_section = f"\nIDEAL CUSTOMER:\n{audience}\n" if audience else ""
+        instructions_section = f"\nADDITIONAL INSTRUCTIONS:\n{instructions}\n" if instructions else ""
         objective_map = {
             "agendar_cita": "Schedule a concrete meeting or call with a specific date and time.",
             "calificar_interes": "Qualify the prospect's interest level and identify their main need. If interested, propose a follow-up.",
@@ -51,10 +57,7 @@ ABOUT THE COMPANY:
 {audience_section}
 SERVICES WE OFFER:
 {agent_config.services}
-
-ADDITIONAL INSTRUCTIONS:
-{agent_config.instructions}
-
+{instructions_section}
 CALL FLOW — follow this structure naturally, do not read it like a script:
 
 1. OPENING: Confirm you are speaking with the right person.
@@ -90,6 +93,7 @@ IMPORTANT RULES:
 """
     else:
         audience_section = f"\nCLIENTE IDEAL:\n{audience}\n" if audience else ""
+        instructions_section = f"\nINSTRUCCIONES ADICIONALES:\n{instructions}\n" if instructions else ""
         objective_map = {
             "agendar_cita": "Agenda una cita o llamada con fecha y hora concretas. Ese es el único objetivo del cierre.",
             "calificar_interes": "Califica el nivel de interés y detecta la necesidad principal. Si hay interés, propón un siguiente paso claro.",
@@ -124,10 +128,7 @@ SOBRE LA EMPRESA:
 {audience_section}
 SERVICIOS QUE OFRECEMOS:
 {agent_config.services}
-
-INSTRUCCIONES ADICIONALES:
-{agent_config.instructions}
-
+{instructions_section}
 FLUJO DE LA LLAMADA — sigue esta estructura de forma natural, no la leas como guión:
 
 1. APERTURA: Confirma que hablas con la persona correcta.
@@ -295,7 +296,6 @@ async def _run_campaign_loop(campaign_id: int):
                 "voice_id": agent_config.voice_id or "retell-Andrea",
                 "calls_per_minute": max(1, campaign.calls_per_minute or 10),
                 "sequential_calls": bool(campaign.sequential_calls),
-                "voicemail_message": agent_config.voicemail_message or "",
                 "max_call_duration": agent_config.max_call_duration or 180,
             }
             logger.info(
@@ -318,7 +318,6 @@ async def _run_campaign_loop(campaign_id: int):
                 prospect_custom_context=call_info.get("custom_context"),
                 api_key=call_info["api_key"],
                 from_number=call_info["from_number"],
-                voicemail_message=call_info["voicemail_message"],
             )
             retell_call_id = result.get("call_id", "")
             logger.info(

@@ -162,7 +162,7 @@ async def sync_to_retell(
 ) -> tuple[str, str, Optional[str], Optional[str]]:
     """Creates or updates Retell agents for outbound (and optionally inbound).
     Returns (outbound_agent_id, outbound_llm_id, inbound_agent_id, inbound_llm_id)."""
-    from services.call_orchestrator import build_system_prompt
+    from services.call_orchestrator import build_system_prompt, is_bilingual
 
     if not api_key or not phone_number:
         api_key_env, phone_env = _get_credentials(agent_config.organization_id)
@@ -175,7 +175,6 @@ async def sync_to_retell(
     headers = {"Authorization": f"Bearer {api_key}"}
     voice_id = agent_config.voice_id or "retell-Andrea"
     lang = (agent_config.language or "español").lower()
-    from services.call_orchestrator import is_bilingual
 
     # "es-419" is Latin American Spanish. The agent's voices are Mexican and the
     # prospects are US/LatAm, so es-ES (Castilian) was the wrong locale for both
@@ -398,7 +397,6 @@ async def create_call_direct(
     prospect_custom_context: str = None,
     api_key: str = "",
     from_number: str = "",
-    voicemail_message: str = "",
 ) -> dict:
     """Like create_call but takes individual values — avoids detached SQLModel instance issues."""
     if not api_key or not from_number:
@@ -421,9 +419,10 @@ async def create_call_direct(
             **custom_vars,
         },
     }
-    # NOTE: "voicemail_message" is not a field on /v2/create-phone-call — Retell
-    # silently ignored it. Voicemail behaviour comes from the agent's
-    # voicemail_option, set during sync_to_retell.
+    # Voicemail behaviour is NOT set per-call — it comes from the agent's
+    # voicemail_option, configured once during sync_to_retell. There is no
+    # "voicemail_message" field on /v2/create-phone-call (Retell used to
+    # silently ignore it when this code sent it).
 
     headers = {"Authorization": f"Bearer {api_key}"}
     async with httpx.AsyncClient(timeout=30) as client:
