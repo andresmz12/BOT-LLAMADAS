@@ -226,7 +226,8 @@ async def craft_lead_message(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error de IA: {str(e)[:200]}")
+        from services.anthropic_errors import friendly_anthropic_error
+        raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
     return _lead_dict(lead)
 
 

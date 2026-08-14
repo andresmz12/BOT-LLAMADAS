@@ -285,7 +285,8 @@ async def generate_copy(
         )
         return {"text": msg.content[0].text.strip()}
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error Claude: {str(e)[:200]}")
+        from services.anthropic_errors import friendly_anthropic_error
+        raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
 
 
 # ── 4. Calendario de Contenido — Claude ──────────────────────────────────────
@@ -343,4 +344,5 @@ async def generate_calendar(
     except json.JSONDecodeError:
         raise HTTPException(status_code=502, detail="Claude no devolvió JSON válido. Intenta de nuevo.")
     except Exception as e:
-        raise HTTPException(status_code=502, detail=f"Error Claude: {str(e)[:200]}")
+        from services.anthropic_errors import friendly_anthropic_error
+        raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
