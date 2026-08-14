@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PencilIcon, TrashIcon, StarIcon, ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon, PhoneArrowDownLeftIcon, DocumentDuplicateIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PencilIcon, TrashIcon, StarIcon, ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon, PhoneArrowDownLeftIcon, DocumentDuplicateIcon, UserGroupIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { getAgents, deleteAgent, setDefaultAgent, syncAgent } from '../api/client'
 import AgentFormModal from '../components/AgentFormModal'
@@ -42,7 +42,10 @@ export default function Agents() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-100">Agentes de Voz</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Agentes de Voz</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Configura y sincroniza los agentes de IA que hacen tus llamadas</p>
+        </div>
         <button onClick={() => setModal('new')} className="z-btn-primary flex items-center gap-2 self-start sm:self-auto">
           <PlusIcon className="w-4 h-4" /> Nuevo Agente
         </button>
@@ -119,7 +122,10 @@ export default function Agents() {
           </div>
         ))}
         {agents.length === 0 && (
-          <div className="col-span-3 text-center py-16 text-slate-500">No hay agentes configurados</div>
+          <div className="col-span-full text-center py-16">
+            <UserGroupIcon className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-40" />
+            <p className="text-slate-500 text-sm">No hay agentes configurados. Crea tu primer agente para empezar a llamar.</p>
+          </div>
         )}
       </div>
 
