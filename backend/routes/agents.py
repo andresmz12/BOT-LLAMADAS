@@ -135,6 +135,26 @@ def list_agents(
     return [a.dict(exclude={"campaigns"}) for a in session.exec(query).all()]
 
 
+@router.get("/voices")
+async def list_voices(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """Retell's live voice catalog, so the agent form isn't stuck on a
+    hardcoded list that predates newer, more natural voices."""
+    from services import retell_client
+
+    org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
+    api_key = ((org.retell_api_key if org else "") or "").strip()
+    try:
+        return await retell_client.list_voices(api_key=api_key)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"[Agents] list_voices failed: {e}", exc_info=True)
+        raise HTTPException(status_code=502, detail="No se pudo obtener el catálogo de voces de Retell")
+
+
 @router.get("/{agent_id}")
 def get_agent(
     agent_id: int,
