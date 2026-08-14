@@ -3,13 +3,14 @@ import io
 import re
 import unicodedata
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, BackgroundTasks
 from sqlmodel import Session, select
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from database import get_session
 from models import Prospect, Campaign, AgentConfig, Call, User, Organization
 from routes.auth import get_current_user, require_write_access, require_pro_plan
+from services.notification_emails import send_notification_email
 
 router = APIRouter(prefix="/prospects", tags=["prospects"])
 
@@ -156,6 +157,7 @@ def create_prospect(
 
 @router.post("/import")
 async def import_file(
+    background_tasks: BackgroundTasks,
     campaign_id: int = Form(...),
     file: UploadFile = File(...),
     phone_country_code: str = Form(default="+1"),
@@ -237,6 +239,19 @@ async def import_file(
         ))
         imported += 1
     session.commit()
+
+    if imported > 0 and current_user.organization_id:
+        org = session.get(Organization, current_user.organization_id)
+        background_tasks.add_task(
+            send_notification_email,
+            org=org,
+            to_email=current_user.email,
+            subject=f"Prospectos importados: {imported}",
+            greeting=f"Hola {current_user.full_name},",
+            body=f"Importaste {imported} prospectos desde \"{file.filename}\"" + (
+                f" ({skipped_existing} se omitieron por estar duplicados)." if skipped_existing else "."
+            ),
+        )
     return {"imported": imported, "skipped_existing": skipped_existing}
 
 

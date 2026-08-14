@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel, field_validator
 from sqlmodel import Session, select
 from typing import Optional
@@ -6,6 +6,7 @@ from database import get_session
 from models import User, Organization
 from routes.auth import get_current_user, require_write_access
 from services.auth import hash_password
+from services.notification_emails import send_notification_email
 
 router = APIRouter(prefix="/team", tags=["team"])
 
@@ -73,6 +74,7 @@ def list_team(
 @router.post("")
 def create_team_member(
     data: TeamMemberCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(_require_admin),
     session: Session = Depends(get_session),
 ):
@@ -91,6 +93,16 @@ def create_team_member(
     session.add(user)
     session.commit()
     session.refresh(user)
+
+    org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
+    background_tasks.add_task(
+        send_notification_email,
+        org=org,
+        to_email=current_user.email,
+        subject=f"Nuevo asesor agregado: {user.full_name}",
+        greeting=f"Hola {current_user.full_name},",
+        body=f"Agregaste a {user.full_name} ({user.email}) como {user.role} a tu equipo en ZyraVoice.",
+    )
     return {"id": user.id, "email": user.email, "full_name": user.full_name, "role": user.role}
 
 

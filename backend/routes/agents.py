@@ -1,13 +1,14 @@
 import os
 import json
 import logging
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from sqlmodel import Session, select
 from pydantic import BaseModel
 from typing import Optional
 from database import get_session
 from models import AgentConfig, Campaign, User, Organization
 from routes.auth import get_current_user, require_write_access, require_superadmin
+from services.notification_emails import send_notification_email
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agents", tags=["agents"])
@@ -115,6 +116,7 @@ def _compute_score(agent) -> tuple[int, list[str]]:
 @router.post("")
 def create_agent(
     data: AgentCreate,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
@@ -123,6 +125,17 @@ def create_agent(
     session.add(agent)
     session.commit()
     session.refresh(agent)
+
+    if org_id:
+        org = session.get(Organization, org_id)
+        background_tasks.add_task(
+            send_notification_email,
+            org=org,
+            to_email=current_user.email,
+            subject=f"Agente creado: {agent.agent_name}",
+            greeting=f"Hola {current_user.full_name},",
+            body=f"Creaste el agente \"{agent.agent_name}\" para {agent.company_name}. Sincronízalo con Retell para empezar a usarlo.",
+        )
     return agent.dict(exclude={"campaigns"})
 
 
@@ -320,6 +333,7 @@ def update_agent(
 @router.post("/{agent_id}/sync")
 async def sync_agent(
     agent_id: int,
+    background_tasks: BackgroundTasks,
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
@@ -349,6 +363,15 @@ async def sync_agent(
         session.commit()
         session.refresh(agent)
         logger.info(f"POST /agents/{agent_id}/sync — OK out={out_agent_id} in={in_agent_id}")
+        if org:
+            background_tasks.add_task(
+                send_notification_email,
+                org=org,
+                to_email=current_user.email,
+                subject=f"Agente sincronizado: {agent.agent_name}",
+                greeting=f"Hola {current_user.full_name},",
+                body=f"El agente \"{agent.agent_name}\" quedó sincronizado con Retell y ya puede recibir/hacer llamadas.",
+            )
     except Exception as e:
         retell_error = str(e)
         logger.error(f"POST /agents/{agent_id}/sync — error: {retell_error}")
