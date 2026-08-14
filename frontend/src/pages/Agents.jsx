@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PencilIcon, TrashIcon, StarIcon, ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon, PhoneArrowDownLeftIcon, DocumentDuplicateIcon, UserGroupIcon } from '@heroicons/react/24/outline'
+import { useNavigate } from 'react-router-dom'
+import { PlusIcon, PencilIcon, TrashIcon, StarIcon, ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon, PhoneArrowDownLeftIcon, DocumentDuplicateIcon, UserGroupIcon, PhoneIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
 import { getAgents, deleteAgent, setDefaultAgent, syncAgent } from '../api/client'
 import AgentFormModal from '../components/AgentFormModal'
 
 export default function Agents() {
+  const navigate = useNavigate()
   const [agents, setAgents] = useState([])
   const [modal, setModal] = useState(null)
   const [syncingId, setSyncingId] = useState(null)
@@ -105,6 +107,14 @@ export default function Agents() {
               >
                 <ArrowPathIcon className={`w-3.5 h-3.5 ${syncingId === agent.id ? 'animate-spin' : ''}`} />
                 {syncingId === agent.id ? 'Sincronizando...' : 'Sincronizar'}
+              </button>
+              <button
+                onClick={() => navigate(`/demo?agent=${agent.id}`)}
+                disabled={!agent.retell_agent_id}
+                title={agent.retell_agent_id ? 'Escuchar una llamada demo con este agente' : 'Sincroniza el agente primero'}
+                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/10 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <PhoneIcon className="w-3.5 h-3.5" /> Probar
               </button>
               <button onClick={() => setModal(agent)}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-slate-400 border border-z-border rounded-lg hover:bg-white/[0.04]">
