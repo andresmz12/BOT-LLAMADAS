@@ -31,7 +31,7 @@ const INDUSTRIES = [
 const CRM_LOGOS = ['Monday.com', 'HubSpot', 'GoHighLevel', 'Zoho CRM', 'Salesforce']
 
 const ISM_WHATSAPP = 'https://wa.me/573001234567'
-const SUPPORT_EMAIL = 'soporte@ismconsulting.com'
+const SUPPORT_EMAIL = 'info@ismconsultores.com'
 
 function GridBackdrop() {
   return (

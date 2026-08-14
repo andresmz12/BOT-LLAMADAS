@@ -1,6 +1,6 @@
 import { LockClosedIcon, EnvelopeIcon } from '@heroicons/react/24/outline'
 
-const SUPPORT_EMAIL = "soporte@ismconsulting.com"
+const SUPPORT_EMAIL = "info@ismconsultores.com"
 const SUPPORT_WHATSAPP = "https://wa.me/13056061812"
 
 export default function UpgradeBanner({ demosUsed = 0, demosTotal = 10, compact = false }) {
