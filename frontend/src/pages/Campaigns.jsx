@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { PlusIcon, PlayIcon, PauseIcon, TrashIcon, XMarkIcon, PencilSquareIcon } from '@heroicons/react/24/outline'
+import { PlusIcon, PlayIcon, PauseIcon, TrashIcon, XMarkIcon, PencilSquareIcon, MegaphoneIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import UpgradeBanner from '../components/UpgradeBanner'
 import { getCampaigns, createCampaign, updateCampaign, startCampaign, pauseCampaign, deleteCampaign, getAgents, getDemoStatus } from '../api/client'
@@ -39,7 +39,10 @@ export default function Campaigns() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-100">Campañas</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Campañas</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Organiza tus llamadas salientes en campañas con ritmo controlado</p>
+        </div>
         {!isFree && (
           <button onClick={() => setShowModal(true)} className="z-btn-primary flex items-center gap-2 self-start sm:self-auto">
             <PlusIcon className="w-4 h-4" /> Nueva Campaña
@@ -122,7 +125,10 @@ export default function Campaigns() {
               )
             })}
             {campaigns.length === 0 && (
-              <tr><td colSpan={8} className="px-6 py-12 text-center text-slate-500">No hay campañas creadas</td></tr>
+              <tr><td colSpan={8} className="px-6 py-12 text-center">
+                <MegaphoneIcon className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-40" />
+                <p className="text-slate-500 text-sm">No hay campañas creadas. Crea una para empezar a marcar prospectos.</p>
+              </td></tr>
             )}
           </tbody>
         </table>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { TrashIcon, PhoneArrowUpRightIcon, ChevronRightIcon, XMarkIcon, ForwardIcon } from '@heroicons/react/24/outline'
+import { TrashIcon, PhoneArrowUpRightIcon, ChevronRightIcon, XMarkIcon, ForwardIcon, PhoneIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import CallDetailModal from '../components/CallDetailModal'
 import { getCalls, getCallDetail, getCampaigns, deleteCalls, callProspect } from '../api/client'
@@ -108,7 +108,10 @@ export default function Calls() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-100">Llamadas</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Llamadas</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Historial y resultados de todas las llamadas realizadas</p>
+        </div>
         {calls.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {calls.some(c => c.prospect_id && !c.is_demo) && (
@@ -194,7 +197,10 @@ export default function Calls() {
               </tr>
             ))}
             {calls.length === 0 && (
-              <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-500">No hay llamadas registradas</td></tr>
+              <tr><td colSpan={10} className="px-6 py-12 text-center">
+                <PhoneIcon className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-40" />
+                <p className="text-slate-500 text-sm">No hay llamadas registradas todavía.</p>
+              </td></tr>
             )}
           </tbody>
         </table>

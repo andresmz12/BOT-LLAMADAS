@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon, ClockIcon, ArrowDownTrayIcon, MagnifyingGlassIcon, SparklesIcon } from '@heroicons/react/24/outline'
+import { ArrowUpTrayIcon, TrashIcon, PlusIcon, XMarkIcon, PhoneArrowUpRightIcon, ArrowPathIcon, ClockIcon, ArrowDownTrayIcon, MagnifyingGlassIcon, SparklesIcon, UsersIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import ImportCSVModal from '../components/ImportCSVModal'
 import UpgradeBanner from '../components/UpgradeBanner'
@@ -251,7 +251,10 @@ export default function Prospects() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <h1 className="text-2xl font-bold text-slate-100">Prospectos</h1>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-100">Prospectos</h1>
+          <p className="text-sm text-slate-500 mt-0.5">Importa y gestiona los contactos que tus agentes van a llamar</p>
+        </div>
         <div className="flex flex-wrap gap-2">
           {prospects.length > 0 && (
             <button onClick={handleExportCsv}
@@ -369,7 +372,10 @@ export default function Prospects() {
               </tr>
             ))}
             {prospects.length === 0 && (
-              <tr><td colSpan={10} className="px-6 py-12 text-center text-slate-500">No hay prospectos</td></tr>
+              <tr><td colSpan={10} className="px-6 py-12 text-center">
+                <UsersIcon className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-40" />
+                <p className="text-slate-500 text-sm">No hay prospectos. Impórtalos desde un CSV o agrégalos manualmente.</p>
+              </td></tr>
             )}
           </tbody>
         </table>
