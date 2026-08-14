@@ -1,6 +1,7 @@
 import httpx
 import logging
 from datetime import datetime
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select
 from database import get_session
@@ -31,6 +32,7 @@ def demo_status(
 
 @router.post("/start-call")
 async def start_demo_call(
+    agent_id: Optional[int] = None,
     current_user: User = Depends(get_current_user),
     session: Session = Depends(get_session),
 ):
@@ -45,9 +47,16 @@ async def start_demo_call(
             detail="DEMO_LIMIT: Has usado todas tus llamadas demo. Contacta soporte para activar el plan Pro."
         )
 
-    agent = session.exec(
-        select(AgentConfig).where(AgentConfig.organization_id == current_user.organization_id)
-    ).first()
+    if agent_id is not None:
+        # Demo a specific agent (e.g. one just created/edited) instead of always
+        # falling back to whichever agent the org made first.
+        agent = session.get(AgentConfig, agent_id)
+        if not agent or (current_user.role != "superadmin" and agent.organization_id != current_user.organization_id):
+            raise HTTPException(status_code=404, detail="Agente no encontrado")
+    else:
+        agent = session.exec(
+            select(AgentConfig).where(AgentConfig.organization_id == current_user.organization_id)
+        ).first()
 
     if not agent or not agent.retell_agent_id:
         raise HTTPException(
