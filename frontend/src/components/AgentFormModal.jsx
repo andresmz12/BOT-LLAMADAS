@@ -418,65 +418,72 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">
-                Voz del agente
-                {voicesLoading && <span className="ml-2 text-xs text-slate-500">cargando catálogo…</span>}
-              </label>
-              <div className="flex gap-2">
-                <select
-                  className="z-input flex-1"
-                  value={form.voice_id || 'retell-Andrea'}
-                  onChange={e => set('voice_id', e.target.value)}
-                >
-                  {voiceOptions.map(v => (
-                    <option key={v.value} value={v.value}>{v.label}</option>
-                  ))}
-                </select>
-                <button
-                  type="button"
-                  onClick={playPreview}
-                  disabled={!previewUrl}
-                  title={previewUrl ? 'Escuchar muestra' : 'Esta voz no tiene muestra'}
-                  className="z-btn-ghost px-3 disabled:opacity-40"
-                >
-                  ▶
-                </button>
+          {/* Voice & call behavior section */}
+          <div className="border border-z-border rounded-xl overflow-hidden">
+            <div className="px-4 py-3 bg-black/20 border-b border-z-border">
+              <h3 className="text-sm font-medium text-slate-300">Voz y comportamiento</h3>
+              <p className="text-xs text-slate-500 mt-0.5">Cómo suena el agente y cómo se comporta durante la llamada.</p>
+            </div>
+            <div className="p-4 space-y-3">
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                  Voz del agente
+                  {voicesLoading && <span className="ml-2 text-xs text-slate-500">cargando catálogo…</span>}
+                </label>
+                <div className="flex gap-2">
+                  <select
+                    className="z-input flex-1"
+                    value={form.voice_id || 'retell-Andrea'}
+                    onChange={e => set('voice_id', e.target.value)}
+                  >
+                    {voiceOptions.map(v => (
+                      <option key={v.value} value={v.value}>{v.label}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    onClick={playPreview}
+                    disabled={!previewUrl}
+                    title={previewUrl ? 'Escuchar muestra' : 'Esta voz no tiene muestra'}
+                    className="z-btn-ghost px-3 disabled:opacity-40"
+                  >
+                    ▶
+                  </button>
+                </div>
+                {voicesError && (
+                  <p className="text-xs text-amber-400 mt-1">
+                    No se pudo cargar el catálogo de Retell — mostrando la lista básica.
+                  </p>
+                )}
               </div>
-              {voicesError && (
-                <p className="text-xs text-amber-400 mt-1">
-                  No se pudo cargar el catálogo de Retell — mostrando la lista básica.
-                </p>
-              )}
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Temperatura del modelo</label>
-              <select className="z-input" value={form.temperature ?? 0.4} onChange={e => set('temperature', parseFloat(e.target.value))}>
-                {TEMPERATURES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-              </select>
+
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Idioma</label>
+                  <select className="z-input" value={form.language} onChange={e => set('language', e.target.value)}>
+                    <option value="español">Español (Latam)</option>
+                    <option value="english">English (US)</option>
+                    <option value="bilingüe">Bilingüe</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Temperatura</label>
+                  <select className="z-input" value={form.temperature ?? 0.4} onChange={e => set('temperature', parseFloat(e.target.value))}>
+                    {TEMPERATURES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                  </select>
+                </div>
+                <Field label="Duración máx. (seg)" type="number" value={form.max_call_duration} onChange={v => set('max_call_duration', Number(v))} />
+              </div>
+
+              <TextArea
+                label="Mensaje de voicemail"
+                value={form.voicemail_message || ''}
+                onChange={v => set('voicemail_message', v)}
+                placeholder={`Hola, le llama ${form.agent_name || 'el agente'} de ${form.company_name || 'la empresa'}. Por favor comuníquese con nosotros cuando pueda. Gracias.`}
+                rows={2}
+              />
             </div>
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Idioma</label>
-              <select className="z-input" value={form.language} onChange={e => set('language', e.target.value)}>
-                <option value="español">Español (Latinoamérica)</option>
-                <option value="english">English (US)</option>
-                <option value="bilingüe">Bilingüe — abre en español y sigue al cliente</option>
-              </select>
-            </div>
-            <Field label="Duración máx. (seg)" type="number" value={form.max_call_duration} onChange={v => set('max_call_duration', Number(v))} />
-          </div>
-
-          <TextArea
-            label="Mensaje de voicemail"
-            value={form.voicemail_message || ''}
-            onChange={v => set('voicemail_message', v)}
-            placeholder={`Hola, le llama ${form.agent_name || 'el agente'} de ${form.company_name || 'la empresa'}. Por favor comuníquese con nosotros cuando pueda. Gracias.`}
-            rows={2}
-          />
 
           {/* Outbound / Inbound tabs */}
           <div className="border border-z-border rounded-xl overflow-hidden">
