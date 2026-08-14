@@ -175,9 +175,23 @@ async def sync_to_retell(
     headers = {"Authorization": f"Bearer {api_key}"}
     voice_id = agent_config.voice_id or "retell-Andrea"
     lang = (agent_config.language or "español").lower()
-    retell_language = "en-US" if ("english" in lang or lang == "en") else "es-ES"
+    from services.call_orchestrator import is_bilingual
+
+    # "es-419" is Latin American Spanish. The agent's voices are Mexican and the
+    # prospects are US/LatAm, so es-ES (Castilian) was the wrong locale for both
+    # recognition and pronunciation.
+    if is_bilingual(lang):
+        # Array form is the supported way to declare several concrete locales;
+        # the scalar "multi" is legacy. Spanish first — the agent opens in it.
+        retell_language = ["es-419", "en-US"]
+    elif "english" in lang or lang == "en":
+        retell_language = "en-US"
+    else:
+        retell_language = "es-419"
+
+    is_en_primary = retell_language == "en-US"
     backchannel_words = (
-        ["uh-huh", "I see", "right", "got it"] if retell_language == "en-US"
+        ["uh-huh", "I see", "right", "got it"] if is_en_primary
         else ["ajá", "claro", "entiendo", "sí"]
     )
 

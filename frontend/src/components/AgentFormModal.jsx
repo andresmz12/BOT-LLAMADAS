@@ -388,9 +388,9 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">Idioma</label>
               <select className="z-input" value={form.language} onChange={e => set('language', e.target.value)}>
-                <option value="español">Español</option>
-                <option value="english">English</option>
-                <option value="bilingüe">Bilingüe</option>
+                <option value="español">Español (Latinoamérica)</option>
+                <option value="english">English (US)</option>
+                <option value="bilingüe">Bilingüe — abre en español y sigue al cliente</option>
               </select>
             </div>
             <Field label="Duración máx. (seg)" type="number" value={form.max_call_duration} onChange={v => set('max_call_duration', Number(v))} />
