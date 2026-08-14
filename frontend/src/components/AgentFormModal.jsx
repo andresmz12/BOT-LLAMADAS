@@ -1,6 +1,6 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon, DocumentArrowUpIcon, ExclamationTriangleIcon, EyeIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline'
-import { createAgent, updateAgent, syncAgent, uploadKnowledgeBase, getAgentPromptPreview } from '../api/client'
+import { createAgent, updateAgent, syncAgent, uploadKnowledgeBase, getAgentPromptPreview, listVoices } from '../api/client'
 
 const VOICES = [
   { value: 'retell-Andrea',    label: 'Andrea (Mexicana · Adulta)' },
@@ -106,6 +106,47 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewData, setPreviewData] = useState(null)
   const [previewLoading, setPreviewLoading] = useState(false)
+
+  // Voice catalog — pulled live from Retell so new voices show up on their own.
+  const [voices, setVoices] = useState([])
+  const [voicesLoading, setVoicesLoading] = useState(true)
+  const [voicesError, setVoicesError] = useState(false)
+  const audioRef = useRef(null)
+
+  useEffect(() => {
+    let cancelled = false
+    listVoices()
+      .then(data => {
+        if (cancelled) return
+        setVoices(Array.isArray(data) ? data : [])
+        setVoicesError(false)
+      })
+      .catch(() => { if (!cancelled) setVoicesError(true) })
+      .finally(() => { if (!cancelled) setVoicesLoading(false) })
+    return () => { cancelled = true }
+  }, [])
+
+  // Fall back to the built-in list if the catalog can't be reached, so the form
+  // still works when Retell is down or the key is missing.
+  const voiceOptions = voices.length
+    ? voices.map(v => ({
+        value: v.voice_id,
+        label: [
+          v.voice_name || v.voice_id,
+          [v.accent, v.gender, v.age].filter(Boolean).join(' · '),
+          v.provider,
+        ].filter(Boolean).join(' — '),
+      }))
+    : VOICES
+
+  const previewUrl = voices.find(v => v.voice_id === (form.voice_id || 'retell-Andrea'))?.preview_audio_url || ''
+
+  const playPreview = () => {
+    if (!previewUrl) return
+    if (audioRef.current) audioRef.current.pause()
+    audioRef.current = new Audio(previewUrl)
+    audioRef.current.play().catch(() => {})
+  }
 
   // KB state
   const [kbFile, setKbFile] = useState(null)
@@ -305,10 +346,35 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Voz del agente</label>
-              <select className="z-input" value={form.voice_id || 'retell-Andrea'} onChange={e => set('voice_id', e.target.value)}>
-                {VOICES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
-              </select>
+              <label className="block text-sm font-medium text-slate-300 mb-1">
+                Voz del agente
+                {voicesLoading && <span className="ml-2 text-xs text-slate-500">cargando catálogo…</span>}
+              </label>
+              <div className="flex gap-2">
+                <select
+                  className="z-input flex-1"
+                  value={form.voice_id || 'retell-Andrea'}
+                  onChange={e => set('voice_id', e.target.value)}
+                >
+                  {voiceOptions.map(v => (
+                    <option key={v.value} value={v.value}>{v.label}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={playPreview}
+                  disabled={!previewUrl}
+                  title={previewUrl ? 'Escuchar muestra' : 'Esta voz no tiene muestra'}
+                  className="z-btn-ghost px-3 disabled:opacity-40"
+                >
+                  ▶
+                </button>
+              </div>
+              {voicesError && (
+                <p className="text-xs text-amber-400 mt-1">
+                  No se pudo cargar el catálogo de Retell — mostrando la lista básica.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-300 mb-1">Temperatura del modelo</label>

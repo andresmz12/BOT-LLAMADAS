@@ -58,6 +58,7 @@ export const deleteAgent = (id) => api.delete(`/agents/${id}`).then(r => r.data)
 export const setDefaultAgent = (id) => api.post(`/agents/${id}/set-default`).then(r => r.data)
 export const syncAgent = (id) => api.post(`/agents/${id}/sync`).then(r => r.data)
 export const getAgentPromptPreview = (id) => api.get(`/agents/${id}/prompt-preview`).then(r => r.data)
+export const listVoices = () => api.get('/agents/voices').then(r => r.data)
 export const uploadKnowledgeBase = (id, file) => {
   const form = new FormData()
   form.append('file', file)

@@ -437,3 +437,36 @@ async def get_call(retell_call_id: str, api_key: str = "") -> dict:
         )
         resp.raise_for_status()
         return resp.json()
+
+
+async def list_voices(api_key: str = "") -> list[dict]:
+    """Fetch Retell's current voice catalog.
+
+    The agent form used to offer a hardcoded handful of voices, so newer and
+    more natural ones Retell has since added were unreachable.
+    """
+    if not api_key:
+        api_key, _ = _get_credentials()
+    if not api_key:
+        raise ValueError("Retell API key no configurada. Ve a Configuración.")
+
+    headers = {"Authorization": f"Bearer {api_key}"}
+    async with httpx.AsyncClient(timeout=30) as client:
+        resp = await client.get(f"{RETELL_API_URL}/list-voices", headers=headers)
+        if resp.status_code >= 400:
+            raise ValueError(f"Retell list-voices {resp.status_code}: {resp.text[:300]}")
+        data = resp.json()
+
+    voices = data if isinstance(data, list) else data.get("voices", [])
+    return [
+        {
+            "voice_id": v.get("voice_id", ""),
+            "voice_name": v.get("voice_name", ""),
+            "provider": v.get("provider", ""),
+            "gender": v.get("gender", ""),
+            "accent": v.get("accent") or "",
+            "age": v.get("age") or "",
+            "preview_audio_url": v.get("preview_audio_url") or "",
+        }
+        for v in voices if v.get("voice_id")
+    ]
