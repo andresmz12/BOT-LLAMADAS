@@ -409,5 +409,155 @@
     "duration": "Duración",
     "actions": "Acciones",
     "see": "Ver"
+  },
+  "landing": {
+    "nav": {
+      "features": "Características",
+      "how": "Cómo funciona",
+      "plans": "Planes",
+      "login": "Iniciar sesión",
+      "tryFree": "Probar gratis"
+    },
+    "hero": {
+      "badge": "IA de ventas · Disponible 24/7",
+      "titlePrefix": "El agente de ventas con IA que",
+      "titleHighlight": "nunca duerme",
+      "subtitle": "Automatiza tus llamadas, califica prospectos y llena tu CRM — sin intervención humana.",
+      "ctaPrimary": "Crear cuenta gratis",
+      "ctaSecondary": "Ver cómo funciona →",
+      "note": "Sin tarjeta de crédito · 10 llamadas demo gratis",
+      "mockup": {
+        "calls": "Llamadas",
+        "contacted": "Contactados",
+        "qualified": "Calificados",
+        "activeCampaigns": "Campañas activas",
+        "agentActive": "Agente activo"
+      }
+    },
+    "social": {
+      "poweredBy": "Impulsado por la misma IA que usan las empresas más avanzadas del mundo",
+      "integratedWith": "Integrado con las herramientas que ya usas"
+    },
+    "how": {
+      "title": "Cómo funciona",
+      "subtitle": "Tres pasos para automatizar tus ventas",
+      "steps": [
+        {
+          "title": "Crea tu agente",
+          "desc": "Configura el nombre, voz, instrucciones y personalidad de tu vendedor IA en minutos."
+        },
+        {
+          "title": "Sube tus prospectos",
+          "desc": "Importa tu lista en segundos desde un CSV. Filtra, prioriza y segmenta."
+        },
+        {
+          "title": "El bot llama solo",
+          "desc": "Clasifica resultados, agenda citas y actualiza tu CRM — sin intervención humana."
+        }
+      ]
+    },
+    "features": {
+      "title": "Todo lo que necesitas para cerrar más ventas",
+      "subtitle": "Sin contratar, sin entrenar, sin parar",
+      "items": [
+        {
+          "title": "Llamadas 24/7",
+          "desc": "Salientes y entrantes sin interrupciones. Tu agente nunca duerme ni se enferma."
+        },
+        {
+          "title": "Análisis con IA",
+          "desc": "Transcripción automática y clasificación de cada llamada según resultado."
+        },
+        {
+          "title": "CRM Nativo",
+          "desc": "Sincroniza con Monday, HubSpot, GoHighLevel, Zoho, Salesforce y más."
+        },
+        {
+          "title": "Dashboard en tiempo real",
+          "desc": "Métricas de contacto, tasas de conversión y rendimiento de campañas."
+        },
+        {
+          "title": "Multi-idioma",
+          "desc": "Español, inglés y más idiomas. Tu agente habla como tus clientes."
+        },
+        {
+          "title": "Buzón inteligente",
+          "desc": "Detecta buzones de voz y deja mensajes personalizados automáticamente."
+        }
+      ]
+    },
+    "industries": {
+      "title": "Diseñado para tu industria",
+      "subtitle": "ZyraVoice se adapta a cualquier sector que venda por teléfono",
+      "items": [
+        {
+          "name": "Logística y carga",
+          "desc": "Contacta embarcadores, actualiza tarifas y califica clientes de importación y exportación."
+        },
+        {
+          "name": "Bienes raíces",
+          "desc": "Filtra compradores y arrendatarios, agenda visitas y mantiene seguimiento de cada prospecto."
+        },
+        {
+          "name": "Seguros y finanzas",
+          "desc": "Califica pólizas, da seguimiento a cotizaciones y agenda citas con asesores."
+        }
+      ]
+    },
+    "pricing": {
+      "title": "Un plan a la medida de tu operación",
+      "subtitle": "Precios personalizados según tu volumen y necesidades",
+      "customized": "Personalizado",
+      "customizedSub": "según tus necesidades",
+      "starter": {
+        "label": "Starter",
+        "desc": "Para empezar a automatizar tu prospección con agentes de voz IA.",
+        "features": [
+          "Llamadas con agente de voz IA",
+          "1 agente de voz",
+          "CRM e importación CSV",
+          "Email marketing"
+        ],
+        "cta": "Solicitar cotización"
+      },
+      "pro": {
+        "label": "Pro",
+        "badge": "Más popular",
+        "desc": "Para equipos de ventas que quieren prospectar en automático y a escala.",
+        "features": [
+          "Agentes de voz ilimitados",
+          "Lead Hunter y campañas programadas",
+          "Email marketing avanzado",
+          "Reportes y KPIs en tiempo real",
+          "Soporte prioritario"
+        ],
+        "cta": "Solicitar cotización"
+      },
+      "enterprise": {
+        "label": "Enterprise",
+        "desc": "Para agencias y empresas con varias marcas y necesidades a medida.",
+        "features": [
+          "Volumen de llamadas a medida",
+          "Multi-organización y roles avanzados",
+          "Números propios y voces personalizadas",
+          "Integraciones y API dedicada",
+          "Gerente de cuenta y soporte prioritario"
+        ],
+        "cta": "Contactar ventas"
+      }
+    },
+    "finalCta": {
+      "titleLine1": "¿Listo para automatizar",
+      "titleLine2": "tu prospección?",
+      "subtitle": "Habla con nuestro equipo y configura el plan ideal para tu negocio.",
+      "cta": "Solicitar demo"
+    },
+    "footer": {
+      "poweredBy": "Powered by ISM Consulting Services",
+      "login": "Iniciar sesión",
+      "createAccount": "Crear cuenta",
+      "contact": "Contacto",
+      "whatsapp": "WhatsApp"
+    }
   }
 }

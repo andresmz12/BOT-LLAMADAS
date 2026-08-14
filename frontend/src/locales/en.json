@@ -409,5 +409,155 @@
     "duration": "Duration",
     "actions": "Actions",
     "see": "View"
+  },
+  "landing": {
+    "nav": {
+      "features": "Features",
+      "how": "How it works",
+      "plans": "Plans",
+      "login": "Log in",
+      "tryFree": "Try for free"
+    },
+    "hero": {
+      "badge": "AI sales agent · Available 24/7",
+      "titlePrefix": "The AI sales agent that",
+      "titleHighlight": "never sleeps",
+      "subtitle": "Automate your calls, qualify prospects, and fill your CRM — with zero human intervention.",
+      "ctaPrimary": "Create free account",
+      "ctaSecondary": "See how it works →",
+      "note": "No credit card required · 10 free demo calls",
+      "mockup": {
+        "calls": "Calls",
+        "contacted": "Contacted",
+        "qualified": "Qualified",
+        "activeCampaigns": "Active campaigns",
+        "agentActive": "Agent active"
+      }
+    },
+    "social": {
+      "poweredBy": "Powered by the same AI the world's most advanced companies use",
+      "integratedWith": "Integrated with the tools you already use"
+    },
+    "how": {
+      "title": "How it works",
+      "subtitle": "Three steps to automate your sales",
+      "steps": [
+        {
+          "title": "Create your agent",
+          "desc": "Configure your AI salesperson's name, voice, instructions, and personality in minutes."
+        },
+        {
+          "title": "Upload your prospects",
+          "desc": "Import your list in seconds from a CSV. Filter, prioritize, and segment."
+        },
+        {
+          "title": "The bot calls on its own",
+          "desc": "Classifies outcomes, books appointments, and updates your CRM — with zero human intervention."
+        }
+      ]
+    },
+    "features": {
+      "title": "Everything you need to close more sales",
+      "subtitle": "No hiring, no training, no stopping",
+      "items": [
+        {
+          "title": "24/7 calling",
+          "desc": "Outbound and inbound with no downtime. Your agent never sleeps or calls in sick."
+        },
+        {
+          "title": "AI-powered analysis",
+          "desc": "Automatic transcription and classification of every call by outcome."
+        },
+        {
+          "title": "Native CRM sync",
+          "desc": "Syncs with Monday, HubSpot, GoHighLevel, Zoho, Salesforce, and more."
+        },
+        {
+          "title": "Real-time dashboard",
+          "desc": "Contact metrics, conversion rates, and campaign performance."
+        },
+        {
+          "title": "Multi-language",
+          "desc": "Spanish, English, and more. Your agent speaks the way your customers do."
+        },
+        {
+          "title": "Smart voicemail",
+          "desc": "Detects voicemail boxes and leaves personalized messages automatically."
+        }
+      ]
+    },
+    "industries": {
+      "title": "Built for your industry",
+      "subtitle": "ZyraVoice adapts to any sector that sells over the phone",
+      "items": [
+        {
+          "name": "Freight & logistics",
+          "desc": "Reach shippers, update rates, and qualify import/export clients."
+        },
+        {
+          "name": "Real estate",
+          "desc": "Screen buyers and renters, book showings, and follow up on every lead."
+        },
+        {
+          "name": "Insurance & finance",
+          "desc": "Qualify policies, follow up on quotes, and book appointments with advisors."
+        }
+      ]
+    },
+    "pricing": {
+      "title": "A plan built around your operation",
+      "subtitle": "Custom pricing based on your volume and needs",
+      "customized": "Custom",
+      "customizedSub": "based on your needs",
+      "starter": {
+        "label": "Starter",
+        "desc": "To start automating your prospecting with AI voice agents.",
+        "features": [
+          "Calls with an AI voice agent",
+          "1 voice agent",
+          "CRM & CSV import",
+          "Email marketing"
+        ],
+        "cta": "Request a quote"
+      },
+      "pro": {
+        "label": "Pro",
+        "badge": "Most popular",
+        "desc": "For sales teams that want to prospect automatically, at scale.",
+        "features": [
+          "Unlimited voice agents",
+          "Lead Hunter & scheduled campaigns",
+          "Advanced email marketing",
+          "Real-time reports & KPIs",
+          "Priority support"
+        ],
+        "cta": "Request a quote"
+      },
+      "enterprise": {
+        "label": "Enterprise",
+        "desc": "For agencies and companies with multiple brands and custom needs.",
+        "features": [
+          "Custom call volume",
+          "Multi-org & advanced roles",
+          "Dedicated numbers & custom voices",
+          "Integrations & dedicated API",
+          "Account manager & priority support"
+        ],
+        "cta": "Contact sales"
+      }
+    },
+    "finalCta": {
+      "titleLine1": "Ready to automate",
+      "titleLine2": "your prospecting?",
+      "subtitle": "Talk to our team and set up the right plan for your business.",
+      "cta": "Request a demo"
+    },
+    "footer": {
+      "poweredBy": "Powered by ISM Consulting Services",
+      "login": "Log in",
+      "createAccount": "Create account",
+      "contact": "Contact",
+      "whatsapp": "WhatsApp"
+    }
   }
 }
