@@ -187,11 +187,29 @@ async def sync_to_retell(
         "responsiveness": 0.8,
         "interruption_sensitivity": 0.6,
         "enable_backchannel": True,
-        "backchannel_frequency": 0.7,
+        # 0.7 made the agent interject "ajá/claro" almost every turn, which reads
+        # as canned rather than attentive.
+        "backchannel_frequency": 0.45,
         "backchannel_words": backchannel_words,
         "ambient_sound": "coffee-shop",
         "max_call_duration_ms": (agent_config.max_call_duration or 180) * 1000,
         "end_call_after_silence_ms": 12000,
+
+        # ── Naturalness ──────────────────────────────────────────────────────
+        # Match the human's pace instead of a fixed cadence.
+        "enable_dynamic_responsiveness": True,
+        "enable_dynamic_voice_speed": True,
+        # Let the voice breathe: pauses, emphasis, empathy instead of a flat read.
+        "enable_expressive_mode": True,
+        "expressive_emotion_tags": [
+            "empathetic", "curious", "happy", "pause", "emphasis", "clear throat",
+        ],
+        # Slight variation between renders; dead-flat delivery is a tell.
+        "voice_temperature": 1.1,
+        # A beat before speaking — instant speech on pickup sounds like a robodialer.
+        "begin_message_delay_ms": 700,
+        # Mishearing a name or objection breaks the illusion faster than latency does.
+        "stt_mode": "accurate",
     }
 
     # ── OUTBOUND ─────────────────────────────────────────────────
@@ -213,7 +231,9 @@ async def sync_to_retell(
         "general_prompt": outbound_prompt,
         "begin_message": outbound_begin,
         "general_tools": [{"type": "end_call", "name": "end_call", "description": "Termina la llamada."}],
-        "temperature": agent_config.temperature if agent_config.temperature is not None else 0.4,
+        # Field is "model_temperature"; "temperature" was silently dropped by
+        # Retell, leaving the model at its default of 0 (fully deterministic).
+        "model_temperature": agent_config.temperature if agent_config.temperature is not None else 0.4,
     }
     if agent_config.retell_knowledge_base_id:
         outbound_llm_payload["knowledge_base_ids"] = [agent_config.retell_knowledge_base_id]
@@ -261,7 +281,9 @@ async def sync_to_retell(
                 "general_prompt": inbound_prompt,
                 "begin_message": inbound_begin,
                 "general_tools": [{"type": "end_call", "name": "end_call", "description": "Termina la llamada."}],
-                "temperature": agent_config.temperature if agent_config.temperature is not None else 0.4,
+                # Field is "model_temperature"; "temperature" was silently dropped by
+                # Retell, leaving the model at its default of 0 (fully deterministic).
+                "model_temperature": agent_config.temperature if agent_config.temperature is not None else 0.4,
             }
             if agent_config.retell_knowledge_base_id:
                 inbound_llm_payload["knowledge_base_ids"] = [agent_config.retell_knowledge_base_id]
