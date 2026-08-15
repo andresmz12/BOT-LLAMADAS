@@ -646,7 +646,12 @@
     "proFeature": "Función disponible en el plan Pro",
     "contactSupport": "Para desbloquear llamadas reales, campañas y prospectos, contacta a soporte.",
     "contactEmail": "Contactar por email",
-    "whatsapp": "WhatsApp"
+    "whatsapp": "WhatsApp",
+    "limitedPlan": "Plan limitado",
+    "requiresProOrEnterprise": "Esta función requiere el plan Pro o Enterprise.",
+    "proOrEnterpriseTitle": "Función disponible en el plan Pro o Enterprise",
+    "currentPlanNote": "Tu plan actual no incluye esta función ({{used}}/{{total}} demos usadas).",
+    "emailBtn": "Email"
   },
   "status": {
     "draft": "Borrador",
@@ -837,5 +842,33 @@
       "contact": "Contacto",
       "whatsapp": "WhatsApp"
     }
+  },
+  "team": {
+    "title": "Asesores",
+    "subtitle": "Gestiona los asesores de tu organización",
+    "add": "Agregar asesor",
+    "headers": {
+      "name": "Nombre",
+      "email": "Email",
+      "role": "Rol",
+      "status": "Estado",
+      "actions": "Acciones"
+    },
+    "active": "Activo",
+    "inactive": "Inactivo",
+    "noMembers": "No hay miembros en el equipo",
+    "confirmDelete": "¿Eliminar a \"{{name}}\"?",
+    "errorDelete": "Error al eliminar",
+    "errorGeneric": "Error",
+    "editTitle": "Editar asesor",
+    "newTitle": "Nuevo asesor",
+    "fullName": "Nombre completo",
+    "email": "Email",
+    "password": "Contraseña",
+    "passwordPlaceholder": "Contraseña del asesor",
+    "activeUser": "Usuario activo",
+    "cancel": "Cancelar",
+    "save": "Guardar",
+    "saving": "Guardando..."
   }
 }

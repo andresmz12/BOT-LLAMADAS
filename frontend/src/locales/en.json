@@ -646,7 +646,12 @@
     "proFeature": "Feature available on the Pro plan",
     "contactSupport": "To unlock real calls, campaigns and prospects, contact support.",
     "contactEmail": "Contact by email",
-    "whatsapp": "WhatsApp"
+    "whatsapp": "WhatsApp",
+    "limitedPlan": "Limited plan",
+    "requiresProOrEnterprise": "This feature requires the Pro or Enterprise plan.",
+    "proOrEnterpriseTitle": "Feature available on the Pro or Enterprise plan",
+    "currentPlanNote": "Your current plan doesn't include this feature ({{used}}/{{total}} demos used).",
+    "emailBtn": "Email"
   },
   "status": {
     "draft": "Draft",
@@ -837,5 +842,33 @@
       "contact": "Contact",
       "whatsapp": "WhatsApp"
     }
+  },
+  "team": {
+    "title": "Advisors",
+    "subtitle": "Manage your organization's advisors",
+    "add": "Add advisor",
+    "headers": {
+      "name": "Name",
+      "email": "Email",
+      "role": "Role",
+      "status": "Status",
+      "actions": "Actions"
+    },
+    "active": "Active",
+    "inactive": "Inactive",
+    "noMembers": "No team members yet",
+    "confirmDelete": "Delete \"{{name}}\"?",
+    "errorDelete": "Error deleting",
+    "errorGeneric": "Error",
+    "editTitle": "Edit advisor",
+    "newTitle": "New advisor",
+    "fullName": "Full name",
+    "email": "Email",
+    "password": "Password",
+    "passwordPlaceholder": "Advisor's password",
+    "activeUser": "Active user",
+    "cancel": "Cancel",
+    "save": "Save",
+    "saving": "Saving..."
   }
 }
