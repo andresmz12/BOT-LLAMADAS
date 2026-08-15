@@ -71,7 +71,16 @@
     "duplicate": "Duplicate",
     "delete": "Delete",
     "noAgents": "No agents configured",
-    "copyOf": "Copy of "
+    "copyOf": "Copy of ",
+    "subtitle": "Configure and sync the AI agents that make your calls",
+    "test": "Test",
+    "testTooltip": "Listen to a demo call with this agent",
+    "testTooltipLocked": "Sync the agent first",
+    "noAgentsHint": "No agents configured yet. Create your first agent to start calling.",
+    "confirmDelete": "Delete \"{{name}}\"?",
+    "syncErrorPrefix": "Sync error: ",
+    "genericError": "Error",
+    "maxDuration": "max {{s}}s"
   },
   "agentForm": {
     "editTitle": "Edit Agent",
@@ -154,7 +163,21 @@
       "appointments": "Appointments",
       "pace": "Pace",
       "actions": "Actions"
-    }
+    },
+    "subtitle": "Organize your outbound calls into campaigns with controlled pacing",
+    "noCampaignsHint": "No campaigns created yet. Create one to start dialing prospects.",
+    "deleteRunningWarning": "\n\n⚠ This campaign is currently running. It will stop and all its prospects will be deleted.",
+    "editTitle": "Edit Campaign",
+    "saving": "Saving...",
+    "saveChanges": "Save changes",
+    "scheduleCampaign": "Schedule campaign",
+    "selectAgentAlert": "Select an agent",
+    "errorUpdate": "Error updating campaign",
+    "startsAt": "Starts: {{date}}",
+    "scheduleEnable": "Schedule automatic start",
+    "scheduleHint": "The campaign will start on its own at the date and time you choose",
+    "scheduleDateLabel": "Start date and time",
+    "scheduleTimezoneHint": "Time in your local timezone"
   },
   "prospects": {
     "title": "Prospects",

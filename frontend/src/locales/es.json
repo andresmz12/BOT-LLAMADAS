@@ -71,7 +71,16 @@
     "duplicate": "Duplicar",
     "delete": "Eliminar",
     "noAgents": "No hay agentes configurados",
-    "copyOf": "Copia de "
+    "copyOf": "Copia de ",
+    "subtitle": "Configura y sincroniza los agentes de IA que hacen tus llamadas",
+    "test": "Probar",
+    "testTooltip": "Escuchar una llamada demo con este agente",
+    "testTooltipLocked": "Sincroniza el agente primero",
+    "noAgentsHint": "No hay agentes configurados. Crea tu primer agente para empezar a llamar.",
+    "confirmDelete": "¿Eliminar \"{{name}}\"?",
+    "syncErrorPrefix": "Error al sincronizar: ",
+    "genericError": "Error",
+    "maxDuration": "max {{s}}s"
   },
   "agentForm": {
     "editTitle": "Editar Agente",
@@ -154,7 +163,21 @@
       "appointments": "Citas",
       "pace": "Ritmo",
       "actions": "Acciones"
-    }
+    },
+    "subtitle": "Organiza tus llamadas salientes en campañas con ritmo controlado",
+    "noCampaignsHint": "No hay campañas creadas. Crea una para empezar a marcar prospectos.",
+    "deleteRunningWarning": "\n\n⚠ Esta campaña está en ejecución. Se detendrá y todos sus prospectos serán eliminados.",
+    "editTitle": "Editar Campaña",
+    "saving": "Guardando...",
+    "saveChanges": "Guardar cambios",
+    "scheduleCampaign": "Programar campaña",
+    "selectAgentAlert": "Selecciona un agente",
+    "errorUpdate": "Error al actualizar campaña",
+    "startsAt": "Inicia: {{date}}",
+    "scheduleEnable": "Programar inicio automático",
+    "scheduleHint": "La campaña arrancará sola en la fecha y hora que elijas",
+    "scheduleDateLabel": "Fecha y hora de inicio",
+    "scheduleTimezoneHint": "Hora en tu zona horaria local"
   },
   "prospects": {
     "title": "Prospectos",
