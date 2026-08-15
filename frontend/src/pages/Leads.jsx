@@ -1,17 +1,10 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FireIcon, ClockIcon, CalendarIcon, ArrowDownTrayIcon, PhoneIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import CallDetailModal from '../components/CallDetailModal'
 import { getLeads, getCampaigns } from '../api/client'
 import { exportToCsv } from '../utils/exportCsv'
-
-const TABS = [
-  { key: 'interested', label: 'Interesados', Icon: FireIcon, color: 'text-green-400', empty: 'No hay prospectos interesados aún. Inicia una campaña para ver resultados aquí.' },
-  { key: 'callback_requested', label: 'Callbacks', Icon: ClockIcon, color: 'text-yellow-400', empty: 'No hay callbacks pendientes.' },
-  { key: 'appointment_scheduled', label: 'Citas agendadas', Icon: CalendarIcon, color: 'text-z-blue-light', empty: 'No hay citas agendadas.' },
-]
-
-const SENTIMENT_LABEL = { positive: '😊 Positivo', neutral: '😐 Neutral', negative: '😞 Negativo' }
 
 function fmtDur(s) {
   if (!s) return '—'
@@ -26,6 +19,14 @@ function fmtDate(iso) {
 }
 
 export default function Leads() {
+  const { t } = useTranslation()
+  const TABS = [
+    { key: 'interested', label: t('leads.tabInterested'), Icon: FireIcon, color: 'text-green-400', empty: t('leads.emptyInterested') },
+    { key: 'callback_requested', label: t('leads.tabCallbacks'), Icon: ClockIcon, color: 'text-yellow-400', empty: t('leads.emptyCallbacks') },
+    { key: 'appointment_scheduled', label: t('leads.tabAppointments'), Icon: CalendarIcon, color: 'text-z-blue-light', empty: t('leads.emptyAppointments') },
+  ]
+  const SENTIMENT_LABEL = { positive: t('leads.sentimentPositive'), neutral: t('leads.sentimentNeutral'), negative: t('leads.sentimentNegative') }
+
   const [activeTab, setActiveTab] = useState('interested')
   const [leads, setLeads] = useState([])
   const [campaigns, setCampaigns] = useState([])
@@ -55,25 +56,24 @@ export default function Leads() {
   }
 
   const handleExport = () => {
-    const tab = TABS.find(t => t.key === activeTab)
     exportToCsv(`leads-${activeTab}-${Date.now()}.csv`, leads, [
-      { key: 'prospect_name', label: 'Nombre' },
-      { key: 'prospect_company', label: 'Empresa' },
-      { key: 'prospect_phone', label: 'Teléfono' },
-      { key: 'campaign_name', label: 'Campaña' },
-      { key: 'started_at', label: 'Fecha' },
-      { key: 'notes', label: 'Resumen' },
+      { key: 'prospect_name', label: t('leads.headers.name') },
+      { key: 'prospect_company', label: t('leads.headers.company') },
+      { key: 'prospect_phone', label: t('leads.headers.phone') },
+      { key: 'campaign_name', label: t('leads.headers.campaign') },
+      { key: 'started_at', label: t('leads.headers.date') },
+      { key: 'notes', label: t('leads.headers.summary') },
       { key: 'outcome', label: 'Resultado' },
       { key: 'recording_url', label: 'Grabación' },
     ])
   }
 
-  const currentTab = TABS.find(t => t.key === activeTab)
+  const currentTab = TABS.find(tab => tab.key === activeTab)
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
-        <h1 className="text-2xl font-bold text-slate-100">Centro de Leads</h1>
+        <h1 className="text-2xl font-bold text-slate-100">{t('leads.title')}</h1>
         <div className="flex items-center gap-3 flex-wrap">
           {campaigns.length > 0 && (
             <select
@@ -81,7 +81,7 @@ export default function Leads() {
               onChange={e => setFilterCampaign(e.target.value)}
               className="z-input w-auto text-sm"
             >
-              <option value="">Todas las campañas</option>
+              <option value="">{t('leads.allCampaigns')}</option>
               {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           )}
@@ -91,7 +91,7 @@ export default function Leads() {
             className="flex items-center gap-2 px-3 py-2 bg-z-card border border-z-border hover:bg-white/5 text-slate-300 text-sm rounded-lg transition-colors disabled:opacity-40"
           >
             <ArrowDownTrayIcon className="w-4 h-4" />
-            Exportar CSV
+            {t('leads.exportCsv')}
           </button>
         </div>
       </div>
@@ -126,14 +126,14 @@ export default function Leads() {
           <table className="w-full text-sm min-w-[700px]">
             <thead className="bg-black/20">
               <tr>
-                {['Nombre', 'Empresa', 'Teléfono', 'Campaña', 'Fecha', 'Duración', 'Sentimiento', 'Resumen', ''].map(h => (
+                {[t('leads.headers.name'), t('leads.headers.company'), t('leads.headers.phone'), t('leads.headers.campaign'), t('leads.headers.date'), t('leads.headers.duration'), t('leads.headers.sentiment'), t('leads.headers.summary'), ''].map(h => (
                   <th key={h} className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-z-border">
               {loading ? (
-                <tr><td colSpan={9} className="px-4 py-10 text-center text-slate-500">Cargando...</td></tr>
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-slate-500">{t('leads.loading')}</td></tr>
               ) : leads.length === 0 ? (
                 <tr>
                   <td colSpan={9} className="px-4 py-12 text-center">
@@ -155,7 +155,7 @@ export default function Leads() {
                       <button
                         onClick={e => { e.stopPropagation(); copyPhone(lead) }}
                         className="text-slate-600 hover:text-slate-300 transition-colors"
-                        title="Copiar teléfono"
+                        title={t('leads.copyPhoneTitle')}
                       >
                         {copiedId === lead.call_id
                           ? <span className="text-green-400 text-xs font-medium">✓</span>
@@ -174,7 +174,7 @@ export default function Leads() {
                       onClick={e => { e.stopPropagation(); setSelectedCall(lead) }}
                       className="text-xs text-z-blue-light hover:underline whitespace-nowrap"
                     >
-                      Ver llamada
+                      {t('leads.viewCall')}
                     </button>
                   </td>
                 </tr>

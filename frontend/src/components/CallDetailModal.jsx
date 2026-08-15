@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { XMarkIcon, ChevronDownIcon, PlayIcon } from '@heroicons/react/24/outline'
 import StatusBadge from './StatusBadge'
 import { fmtDate } from '../utils/date'
@@ -6,6 +7,7 @@ import { fmtDate } from '../utils/date'
 const SENTIMENT_EMOJI = { positive: '😊', neutral: '😐', negative: '😞' }
 
 export default function CallDetailModal({ call, onClose }) {
+  const { t } = useTranslation()
   const [transcriptOpen, setTranscriptOpen] = useState(false)
   if (!call) return null
 
@@ -19,7 +21,7 @@ export default function CallDetailModal({ call, onClose }) {
       <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-z-border">
           <div>
-            <h2 className="text-lg font-bold text-slate-100">{call.prospect_name || 'Prospecto'} — {call.prospect_company || ''}</h2>
+            <h2 className="text-lg font-bold text-slate-100">{call.prospect_name || t('callDetail.prospect')} — {call.prospect_company || ''}</h2>
             <p className="text-sm text-slate-500">{call.prospect_phone}</p>
           </div>
           <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500 hover:text-slate-300" /></button>
@@ -33,7 +35,7 @@ export default function CallDetailModal({ call, onClose }) {
             {call.recording_url && (
               <a href={call.recording_url} target="_blank" rel="noreferrer"
                 className="flex items-center gap-1 text-sm text-z-blue-light font-medium hover:text-z-blue">
-                <PlayIcon className="w-4 h-4" /> Reproducir grabación
+                <PlayIcon className="w-4 h-4" /> {t('callDetail.playRecording')}
               </a>
             )}
           </div>
@@ -46,28 +48,28 @@ export default function CallDetailModal({ call, onClose }) {
           )}
           {call.appointment_scheduled && (
             <div className="bg-z-blue/10 border border-z-blue/30 rounded-xl p-4 text-blue-300">
-              <p className="font-semibold">✓ Cita agendada</p>
+              <p className="font-semibold">{t('callDetail.appointmentScheduled')}</p>
               {call.appointment_date && <p className="text-sm mt-1">{fmtDate(call.appointment_date)}</p>}
             </div>
           )}
           {call.notes && (
             <div className="bg-slate-800 rounded-xl p-4">
-              <p className="text-xs font-semibold text-slate-500 uppercase mb-1">Nota</p>
+              <p className="text-xs font-semibold text-slate-500 uppercase mb-1">{t('callDetail.note')}</p>
               <p className="text-sm text-slate-300">{call.notes}</p>
             </div>
           )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <h3 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wide">Lo que dijo el cliente</h3>
+              <h3 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wide">{t('callDetail.clientSaid')}</h3>
               {clientSaid.length > 0
                 ? <ul className="space-y-2">{clientSaid.map((p, i) => <li key={i} className="flex items-start gap-2 text-sm text-slate-300"><span className="text-z-blue-light mt-0.5">•</span>{p}</li>)}</ul>
-                : <p className="text-sm text-slate-500 italic">Sin datos</p>}
+                : <p className="text-sm text-slate-500 italic">{t('callDetail.noData')}</p>}
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wide">Lo que hizo el agente</h3>
+              <h3 className="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wide">{t('callDetail.agentDid')}</h3>
               {agentSaid.length > 0
                 ? <ul className="space-y-2">{agentSaid.map((p, i) => <li key={i} className="flex items-start gap-2 text-sm text-slate-300"><span className="text-z-blue-light mt-0.5">•</span>{p}</li>)}</ul>
-                : <p className="text-sm text-slate-500 italic">Sin datos</p>}
+                : <p className="text-sm text-slate-500 italic">{t('callDetail.noData')}</p>}
             </div>
           </div>
           {call.raw_transcript && (
@@ -75,7 +77,7 @@ export default function CallDetailModal({ call, onClose }) {
               <button onClick={() => setTranscriptOpen(o => !o)}
                 className="flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-slate-300">
                 <ChevronDownIcon className={`w-4 h-4 transition-transform ${transcriptOpen ? 'rotate-180' : ''}`} />
-                {transcriptOpen ? 'Ocultar' : 'Ver'} transcript completo
+                {transcriptOpen ? t('callDetail.hideTranscript') : t('callDetail.viewTranscript')} {t('callDetail.transcriptFull')}
               </button>
               {transcriptOpen && (
                 <pre className="mt-3 bg-slate-800 rounded-xl p-4 text-xs text-slate-400 whitespace-pre-wrap max-h-64 overflow-y-auto">
