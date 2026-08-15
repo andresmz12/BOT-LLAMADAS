@@ -309,7 +309,11 @@
       "duration": "Duración",
       "sentiment": "Sentimiento",
       "summary": "Resumen"
-    }
+    },
+    "copyPhoneTitle": "Copiar teléfono",
+    "sentimentPositive": "😊 Positivo",
+    "sentimentNeutral": "😐 Neutral",
+    "sentimentNegative": "😞 Negativo"
   },
   "callDetail": {
     "prospect": "Prospecto",
