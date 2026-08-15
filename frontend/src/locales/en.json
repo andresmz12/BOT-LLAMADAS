@@ -354,7 +354,10 @@
     "testSuccess": "✓ Webhook sent successfully (HTTP {{code}})",
     "testError": "✗ Error: ",
     "noCrm": "No CRM connected to this organization.",
-    "saveError": "Error saving"
+    "saveError": "Error saving",
+    "retellApiKeyHint": "Get your API key at",
+    "connectionError": "Connection error",
+    "crmCustomLabel": "Custom webhook"
   },
   "admin": {
     "title": "Admin Panel"
@@ -374,7 +377,11 @@
     "waitingAudio": "Waiting for audio...",
     "agent": "Agent",
     "you": "You",
-    "micHint": "The browser will ask for microphone access on start. Make sure you have a synced agent in the Agents section."
+    "micHint": "The browser will ask for microphone access on start. Make sure you have a synced agent in the Agents section.",
+    "cancel": "Cancel",
+    "errorCall": "Call error: {{msg}}",
+    "errorUnknown": "unknown",
+    "errorStart": "Could not start the call"
   },
   "auth": {
     "loginTitle": "Log in",
@@ -463,7 +470,8 @@
     "date": "Date",
     "duration": "Duration",
     "actions": "Actions",
-    "see": "View"
+    "see": "View",
+    "and": "and"
   },
   "landing": {
     "nav": {
