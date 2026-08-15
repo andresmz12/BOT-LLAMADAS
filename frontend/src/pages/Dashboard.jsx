@@ -12,14 +12,6 @@ const PIE_COLORS = ['#2563EB', '#10b981', '#8b5cf6', '#ef4444', '#f97316', '#3b8
 const FUNNEL_COLORS = ['#334155', '#2563EB', '#10b981', '#3b82f6']
 const TOOLTIP_STYLE = { background: '#111827', border: '1px solid #1E293B', borderRadius: 8, color: '#F1F5F9', fontSize: 12 }
 
-const TEMPLATE_LABELS = {
-  interested: 'Interesado',
-  callback_requested: 'Callback',
-  voicemail: 'Buzón de voz',
-  not_interested: 'No interesado',
-  general: 'General',
-}
-
 function KPI({ title, value, sub, color = 'text-slate-100', icon: Icon, iconColor = 'text-slate-500' }) {
   return (
     <div className="bg-z-card rounded-xl p-4 border border-z-border flex items-start gap-3">
@@ -53,6 +45,15 @@ function TabButton({ active, onClick, children }) {
 }
 
 function EmailDashboard({ selectedOrg }) {
+  const { t, i18n } = useTranslation()
+  const dateLocale = i18n.resolvedLanguage?.startsWith('en') ? 'en' : 'es'
+  const TEMPLATE_LABELS = {
+    interested: t('dashboard.email.templateInterested'),
+    callback_requested: t('dashboard.email.templateCallback'),
+    voicemail: t('dashboard.email.templateVoicemail'),
+    not_interested: t('dashboard.email.templateNotInterested'),
+    general: t('dashboard.email.templateGeneral'),
+  }
   const [es, setEs] = useState(null)
   const [trackingTab, setTrackingTab] = useState('all')
   const [trackingEvents, setTrackingEvents] = useState(null)
@@ -66,7 +67,7 @@ function EmailDashboard({ selectedOrg }) {
   const handleDownloadPdf = async () => {
     setPdfLoading(true)
     try { await downloadEmailStatsPdf() }
-    catch (e) { alert('Error al generar el PDF') }
+    catch (e) { alert(t('dashboard.email.pdfError')) }
     finally { setPdfLoading(false) }
   }
 
@@ -79,9 +80,9 @@ function EmailDashboard({ selectedOrg }) {
 
   const exportTracking = () => {
     if (!trackingEvents?.length) return
-    const LABEL = { delivered: 'Entregado', open: 'Abierto', click: 'Click', bounce: 'Rebotado', dropped: 'Descartado', unsubscribe: 'Desuscrito', spamreport: 'Spam' }
+    const LABEL = { delivered: t('dashboard.email.eventDelivered'), open: t('dashboard.email.eventOpen'), click: t('dashboard.email.eventClick'), bounce: t('dashboard.email.eventBounce'), dropped: t('dashboard.email.eventDropped'), unsubscribe: t('dashboard.email.eventUnsubscribe'), spamreport: t('dashboard.email.eventSpamreport') }
     const rows = (trackingTab === 'all' ? trackingEvents : trackingEvents.filter(e => e.event_type === trackingTab))
-      .map(e => ({ 'Email': e.email, 'Evento': LABEL[e.event_type] || e.event_type, 'Plantilla': e.template_key || '', 'URL': e.url || '', 'Fecha': e.timestamp ? new Date(e.timestamp).toLocaleString('es') : '' }))
+      .map(e => ({ 'Email': e.email, 'Evento': LABEL[e.event_type] || e.event_type, 'Plantilla': e.template_key || '', 'URL': e.url || '', 'Fecha': e.timestamp ? new Date(e.timestamp).toLocaleString(dateLocale) : '' }))
     import('xlsx').then(XLSX => {
       const ws = XLSX.utils.json_to_sheet(rows)
       const wb = XLSX.utils.book_new()
@@ -95,57 +96,57 @@ function EmailDashboard({ selectedOrg }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-slate-300">Métricas de email marketing</h2>
+        <h2 className="text-sm font-semibold text-slate-300">{t('dashboard.email.metricsTitle')}</h2>
         <button
           onClick={handleDownloadPdf}
           disabled={pdfLoading || noData}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-slate-200 bg-white/5 hover:bg-white/10 border border-z-border rounded-lg transition-colors disabled:opacity-40"
         >
           <ArrowDownTrayIcon className="w-3.5 h-3.5" />
-          {pdfLoading ? 'Generando...' : 'Descargar PDF'}
+          {pdfLoading ? t('dashboard.email.generatingPdf') : t('dashboard.email.downloadPdf')}
         </button>
       </div>
 
       {/* KPI cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        <KPI title="Enviados" value={es?.total_sent ?? 0} icon={EnvelopeIcon} iconColor="text-z-blue" />
-        <KPI title="Entregados" value={es?.delivered ?? 0}
+        <KPI title={t('dashboard.email.kpiSent')} value={es?.total_sent ?? 0} icon={EnvelopeIcon} iconColor="text-z-blue" />
+        <KPI title={t('dashboard.email.kpiDelivered')} value={es?.delivered ?? 0}
           sub={es?.delivery_rate != null ? `${es.delivery_rate}%` : undefined}
           icon={ArrowTrendingUpIcon} iconColor="text-green-400" color="text-green-400" />
-        <KPI title="Abiertos" value={es?.unique_opens ?? 0}
-          sub={es?.open_rate != null ? `${es.open_rate}% tasa` : undefined}
+        <KPI title={t('dashboard.email.kpiOpened')} value={es?.unique_opens ?? 0}
+          sub={es?.open_rate != null ? t('dashboard.email.kpiOpenRate', { rate: es.open_rate }) : undefined}
           icon={EnvelopeIcon} iconColor="text-blue-400" color="text-blue-400" />
-        <KPI title="Clicks" value={es?.unique_clicks ?? 0}
-          sub={es?.click_rate != null ? `${es.click_rate}% tasa` : undefined}
+        <KPI title={t('dashboard.email.kpiClicks')} value={es?.unique_clicks ?? 0}
+          sub={es?.click_rate != null ? t('dashboard.email.kpiClickRate', { rate: es.click_rate }) : undefined}
           icon={CursorArrowRaysIcon} iconColor="text-purple-400" color="text-purple-400" />
-        <KPI title="Rebotados" value={es?.bounces ?? 0}
+        <KPI title={t('dashboard.email.kpiBounced')} value={es?.bounces ?? 0}
           sub={es?.bounce_rate != null ? `${es.bounce_rate}%` : undefined}
           icon={XCircleIcon} iconColor="text-red-400" color="text-red-400" />
-        <KPI title="Desuscritos" value={es?.unsubscribes ?? 0}
+        <KPI title={t('dashboard.email.kpiUnsubscribed')} value={es?.unsubscribes ?? 0}
           icon={NoSymbolIcon} iconColor="text-slate-500" color="text-slate-400" />
       </div>
 
       {noData ? (
         <div className="bg-z-card rounded-xl border border-z-border p-8 text-center">
           <EnvelopeIcon className="w-10 h-10 text-slate-600 mx-auto mb-3" />
-          <p className="text-slate-400 font-medium">No hay datos de email todavía</p>
-          <p className="text-slate-600 text-sm mt-1">Cuando envíes emails desde Email Marketing, aquí verás las métricas.</p>
+          <p className="text-slate-400 font-medium">{t('dashboard.email.noDataTitle')}</p>
+          <p className="text-slate-600 text-sm mt-1">{t('dashboard.email.noDataHint')}</p>
         </div>
       ) : (
         <>
           {/* Chart — last 7 days */}
           <div className="bg-z-card rounded-xl p-5 border border-z-border">
-            <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wide">Actividad últimos 7 días</h2>
+            <h2 className="text-sm font-semibold text-slate-400 mb-4 uppercase tracking-wide">{t('dashboard.email.activityLast7Days')}</h2>
             <ResponsiveContainer width="100%" height={220}>
               <BarChart data={es?.by_day || []} barGap={2}>
                 <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} />
                 <YAxis tick={{ fontSize: 11, fill: '#64748b' }} axisLine={false} tickLine={false} allowDecimals={false} />
                 <Tooltip contentStyle={TOOLTIP_STYLE} />
                 <Legend iconSize={8} formatter={(v) => <span style={{ color: '#94a3b8', fontSize: 11 }}>{v}</span>} />
-                <Bar dataKey="sent" name="Enviados" fill="#334155" radius={[3,3,0,0]} />
-                <Bar dataKey="delivered" name="Entregados" fill="#2563EB" radius={[3,3,0,0]} />
-                <Bar dataKey="opens" name="Abiertos" fill="#10b981" radius={[3,3,0,0]} />
-                <Bar dataKey="clicks" name="Clicks" fill="#8b5cf6" radius={[3,3,0,0]} />
+                <Bar dataKey="sent" name={t('dashboard.email.chartSent')} fill="#334155" radius={[3,3,0,0]} />
+                <Bar dataKey="delivered" name={t('dashboard.email.chartDelivered')} fill="#2563EB" radius={[3,3,0,0]} />
+                <Bar dataKey="opens" name={t('dashboard.email.chartOpens')} fill="#10b981" radius={[3,3,0,0]} />
+                <Bar dataKey="clicks" name={t('dashboard.email.chartClicks')} fill="#8b5cf6" radius={[3,3,0,0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -155,26 +156,26 @@ function EmailDashboard({ selectedOrg }) {
             {es?.by_template?.length > 0 && (
               <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
                 <div className="p-4 border-b border-z-border">
-                  <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Por plantilla</h2>
+                  <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">{t('dashboard.email.byTemplate')}</h2>
                 </div>
                 <table className="w-full text-sm">
                   <thead className="bg-black/20">
                     <tr>
-                      {['Plantilla', 'Enviados', 'Entregados', 'Apertura', 'Clicks'].map(h => (
+                      {[t('dashboard.email.templateHeaders.template'), t('dashboard.email.templateHeaders.sent'), t('dashboard.email.templateHeaders.delivered'), t('dashboard.email.templateHeaders.openRate'), t('dashboard.email.templateHeaders.clickRate')].map(h => (
                         <th key={h} className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-z-border">
-                    {es.by_template.map(t => (
-                      <tr key={t.key} className="hover:bg-white/[0.02]">
+                    {es.by_template.map(tpl => (
+                      <tr key={tpl.key} className="hover:bg-white/[0.02]">
                         <td className="px-4 py-3 font-medium text-slate-200 capitalize">
-                          {TEMPLATE_LABELS[t.key] || t.key}
+                          {TEMPLATE_LABELS[tpl.key] || tpl.key}
                         </td>
-                        <td className="px-4 py-3 text-slate-300">{t.sent}</td>
-                        <td className="px-4 py-3 text-green-400">{t.delivered}</td>
-                        <td className="px-4 py-3 text-blue-400">{t.open_rate}%</td>
-                        <td className="px-4 py-3 text-purple-400">{t.click_rate}%</td>
+                        <td className="px-4 py-3 text-slate-300">{tpl.sent}</td>
+                        <td className="px-4 py-3 text-green-400">{tpl.delivered}</td>
+                        <td className="px-4 py-3 text-blue-400">{tpl.open_rate}%</td>
+                        <td className="px-4 py-3 text-purple-400">{tpl.click_rate}%</td>
                       </tr>
                     ))}
                   </tbody>
@@ -185,7 +186,7 @@ function EmailDashboard({ selectedOrg }) {
             {es?.recent_sends?.length > 0 && (
               <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
                 <div className="p-4 border-b border-z-border">
-                  <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">Últimos envíos</h2>
+                  <h2 className="text-sm font-semibold text-slate-400 uppercase tracking-wide">{t('dashboard.email.recentSends')}</h2>
                 </div>
                 <div className="divide-y divide-z-border">
                   {es.recent_sends.map((s, i) => (
@@ -198,8 +199,8 @@ function EmailDashboard({ selectedOrg }) {
                         <p className="text-xs text-slate-500">{fmtDate(s.sent_at)}</p>
                       </div>
                       <div className="flex items-center gap-3 flex-shrink-0 text-xs">
-                        <span className="text-green-400 font-semibold">{s.total_sent} enviados</span>
-                        {s.total_errors > 0 && <span className="text-red-400">{s.total_errors} errores</span>}
+                        <span className="text-green-400 font-semibold">{t('dashboard.email.sentCount', { count: s.total_sent })}</span>
+                        {s.total_errors > 0 && <span className="text-red-400">{t('dashboard.email.errorsCount', { count: s.total_errors })}</span>}
                       </div>
                     </div>
                   ))}
@@ -214,20 +215,20 @@ function EmailDashboard({ selectedOrg }) {
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
         <div className="px-5 py-4 border-b border-z-border flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-slate-200">Seguimiento de emails</h2>
-            <p className="text-xs text-slate-500 mt-0.5">Quién abrió, hizo click, rebotó o se desuscribió</p>
+            <h2 className="text-sm font-semibold text-slate-200">{t('dashboard.email.trackingTitle')}</h2>
+            <p className="text-xs text-slate-500 mt-0.5">{t('dashboard.email.trackingSubtitle')}</p>
           </div>
           <div className="flex items-center gap-2">
             {trackingEvents !== null && (
               <button onClick={exportTracking} disabled={!trackingEvents.length}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-400 border border-green-400/30 rounded-lg hover:bg-green-400/10 transition-colors disabled:opacity-40">
-                <ArrowDownTrayIcon className="w-3.5 h-3.5" /> Exportar Excel
+                <ArrowDownTrayIcon className="w-3.5 h-3.5" /> {t('dashboard.email.exportExcel')}
               </button>
             )}
             {trackingEvents === null ? (
               <button onClick={loadTracking} disabled={trackingLoading}
                 className="px-3 py-1.5 text-xs font-medium text-blue-400 border border-blue-400/30 rounded-lg hover:bg-blue-400/10 transition-colors disabled:opacity-50">
-                {trackingLoading ? 'Cargando...' : 'Cargar eventos'}
+                {trackingLoading ? t('dashboard.email.loadingEvents') : t('dashboard.email.loadEvents')}
               </button>
             ) : (
               <button onClick={loadTracking} disabled={trackingLoading}
@@ -243,42 +244,42 @@ function EmailDashboard({ selectedOrg }) {
             {/* Tabs */}
             {(() => {
               const TABS = [
-                { key: 'all', label: 'Todos' },
-                { key: 'delivered', label: 'Entregados', color: 'text-green-400' },
-                { key: 'open', label: 'Abiertos', color: 'text-blue-400' },
-                { key: 'click', label: 'Clicks', color: 'text-purple-400' },
-                { key: 'bounce', label: 'Rebotados', color: 'text-red-400' },
-                { key: 'unsubscribe', label: 'Desuscritos', color: 'text-amber-400' },
+                { key: 'all', label: t('dashboard.email.tabAll') },
+                { key: 'delivered', label: t('dashboard.email.tabDelivered'), color: 'text-green-400' },
+                { key: 'open', label: t('dashboard.email.tabOpen'), color: 'text-blue-400' },
+                { key: 'click', label: t('dashboard.email.tabClick'), color: 'text-purple-400' },
+                { key: 'bounce', label: t('dashboard.email.tabBounce'), color: 'text-red-400' },
+                { key: 'unsubscribe', label: t('dashboard.email.tabUnsubscribe'), color: 'text-amber-400' },
               ]
               const counts = {}
               trackingEvents.forEach(e => { counts[e.event_type] = (counts[e.event_type] || 0) + 1 })
-              const LABEL = { delivered: 'Entregado', open: 'Abierto', click: 'Click', bounce: 'Rebotado', dropped: 'Descartado', unsubscribe: 'Desuscrito', spamreport: 'Spam' }
+              const LABEL = { delivered: t('dashboard.email.eventDelivered'), open: t('dashboard.email.eventOpen'), click: t('dashboard.email.eventClick'), bounce: t('dashboard.email.eventBounce'), dropped: t('dashboard.email.eventDropped'), unsubscribe: t('dashboard.email.eventUnsubscribe'), spamreport: t('dashboard.email.eventSpamreport') }
               const BADGE = { delivered: 'bg-green-500/15 text-green-400', open: 'bg-blue-500/15 text-blue-400', click: 'bg-purple-500/15 text-purple-400', bounce: 'bg-red-500/15 text-red-400', dropped: 'bg-red-500/15 text-red-400', unsubscribe: 'bg-amber-500/15 text-amber-400', spamreport: 'bg-orange-500/15 text-orange-400' }
               const filtered = trackingTab === 'all' ? trackingEvents : trackingEvents.filter(e => e.event_type === trackingTab)
               return (
                 <>
                   <div className="flex gap-1 px-4 py-3 border-b border-z-border flex-wrap">
-                    {TABS.map(t => {
-                      const count = t.key === 'all' ? trackingEvents.length : (counts[t.key] || 0)
+                    {TABS.map(tab => {
+                      const count = tab.key === 'all' ? trackingEvents.length : (counts[tab.key] || 0)
                       return (
-                        <button key={t.key} onClick={() => setTrackingTab(t.key)}
-                          className={`px-3 py-1 text-xs rounded-lg border transition-colors ${trackingTab === t.key ? 'bg-white/10 border-slate-500/60 text-slate-200' : 'border-z-border text-slate-500 hover:bg-white/5'}`}>
-                          {t.label}
-                          {count > 0 && <span className={`ml-1.5 font-bold ${trackingTab === t.key ? 'text-slate-300' : (t.color || 'text-slate-400')}`}>{count}</span>}
+                        <button key={tab.key} onClick={() => setTrackingTab(tab.key)}
+                          className={`px-3 py-1 text-xs rounded-lg border transition-colors ${trackingTab === tab.key ? 'bg-white/10 border-slate-500/60 text-slate-200' : 'border-z-border text-slate-500 hover:bg-white/5'}`}>
+                          {tab.label}
+                          {count > 0 && <span className={`ml-1.5 font-bold ${trackingTab === tab.key ? 'text-slate-300' : (tab.color || 'text-slate-400')}`}>{count}</span>}
                         </button>
                       )
                     })}
                   </div>
                   {filtered.length === 0 ? (
                     <p className="text-center text-slate-600 text-sm py-10">
-                      {trackingTab === 'all' ? 'Sin eventos aún. Los eventos aparecen cuando SendGrid reporta aperturas, clicks, etc.' : 'Sin eventos de este tipo.'}
+                      {trackingTab === 'all' ? t('dashboard.email.noEventsYet') : t('dashboard.email.noEventsOfType')}
                     </p>
                   ) : (
                     <div className="overflow-x-auto max-h-80 overflow-y-auto">
                       <table className="w-full text-xs">
                         <thead className="bg-black/20 sticky top-0">
                           <tr>
-                            {['Email', 'Evento', 'Plantilla', 'URL (click)', 'Fecha y hora'].map(h => (
+                            {[t('dashboard.email.trackingHeaders.email'), t('dashboard.email.trackingHeaders.event'), t('dashboard.email.trackingHeaders.template'), t('dashboard.email.trackingHeaders.url'), t('dashboard.email.trackingHeaders.date')].map(h => (
                               <th key={h} className="px-4 py-2.5 text-left font-medium text-slate-500 uppercase tracking-wide">{h}</th>
                             ))}
                           </tr>
@@ -297,7 +298,7 @@ function EmailDashboard({ selectedOrg }) {
                                 {ev.url ? <a href={ev.url} target="_blank" rel="noreferrer" className="text-blue-400 hover:underline">{ev.url}</a> : <span className="text-slate-700">—</span>}
                               </td>
                               <td className="px-4 py-2 text-slate-500 whitespace-nowrap">
-                                {ev.timestamp ? new Date(ev.timestamp).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                                {ev.timestamp ? new Date(ev.timestamp).toLocaleString(dateLocale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
                               </td>
                             </tr>
                           ))}
@@ -312,7 +313,7 @@ function EmailDashboard({ selectedOrg }) {
         )}
 
         {trackingEvents === null && !trackingLoading && (
-          <p className="text-center text-slate-600 text-xs py-6">Haz clic en "Cargar eventos" para ver el detalle de aperturas, clicks y más.</p>
+          <p className="text-center text-slate-600 text-xs py-6">{t('dashboard.email.loadEventsHint')}</p>
         )}
       </div>
     </div>
