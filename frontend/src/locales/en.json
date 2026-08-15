@@ -224,7 +224,31 @@
     },
     "newProspect": "New Prospect",
     "addProspect": "Add",
-    "adding": "Saving..."
+    "adding": "Saving...",
+    "subtitle": "Import and manage the contacts your agents will call",
+    "emailContacts": "Email contacts",
+    "scoreHeader": "Score",
+    "emailHeader": "Email",
+    "unsubscribedShort": "Unsub.",
+    "unsubscribedTitle": "Unsubscribed",
+    "noEmail": "No email",
+    "callTitle": "Call",
+    "historyTitle": "History",
+    "deleteTitle": "Delete",
+    "view": "View",
+    "loading": "Loading...",
+    "close": "Close",
+    "noCampaignImportWarning": "You must create a campaign before importing prospects.",
+    "scopeEmail": "the {{count}} email contacts",
+    "nameLabel": "Name *",
+    "phoneLabel": "Phone *",
+    "companyLabel": "Company",
+    "campaignLabel": "Campaign *",
+    "digitsHint": "Digits only, no spaces or dashes",
+    "cancel": "Cancel",
+    "emailSentTooltip": "{{count}} email(s) sent\nLast: {{date}}",
+    "scopeStatus": "the {{count}} prospects with status \"{{status}}\"",
+    "scopeFailedVoicemail": "all failed and voicemail prospects"
   },
   "calls": {
     "title": "Calls",
@@ -258,7 +282,11 @@
       "sentiment": "Sentiment",
       "duration": "Duration",
       "date": "Date"
-    }
+    },
+    "subtitle": "History and results of all calls made",
+    "deleteAllConfirm": "Delete {{scope}}? This action cannot be undone.",
+    "scopeFiltered": "the {{count}} calls in the current filter",
+    "scopeAll": "ALL {{count}} calls"
   },
   "leads": {
     "title": "Leads Center",
