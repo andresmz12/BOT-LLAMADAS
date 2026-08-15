@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   MagnifyingGlassIcon, ShieldCheckIcon, SparklesIcon,
   PaperAirplaneIcon, FireIcon, TrashIcon, ChevronDownIcon,
@@ -13,14 +14,6 @@ import {
 } from '../api/client'
 import { Link } from 'react-router-dom'
 import { exportToCsv } from '../utils/exportCsv'
-
-const FILTER_TABS = [
-  { key: 'all',     label: 'Todos' },
-  { key: 'checked', label: 'Verificados' },
-  { key: 'crafted', label: 'Con mensaje' },
-  { key: 'sent',    label: 'Enviados' },
-  { key: 'hot',     label: '🔥 Calientes' },
-]
 
 const INTENT_COLORS = {
   positivo: 'bg-green-500/15 text-green-400',
@@ -45,14 +38,30 @@ function Stars({ rating }) {
 }
 
 function StatusPill({ lead }) {
-  if (lead.sent)           return <span className="px-2 py-0.5 text-xs rounded-full bg-green-500/15 text-green-400">Enviado</span>
-  if (lead.message_es)     return <span className="px-2 py-0.5 text-xs rounded-full bg-blue-500/15 text-blue-400">Mensaje listo</span>
-  if (lead.passed_checks === true)  return <span className="px-2 py-0.5 text-xs rounded-full bg-teal-500/15 text-teal-400">✓ Verificado</span>
-  if (lead.passed_checks === false) return <span className="px-2 py-0.5 text-xs rounded-full bg-red-500/15 text-red-400">✗ Falló check</span>
-  return <span className="px-2 py-0.5 text-xs rounded-full bg-slate-700/60 text-slate-400">Sin revisar</span>
+  const { t } = useTranslation()
+  if (lead.sent)           return <span className="px-2 py-0.5 text-xs rounded-full bg-green-500/15 text-green-400">{t('leadHunter.statusSent')}</span>
+  if (lead.message_es)     return <span className="px-2 py-0.5 text-xs rounded-full bg-blue-500/15 text-blue-400">{t('leadHunter.statusMessageReady')}</span>
+  if (lead.passed_checks === true)  return <span className="px-2 py-0.5 text-xs rounded-full bg-teal-500/15 text-teal-400">{t('leadHunter.statusVerified')}</span>
+  if (lead.passed_checks === false) return <span className="px-2 py-0.5 text-xs rounded-full bg-red-500/15 text-red-400">{t('leadHunter.statusCheckFailed')}</span>
+  return <span className="px-2 py-0.5 text-xs rounded-full bg-slate-700/60 text-slate-400">{t('leadHunter.statusUnreviewed')}</span>
+}
+
+function IntentLabel({ intent }) {
+  const { t } = useTranslation()
+  const key = intent === 'positivo' ? 'intentPositive' : intent === 'negativo' ? 'intentNegative' : intent === 'pregunta' ? 'intentQuestion' : null
+  return <>{key ? t(`leadHunter.${key}`) : intent}</>
 }
 
 export default function LeadHunter() {
+  const { t } = useTranslation()
+  const FILTER_TABS = [
+    { key: 'all',     label: t('leadHunter.tabAll') },
+    { key: 'checked', label: t('leadHunter.tabChecked') },
+    { key: 'crafted', label: t('leadHunter.tabCrafted') },
+    { key: 'sent',    label: t('leadHunter.tabSent') },
+    { key: 'hot',     label: t('leadHunter.tabHot') },
+  ]
+
   const [leads, setLeads] = useState([])
   const [filter, setFilter] = useState('all')
   const [loading, setLoading] = useState(false)
@@ -83,11 +92,11 @@ export default function LeadHunter() {
     setScouting(true); setScoutMsg(null)
     try {
       const r = await scoutLeads({ limit: Number(limit) || 17 })
-      setScoutMsg({ ok: true, text: `${r.found} leads encontrados y guardados` })
+      setScoutMsg({ ok: true, text: t('leadHunter.scoutSuccess', { count: r.found }) })
       setFilter('all')
       loadLeads('all')
     } catch (e) {
-      setScoutMsg({ ok: false, text: e.response?.data?.detail || 'Error al buscar' })
+      setScoutMsg({ ok: false, text: e.response?.data?.detail || t('leadHunter.scoutError') })
     } finally { setScouting(false) }
   }
 
@@ -96,7 +105,7 @@ export default function LeadHunter() {
     try {
       const updated = await checkLead(lead.id)
       setLeads(prev => prev.map(l => l.id === lead.id ? updated : l))
-    } catch (e) { alert(e.response?.data?.detail || 'Error') }
+    } catch (e) { alert(e.response?.data?.detail || t('leadHunter.genericError')) }
     finally { setActingId(null) }
   }
 
@@ -104,9 +113,9 @@ export default function LeadHunter() {
     setBulkMsg(null)
     try {
       const r = await checkAllLeads()
-      setBulkMsg({ ok: true, text: `${r.checked} revisados — ${r.passed} pasaron, ${r.failed} fallaron` })
+      setBulkMsg({ ok: true, text: t('leadHunter.checkAllResult', { checked: r.checked, passed: r.passed, failed: r.failed }) })
       loadLeads()
-    } catch (e) { setBulkMsg({ ok: false, text: e.response?.data?.detail || 'Error' }) }
+    } catch (e) { setBulkMsg({ ok: false, text: e.response?.data?.detail || t('leadHunter.genericError') }) }
   }
 
   const handleCraft = async (lead) => {
@@ -115,7 +124,7 @@ export default function LeadHunter() {
       const updated = await craftLeadMessage(lead.id)
       setLeads(prev => prev.map(l => l.id === lead.id ? updated : l))
       setExpanded(lead.id)
-    } catch (e) { alert(e.response?.data?.detail || 'Error al generar mensaje') }
+    } catch (e) { alert(e.response?.data?.detail || t('leadHunter.generateMessageError')) }
     finally { setActingId(null) }
   }
 
@@ -123,9 +132,9 @@ export default function LeadHunter() {
     setBulkMsg(null)
     try {
       const r = await craftAllLeads()
-      setBulkMsg({ ok: true, text: `${r.crafted} mensajes generados${r.errors ? `, ${r.errors} errores` : ''}` })
+      setBulkMsg({ ok: true, text: t('leadHunter.craftAllResult', { count: r.crafted }) + (r.errors ? t('leadHunter.craftAllErrors', { count: r.errors }) : '') })
       loadLeads()
-    } catch (e) { setBulkMsg({ ok: false, text: e.response?.data?.detail || 'Error' }) }
+    } catch (e) { setBulkMsg({ ok: false, text: e.response?.data?.detail || t('leadHunter.genericError') }) }
   }
 
   const handleSend = async (lead, channel) => {
@@ -134,7 +143,7 @@ export default function LeadHunter() {
     try {
       const updated = await sendLeadMessage(lead.id, channel)
       setLeads(prev => prev.map(l => l.id === lead.id ? updated : l))
-    } catch (e) { alert(e.response?.data?.detail || 'Error al enviar') }
+    } catch (e) { alert(e.response?.data?.detail || t('leadHunter.sendError')) }
     finally { setActingId(null) }
   }
 
@@ -146,19 +155,19 @@ export default function LeadHunter() {
   }
 
   const handleDelete = async (lead) => {
-    if (!confirm(`¿Eliminar "${lead.name}"?`)) return
+    if (!confirm(t('leadHunter.confirmDelete', { name: lead.name }))) return
     try {
       await deleteLeadHunt(lead.id)
       setLeads(prev => prev.filter(l => l.id !== lead.id))
-    } catch (e) { alert('Error al eliminar') }
+    } catch (e) { alert(t('leadHunter.confirmDeleteError')) }
   }
 
   const handleDeleteAll = async () => {
-    if (!confirm(`¿Eliminar todos los leads? Esta acción no se puede deshacer.`)) return
+    if (!confirm(t('leadHunter.confirmDeleteAll'))) return
     try {
       await deleteAllLeadHunts()
       setLeads([])
-    } catch (e) { alert('Error al eliminar') }
+    } catch (e) { alert(t('leadHunter.confirmDeleteError')) }
   }
 
   const handleSaveReply = async (lead, reply, intent) => {
@@ -166,23 +175,23 @@ export default function LeadHunter() {
       const updated = await updateLeadHunt(lead.id, { reply, reply_intent: intent })
       setLeads(prev => prev.map(l => l.id === lead.id ? updated : l))
       setReplyModal(null)
-    } catch (e) { alert('Error al guardar') }
+    } catch (e) { alert(t('leadHunter.saveError')) }
   }
 
   const handleExport = () => {
     exportToCsv(`lead-hunter-${Date.now()}.csv`, leads, [
-      { key: 'name',          label: 'Nombre' },
-      { key: 'city',          label: 'Ciudad' },
+      { key: 'name',          label: t('leadHunter.headers.business') },
+      { key: 'city',          label: t('leadHunter.headers.city') },
       { key: 'category',      label: 'Categoría' },
       { key: 'phone',         label: 'Teléfono' },
-      { key: 'rating',        label: 'Rating' },
-      { key: 'reviews_count', label: 'Reseñas' },
+      { key: 'rating',        label: t('leadHunter.headers.rating') },
+      { key: 'reviews_count', label: t('leadHunter.headers.reviews') },
       { key: 'website_url',   label: 'Web' },
-      { key: 'pain_point',    label: 'Pain Point' },
-      { key: 'message_es',    label: 'Mensaje ES' },
-      { key: 'sent',          label: 'Enviado' },
-      { key: 'reply',         label: 'Respuesta' },
-      { key: 'reply_intent',  label: 'Intención' },
+      { key: 'pain_point',    label: t('leadHunter.painPoint') },
+      { key: 'message_es',    label: t('leadHunter.messageEs') },
+      { key: 'sent',          label: t('leadHunter.statusSent') },
+      { key: 'reply',         label: t('leadHunter.replyText') },
+      { key: 'reply_intent',  label: t('leadHunter.intent') },
     ])
   }
 
@@ -200,20 +209,20 @@ export default function LeadHunter() {
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-            <MagnifyingGlassIcon className="w-6 h-6 text-blue-400" /> Lead Hunter
+            <MagnifyingGlassIcon className="w-6 h-6 text-blue-400" /> {t('leadHunter.title')}
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">Encuentra, verifica y contacta negocios locales con IA</p>
+          <p className="text-xs text-slate-500 mt-0.5">{t('leadHunter.subtitle')}</p>
         </div>
         <div className="flex items-center gap-2">
           {leads.length > 0 && (
             <>
               <button onClick={handleExport}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 border border-z-border rounded-lg hover:bg-white/5 transition-colors">
-                <ArrowDownTrayIcon className="w-3.5 h-3.5" /> Exportar
+                <ArrowDownTrayIcon className="w-3.5 h-3.5" /> {t('leadHunter.export')}
               </button>
               <button onClick={handleDeleteAll}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-red-400/70 border border-red-500/20 rounded-lg hover:bg-red-500/10 transition-colors">
-                <TrashIcon className="w-3.5 h-3.5" /> Limpiar todo
+                <TrashIcon className="w-3.5 h-3.5" /> {t('leadHunter.clearAll')}
               </button>
             </>
           )}
@@ -227,19 +236,19 @@ export default function LeadHunter() {
             {lhConfig.lh_active ? (
               <>
                 <p className="text-slate-300 font-medium">
-                  Buscando: <span className="text-blue-400">{lhConfig.lh_target_description || '—'}</span>
+                  {t('leadHunter.searchingLabel')}: <span className="text-blue-400">{lhConfig.lh_target_description || '—'}</span>
                 </p>
                 <p className="text-slate-500">
-                  Ciudades: {lhConfig.lh_cities || '—'} · Idioma: {lhConfig.lh_language === 'both' ? 'ES + EN' : (lhConfig.lh_language || 'es').toUpperCase()}
+                  {t('leadHunter.citiesLabel')}: {lhConfig.lh_cities || '—'} · {t('leadHunter.languageLabel')}: {lhConfig.lh_language === 'both' ? 'ES + EN' : (lhConfig.lh_language || 'es').toUpperCase()}
                 </p>
               </>
             ) : (
-              <p className="text-amber-400 font-medium">Lead Hunter inactivo — actívalo en Configuración para poder buscar</p>
+              <p className="text-amber-400 font-medium">{t('leadHunter.inactiveWarning')}</p>
             )}
           </div>
           <Link to="/lead-hunter/config"
             className="shrink-0 text-xs px-3 py-1.5 rounded-lg border border-z-border text-slate-400 hover:bg-white/5 transition-colors whitespace-nowrap">
-            ⚙ Configurar
+            {t('leadHunter.configureBtn')}
           </Link>
         </div>
       )}
@@ -247,10 +256,10 @@ export default function LeadHunter() {
       {/* Scout form */}
       <div className="bg-z-card rounded-xl border border-z-border p-5 space-y-4">
         <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-          <MagnifyingGlassIcon className="w-4 h-4 text-blue-400" /> Buscar negocios
+          <MagnifyingGlassIcon className="w-4 h-4 text-blue-400" /> {t('leadHunter.searchBusinesses')}
         </h2>
         <div className="max-w-xs">
-          <label className="text-xs text-slate-500 mb-1 block">Límite de resultados</label>
+          <label className="text-xs text-slate-500 mb-1 block">{t('leadHunter.resultLimit')}</label>
           <input
             type="number" min={1} max={50} value={scoutForm.limit}
             onChange={e => setScoutForm(p => ({ ...p, limit: e.target.value }))}
@@ -264,14 +273,14 @@ export default function LeadHunter() {
             className="z-btn-primary flex items-center gap-2 disabled:opacity-50"
           >
             {scouting
-              ? <><span className="animate-spin text-base">⟳</span> Buscando en Google Maps...</>
-              : <><MagnifyingGlassIcon className="w-4 h-4" /> Buscar leads</>
+              ? <><span className="animate-spin text-base">⟳</span> {t('leadHunter.searching')}</>
+              : <><MagnifyingGlassIcon className="w-4 h-4" /> {t('leadHunter.searchLeads')}</>
             }
           </button>
           {!lhConfig?.lh_active && !scouting && (
-            <p className="text-xs text-amber-400">Activa Lead Hunter en <Link to="/lead-hunter/config" className="underline">Configuración</Link> primero</p>
+            <p className="text-xs text-amber-400">{t('leadHunter.activateFirst')} <Link to="/lead-hunter/config" className="underline">{t('leadHunter.configuration')}</Link> {t('leadHunter.activateFirstSuffix')}</p>
           )}
-          {scouting && <p className="text-xs text-slate-500 animate-pulse">Buscando negocios en Google Maps con IA, puede tomar 15–30 segundos...</p>}
+          {scouting && <p className="text-xs text-slate-500 animate-pulse">{t('leadHunter.searchingHint')}</p>}
           {scoutMsg && (
             <p className={`text-xs font-medium ${scoutMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
               {scoutMsg.ok ? '✓' : '✗'} {scoutMsg.text}
@@ -279,7 +288,7 @@ export default function LeadHunter() {
           )}
         </div>
         <p className="text-xs text-slate-600">
-          La IA genera automáticamente las búsquedas según tu perfil de Lead Hunter. Filtra negocios con rating 3.0–4.6 ⭐ y 5–80 reseñas.
+          {t('leadHunter.aiSearchHint')}
         </p>
       </div>
 
@@ -287,11 +296,11 @@ export default function LeadHunter() {
       {total > 0 && (
         <div className="grid grid-cols-5 gap-2">
           {[
-            { label: 'Total', value: total,   color: 'text-slate-300' },
-            { label: 'Verificados', value: checked, color: 'text-teal-400' },
-            { label: 'Con mensaje', value: crafted, color: 'text-blue-400' },
-            { label: 'Enviados',    value: sent,    color: 'text-green-400' },
-            { label: 'Calientes',   value: hot,     color: 'text-amber-400' },
+            { label: t('leadHunter.statTotal'), value: total,   color: 'text-slate-300' },
+            { label: t('leadHunter.statChecked'), value: checked, color: 'text-teal-400' },
+            { label: t('leadHunter.statCrafted'), value: crafted, color: 'text-blue-400' },
+            { label: t('leadHunter.statSent'),    value: sent,    color: 'text-green-400' },
+            { label: t('leadHunter.statHot'),   value: hot,     color: 'text-amber-400' },
           ].map(s => (
             <div key={s.label} className="bg-z-card border border-z-border rounded-xl p-3 text-center">
               <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
@@ -304,14 +313,14 @@ export default function LeadHunter() {
       {/* Bulk actions */}
       {total > 0 && (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs text-slate-500">Acciones masivas:</span>
+          <span className="text-xs text-slate-500">{t('leadHunter.bulkActionsLabel')}</span>
           <button onClick={handleCheckAll}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-teal-400 border border-teal-500/30 rounded-lg hover:bg-teal-500/10 transition-colors">
-            <ShieldCheckIcon className="w-3.5 h-3.5" /> Verificar todos
+            <ShieldCheckIcon className="w-3.5 h-3.5" /> {t('leadHunter.checkAll')}
           </button>
           <button onClick={handleCraftAll}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/10 transition-colors">
-            <SparklesIcon className="w-3.5 h-3.5" /> Generar todos los mensajes
+            <SparklesIcon className="w-3.5 h-3.5" /> {t('leadHunter.craftAll')}
           </button>
           {bulkMsg && (
             <p className={`text-xs font-medium ${bulkMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
@@ -326,17 +335,17 @@ export default function LeadHunter() {
         <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
           {/* Tabs */}
           <div className="flex border-b border-z-border overflow-x-auto">
-            {FILTER_TABS.map(t => (
+            {FILTER_TABS.map(tab => (
               <button
-                key={t.key}
-                onClick={() => setFilter(t.key)}
+                key={tab.key}
+                onClick={() => setFilter(tab.key)}
                 className={`px-4 py-3 text-xs font-medium whitespace-nowrap transition-colors ${
-                  filter === t.key
+                  filter === tab.key
                     ? 'text-blue-400 border-b-2 border-blue-400 bg-blue-500/5'
                     : 'text-slate-500 hover:text-slate-300'
                 }`}
               >
-                {t.label}
+                {tab.label}
               </button>
             ))}
           </div>
@@ -346,16 +355,16 @@ export default function LeadHunter() {
             <table className="w-full text-sm min-w-[800px]">
               <thead className="bg-black/20">
                 <tr>
-                  {['Negocio', 'Ciudad', 'Rating', 'Reseñas', 'Tel/Web', 'Estado', 'Acciones'].map(h => (
+                  {[t('leadHunter.headers.business'), t('leadHunter.headers.city'), t('leadHunter.headers.rating'), t('leadHunter.headers.reviews'), t('leadHunter.headers.phoneWeb'), t('leadHunter.headers.status'), t('leadHunter.headers.actions')].map(h => (
                     <th key={h} className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-z-border">
                 {loading ? (
-                  <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-500 animate-pulse">Cargando leads...</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-500 animate-pulse">{t('leadHunter.loadingLeads')}</td></tr>
                 ) : leads.length === 0 ? (
-                  <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-600 text-sm">No hay leads en esta vista.</td></tr>
+                  <tr><td colSpan={7} className="px-4 py-10 text-center text-slate-600 text-sm">{t('leadHunter.noLeadsInView')}</td></tr>
                 ) : leads.map(lead => (
                   <>
                     <tr
@@ -404,7 +413,7 @@ export default function LeadHunter() {
                           <StatusPill lead={lead} />
                           {lead.reply_intent && (
                             <span className={`px-2 py-0.5 text-xs rounded-full ${INTENT_COLORS[lead.reply_intent] || 'bg-slate-700 text-slate-400'}`}>
-                              {lead.reply_intent}
+                              <IntentLabel intent={lead.reply_intent} />
                             </span>
                           )}
                         </div>
@@ -416,7 +425,7 @@ export default function LeadHunter() {
                           <button
                             onClick={() => setExpanded(expanded === lead.id ? null : lead.id)}
                             className="p-1.5 text-slate-500 hover:text-slate-300 transition-colors"
-                            title={expanded === lead.id ? 'Colapsar' : 'Ver detalle'}
+                            title={expanded === lead.id ? t('leadHunter.collapse') : t('leadHunter.viewDetail')}
                           >
                             {expanded === lead.id
                               ? <ChevronUpIcon className="w-3.5 h-3.5" />
@@ -430,7 +439,7 @@ export default function LeadHunter() {
                               onClick={() => handleCheck(lead)}
                               disabled={actingId === lead.id}
                               className="p-1.5 text-teal-500 hover:text-teal-300 transition-colors disabled:opacity-40"
-                              title="Verificar calidad"
+                              title={t('leadHunter.verifyQuality')}
                             >
                               <ShieldCheckIcon className="w-3.5 h-3.5" />
                             </button>
@@ -442,7 +451,7 @@ export default function LeadHunter() {
                               onClick={() => handleCraft(lead)}
                               disabled={actingId === lead.id}
                               className="p-1.5 text-blue-400 hover:text-blue-300 transition-colors disabled:opacity-40"
-                              title="Generar mensaje con IA"
+                              title={t('leadHunter.generateMessageAi')}
                             >
                               {actingId === lead.id
                                 ? <span className="text-xs animate-spin inline-block">⟳</span>
@@ -457,7 +466,7 @@ export default function LeadHunter() {
                               onClick={() => setSendModal(lead)}
                               disabled={actingId === lead.id}
                               className="p-1.5 text-green-400 hover:text-green-300 transition-colors disabled:opacity-40"
-                              title="Enviar mensaje"
+                              title={t('leadHunter.sendMessage')}
                             >
                               <PaperAirplaneIcon className="w-3.5 h-3.5" />
                             </button>
@@ -468,7 +477,7 @@ export default function LeadHunter() {
                             <button
                               onClick={() => setReplyModal({ ...lead })}
                               className="p-1.5 text-slate-400 hover:text-slate-200 transition-colors"
-                              title="Registrar respuesta"
+                              title={t('leadHunter.logReply')}
                             >
                               <ChatBubbleLeftEllipsisIcon className="w-3.5 h-3.5" />
                             </button>
@@ -478,7 +487,7 @@ export default function LeadHunter() {
                           <button
                             onClick={() => handleToggleHot(lead)}
                             className={`p-1.5 transition-colors ${lead.is_hot ? 'text-amber-400' : 'text-slate-600 hover:text-amber-400'}`}
-                            title={lead.is_hot ? 'Quitar caliente' : 'Marcar caliente'}
+                            title={lead.is_hot ? t('leadHunter.removeHot') : t('leadHunter.markHot')}
                           >
                             <FireIcon className="w-3.5 h-3.5" />
                           </button>
@@ -487,7 +496,7 @@ export default function LeadHunter() {
                           <button
                             onClick={() => handleDelete(lead)}
                             className="p-1.5 text-slate-600 hover:text-red-400 transition-colors"
-                            title="Eliminar"
+                            title={t('leadHunter.delete')}
                           >
                             <TrashIcon className="w-3.5 h-3.5" />
                           </button>
@@ -502,39 +511,39 @@ export default function LeadHunter() {
                           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
                             {/* Pain point */}
                             <div>
-                              <p className="text-slate-500 uppercase font-medium mb-1">Pain Point</p>
+                              <p className="text-slate-500 uppercase font-medium mb-1">{t('leadHunter.painPoint')}</p>
                               {lead.pain_point
                                 ? <p className="text-slate-300 leading-relaxed">{lead.pain_point}</p>
-                                : <p className="text-slate-600 italic">Sin generar aún</p>
+                                : <p className="text-slate-600 italic">{t('leadHunter.notGeneratedYet')}</p>
                               }
                             </div>
                             {/* Message ES */}
                             <div>
-                              <p className="text-slate-500 uppercase font-medium mb-1">Mensaje (ES)</p>
+                              <p className="text-slate-500 uppercase font-medium mb-1">{t('leadHunter.messageEs')}</p>
                               {lead.message_es
                                 ? <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">{lead.message_es}</p>
-                                : <p className="text-slate-600 italic">Sin generar aún</p>
+                                : <p className="text-slate-600 italic">{t('leadHunter.notGeneratedYet')}</p>
                               }
                             </div>
                             {/* Message EN */}
                             <div>
-                              <p className="text-slate-500 uppercase font-medium mb-1">Message (EN)</p>
+                              <p className="text-slate-500 uppercase font-medium mb-1">{t('leadHunter.messageEn')}</p>
                               {lead.message_en
                                 ? <p className="text-slate-300 leading-relaxed whitespace-pre-wrap">{lead.message_en}</p>
-                                : <p className="text-slate-600 italic">Not generated yet</p>
+                                : <p className="text-slate-600 italic">{t('leadHunter.notGeneratedYetEn')}</p>
                               }
                             </div>
                             {/* Reply if any */}
                             {lead.reply && (
                               <div className="sm:col-span-3">
-                                <p className="text-slate-500 uppercase font-medium mb-1">Respuesta del prospecto</p>
+                                <p className="text-slate-500 uppercase font-medium mb-1">{t('leadHunter.prospectReply')}</p>
                                 <p className="text-slate-300 italic">"{lead.reply}"</p>
                               </div>
                             )}
                             {/* Check reason */}
                             {lead.check_reason && (
                               <div className="sm:col-span-3">
-                                <p className="text-slate-500 uppercase font-medium mb-1">Razón check</p>
+                                <p className="text-slate-500 uppercase font-medium mb-1">{t('leadHunter.checkReason')}</p>
                                 <p className="text-red-400">{lead.check_reason}</p>
                               </div>
                             )}
@@ -547,8 +556,8 @@ export default function LeadHunter() {
                               className="mt-3 flex items-center gap-1.5 px-3 py-1.5 text-xs text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-500/10 transition-colors disabled:opacity-40"
                             >
                               {actingId === lead.id
-                                ? <><span className="animate-spin">⟳</span> Generando mensaje...</>
-                                : <><SparklesIcon className="w-3.5 h-3.5" /> Generar mensaje con IA</>
+                                ? <><span className="animate-spin">⟳</span> {t('leadHunter.generatingMessage')}</>
+                                : <><SparklesIcon className="w-3.5 h-3.5" /> {t('leadHunter.generateMessageAi')}</>
                               }
                             </button>
                           )}
@@ -567,8 +576,8 @@ export default function LeadHunter() {
       {!loading && total === 0 && !scouting && (
         <div className="bg-z-card border border-z-border rounded-xl p-12 text-center">
           <MagnifyingGlassIcon className="w-10 h-10 text-slate-700 mx-auto mb-3" />
-          <p className="text-slate-400 font-medium">No hay leads todavía</p>
-          <p className="text-xs text-slate-600 mt-1">Usa el formulario de arriba para buscar negocios en Google Maps</p>
+          <p className="text-slate-400 font-medium">{t('leadHunter.emptyTitle')}</p>
+          <p className="text-xs text-slate-600 mt-1">{t('leadHunter.emptyHint')}</p>
         </div>
       )}
 
@@ -576,10 +585,10 @@ export default function LeadHunter() {
       {sendModal && (
         <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
           <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-md p-6 space-y-4">
-            <h2 className="text-base font-bold text-slate-100">Confirmar envío</h2>
+            <h2 className="text-base font-bold text-slate-100">{t('leadHunter.confirmSendTitle')}</h2>
             <div className="space-y-2">
               <p className="text-sm text-slate-300">
-                Enviar mensaje a <span className="font-semibold text-slate-100">{sendModal.name}</span>
+                {t('leadHunter.sendMessageTo')} <span className="font-semibold text-slate-100">{sendModal.name}</span>
               </p>
               {sendModal.phone && (
                 <p className="text-xs text-slate-500 font-mono">{sendModal.phone}</p>
@@ -593,9 +602,9 @@ export default function LeadHunter() {
                 onClick={() => handleSend(sendModal, 'whatsapp')}
                 className="flex-1 z-btn-primary text-sm flex items-center justify-center gap-2"
               >
-                <PaperAirplaneIcon className="w-4 h-4" /> Enviar por WhatsApp
+                <PaperAirplaneIcon className="w-4 h-4" /> {t('leadHunter.sendWhatsapp')}
               </button>
-              <button onClick={() => setSendModal(null)} className="z-btn-ghost text-sm">Cancelar</button>
+              <button onClick={() => setSendModal(null)} className="z-btn-ghost text-sm">{t('leadHunter.cancel')}</button>
             </div>
           </div>
         </div>
@@ -614,28 +623,31 @@ export default function LeadHunter() {
 }
 
 function ReplyModal({ lead, onSave, onClose }) {
+  const { t } = useTranslation()
   const [reply, setReply] = useState(lead.reply || '')
   const [intent, setIntent] = useState(lead.reply_intent || '')
+
+  const INTENT_OPTIONS = ['positivo', 'negativo', 'pregunta']
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-md p-6 space-y-4">
-        <h2 className="text-base font-bold text-slate-100">Registrar respuesta</h2>
+        <h2 className="text-base font-bold text-slate-100">{t('leadHunter.logReplyTitle')}</h2>
         <p className="text-xs text-slate-500">{lead.name}</p>
         <div>
-          <label className="text-xs text-slate-500 mb-1 block">Texto de la respuesta</label>
+          <label className="text-xs text-slate-500 mb-1 block">{t('leadHunter.replyText')}</label>
           <textarea
             value={reply}
             onChange={e => setReply(e.target.value)}
             rows={3}
-            placeholder="Escribe lo que respondió el prospecto..."
+            placeholder={t('leadHunter.replyPlaceholder')}
             className="z-input w-full text-sm resize-none"
           />
         </div>
         <div>
-          <label className="text-xs text-slate-500 mb-1 block">Intención</label>
+          <label className="text-xs text-slate-500 mb-1 block">{t('leadHunter.intent')}</label>
           <div className="flex gap-2">
-            {['positivo', 'negativo', 'pregunta'].map(opt => (
+            {INTENT_OPTIONS.map(opt => (
               <button
                 key={opt}
                 onClick={() => setIntent(opt)}
@@ -647,7 +659,7 @@ function ReplyModal({ lead, onSave, onClose }) {
                     : 'text-slate-500 border-z-border hover:bg-white/5'
                 }`}
               >
-                {opt}
+                <IntentLabel intent={opt} />
               </button>
             ))}
           </div>
@@ -658,9 +670,9 @@ function ReplyModal({ lead, onSave, onClose }) {
             disabled={!reply.trim()}
             className="flex-1 z-btn-primary text-sm disabled:opacity-50"
           >
-            Guardar
+            {t('leadHunter.save')}
           </button>
-          <button onClick={onClose} className="z-btn-ghost text-sm">Cancelar</button>
+          <button onClick={onClose} className="z-btn-ghost text-sm">{t('leadHunter.cancel')}</button>
         </div>
       </div>
     </div>
