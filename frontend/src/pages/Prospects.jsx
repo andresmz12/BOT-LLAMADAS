@@ -49,7 +49,7 @@ function NewProspectModal({ campaigns, onClose, onSaved }) {
       await createProspect({ name: form.name, phone, company: form.company, campaign_id: Number(form.campaign_id) })
       onSaved()
     } catch (err) {
-      alert('Error: ' + (err.response?.data?.detail || err.message))
+      alert(t('prospects.genericError') + ': ' + (err.response?.data?.detail || err.message))
     } finally { setLoading(false) }
   }
 
@@ -184,7 +184,7 @@ export default function Prospects() {
     if (callingId) return
     setCallingId(p.id)
     try { await callProspect(p.id); load() }
-    catch (err) { alert('Error: ' + (err.response?.data?.detail || err.message)) }
+    catch (err) { alert(t('prospects.genericError') + ': ' + (err.response?.data?.detail || err.message)) }
     finally { setCallingId(null) }
   }
 
@@ -206,7 +206,7 @@ export default function Prospects() {
   const handleDelete = async (p) => {
     if (!confirm(t('prospects.confirmDelete', { name: p.name }))) return
     try { await deleteProspect(p.id); load() }
-    catch (err) { alert(err.response?.data?.detail || 'Error') }
+    catch (err) { alert(err.response?.data?.detail || t('prospects.genericError')) }
   }
 
   const handleRetry = async () => {
@@ -222,7 +222,7 @@ export default function Prospects() {
       const res = await retryProspects(params)
       alert(t('prospects.resetCount', { count: res.reset }))
       load()
-    } catch (err) { alert(err.response?.data?.detail || 'Error') }
+    } catch (err) { alert(err.response?.data?.detail || t('prospects.genericError')) }
   }
 
   const handleDeleteAll = async () => {
@@ -239,7 +239,7 @@ export default function Prospects() {
       const res = await deleteAllProspects(params)
       alert(t('prospects.deleteCount', { count: res.deleted }))
       load()
-    } catch (err) { alert(err.response?.data?.detail || 'Error') }
+    } catch (err) { alert(err.response?.data?.detail || t('prospects.genericError')) }
   }
 
   const handleExportCsv = () => {
@@ -298,7 +298,7 @@ export default function Prospects() {
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className="z-input w-full sm:w-auto">
-          {STATUSES.map(s => <option key={s} value={s}>{s || t('prospects.allStatuses')}</option>)}
+          {STATUSES.map(s => <option key={s} value={s}>{s ? t(`status.${s}`) : t('prospects.allStatuses')}</option>)}
         </select>
         <span className="text-sm text-slate-500">{t('prospects.prospectsCount', { count: prospects.length })}</span>
         {prospects.length > 0 && (
