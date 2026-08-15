@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   SparklesIcon,
   PhotoIcon,
@@ -11,16 +12,17 @@ import {
 } from '@heroicons/react/24/outline'
 import { generateImage, generateVideo, generateCopy, generateCalendar } from '../api/client'
 
-const TABS = [
-  { key: 'images',   label: 'Imágenes IA',           Icon: PhotoIcon },
-  { key: 'videos',   label: 'Videos IA',              Icon: FilmIcon },
-  { key: 'copy',     label: 'Copy & Textos',           Icon: DocumentTextIcon },
-  { key: 'calendar', label: 'Calendario',              Icon: CalendarDaysIcon },
-]
-
 export default function Marketing() {
+  const { t } = useTranslation()
   const [activeTab, setActiveTab] = useState('images')
   const [copyPrefill, setCopyPrefill] = useState(null)
+
+  const TABS = [
+    { key: 'images',   label: t('marketing.tabImages'),   Icon: PhotoIcon },
+    { key: 'videos',   label: t('marketing.tabVideos'),   Icon: FilmIcon },
+    { key: 'copy',     label: t('marketing.tabCopy'),     Icon: DocumentTextIcon },
+    { key: 'calendar', label: t('marketing.tabCalendar'), Icon: CalendarDaysIcon },
+  ]
 
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   if (user.role !== 'superadmin' && !user.marketing_enabled) {
@@ -29,9 +31,9 @@ export default function Marketing() {
         <div className="p-4 rounded-full bg-slate-800 border border-z-border">
           <SparklesIcon className="w-10 h-10 text-slate-500" />
         </div>
-        <h2 className="text-xl font-bold text-slate-200">Marketing IA no habilitado</h2>
+        <h2 className="text-xl font-bold text-slate-200">{t('marketing.notEnabledTitle')}</h2>
         <p className="text-slate-500 max-w-sm">
-          Esta función no está activa para tu organización. Contacta al administrador para que la habilite desde el Panel de Admin.
+          {t('marketing.notEnabledHint')}
         </p>
       </div>
     )
@@ -49,8 +51,8 @@ export default function Marketing() {
           <SparklesIcon className="w-6 h-6 text-z-blue-light" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Marketing IA</h1>
-          <p className="text-sm text-slate-500">Genera imágenes, videos, textos y calendarios con inteligencia artificial</p>
+          <h1 className="text-2xl font-bold text-slate-100">{t('marketing.title')}</h1>
+          <p className="text-sm text-slate-500">{t('marketing.subtitle')}</p>
         </div>
       </div>
 
@@ -83,6 +85,7 @@ export default function Marketing() {
 // ── Tab 1: Imágenes IA ────────────────────────────────────────────────────────
 
 function ImagesTab() {
+  const { t } = useTranslation()
   const [prompt, setPrompt]   = useState('')
   const [size, setSize]       = useState('1024x1024')
   const [quality, setQuality] = useState('standard')
@@ -96,7 +99,7 @@ function ImagesTab() {
   const pickRef = (e) => {
     const f = e.target.files?.[0]
     if (!f) return
-    if (f.size > 10 * 1024 * 1024) { setError('La imagen de referencia no puede superar 10 MB.'); return }
+    if (f.size > 10 * 1024 * 1024) { setError(t('marketing.images.refTooBig')); return }
     setRefFile(f); setError(null)
   }
 
@@ -107,7 +110,7 @@ function ImagesTab() {
       const r = await generateImage({ prompt, size, quality, n: quantity }, refFile)
       setImages(r.urls || [])
     } catch (e) {
-      setError(e.response?.data?.detail || 'Error al generar la imagen.')
+      setError(e.response?.data?.detail || t('marketing.images.generateError'))
     } finally {
       setLoading(false)
     }
@@ -118,23 +121,23 @@ function ImagesTab() {
       <div className="bg-z-card rounded-xl border border-z-border p-5 space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <PhotoIcon className="w-4 h-4 text-z-blue-light" />
-          <h2 className="text-sm font-semibold text-slate-200">Generador de imágenes</h2>
+          <h2 className="text-sm font-semibold text-slate-200">{t('marketing.images.title')}</h2>
         </div>
 
         <div>
-          <label className="text-xs text-slate-400 mb-1.5 block">Descripción de la imagen *</label>
+          <label className="text-xs text-slate-400 mb-1.5 block">{t('marketing.images.descLabel')}</label>
           <textarea
             rows={3}
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
-            placeholder="ej: logo minimalista para una tienda de envíos, fondo blanco, colores azul y dorado, estilo moderno y profesional"
+            placeholder={t('marketing.images.descPlaceholder')}
             className="z-input-light text-sm resize-none"
           />
         </div>
 
         {/* Reference image upload */}
         <div>
-          <label className="text-xs text-slate-400 mb-1.5 block">Imagen de referencia <span className="text-slate-600">(opcional)</span></label>
+          <label className="text-xs text-slate-400 mb-1.5 block">{t('marketing.images.refLabel')} <span className="text-slate-600">{t('marketing.images.optional')}</span></label>
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pickRef} />
           <div className="flex items-center gap-3">
             <button
@@ -142,7 +145,7 @@ function ImagesTab() {
               className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg bg-white/5 border border-z-border text-slate-300 hover:bg-white/10 hover:text-slate-100 transition-colors"
             >
               <PhotoIcon className="w-3.5 h-3.5" />
-              {refFile ? refFile.name : 'Subir imagen de referencia'}
+              {refFile ? refFile.name : t('marketing.images.uploadRef')}
             </button>
             {refFile && (
               <>
@@ -155,40 +158,40 @@ function ImagesTab() {
                   onClick={() => { setRefFile(null); fileRef.current && (fileRef.current.value = '') }}
                   className="text-xs text-slate-500 hover:text-red-400 transition-colors"
                 >
-                  ✕ Quitar
+                  {t('marketing.images.remove')}
                 </button>
               </>
             )}
           </div>
           {refFile && (
             <p className="text-xs text-z-blue-light mt-1.5">
-              ✓ La IA analizará tu imagen y generará algo similar
+              {t('marketing.images.refHint')}
             </p>
           )}
         </div>
 
         <div className="grid grid-cols-3 gap-3">
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Formato</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.images.format')}</label>
             <select value={size} onChange={e => setSize(e.target.value)} className="z-input-light text-sm">
-              <option value="1024x1024">Cuadrado (1:1)</option>
-              <option value="1536x1024">Horizontal (3:2)</option>
-              <option value="1024x1536">Vertical (2:3)</option>
+              <option value="1024x1024">{t('marketing.images.square')}</option>
+              <option value="1536x1024">{t('marketing.images.horizontal')}</option>
+              <option value="1024x1536">{t('marketing.images.vertical')}</option>
             </select>
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Calidad</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.images.quality')}</label>
             <select value={quality} onChange={e => setQuality(e.target.value)} className="z-input-light text-sm">
-              <option value="standard">Estándar</option>
+              <option value="standard">{t('marketing.images.standard')}</option>
               <option value="hd">HD</option>
             </select>
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Cantidad</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.images.quantity')}</label>
             <select value={quantity} onChange={e => setQty(Number(e.target.value))} className="z-input-light text-sm">
-              <option value={1}>1 imagen</option>
-              <option value={2}>2 imágenes</option>
-              <option value={4}>4 imágenes</option>
+              <option value={1}>{t('marketing.images.qty1')}</option>
+              <option value={2}>{t('marketing.images.qty2')}</option>
+              <option value={4}>{t('marketing.images.qty4')}</option>
             </select>
           </div>
         </div>
@@ -204,10 +207,10 @@ function ImagesTab() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              {refFile ? 'Analizando imagen y generando...' : 'Generando imagen...'}
+              {refFile ? t('marketing.images.analyzingAndGenerating') : t('marketing.images.generatingImage')}
             </>
           ) : (
-            <>✨ Generar imagen</>
+            <>{t('marketing.images.generateImage')}</>
           )}
         </button>
 
@@ -218,14 +221,14 @@ function ImagesTab() {
         <div className={`grid gap-4 ${images.length > 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1 max-w-lg'}`}>
           {images.map((url, i) => (
             <div key={i} className="bg-z-card rounded-xl border border-z-border overflow-hidden">
-              <img src={url} alt={`Generada ${i + 1}`} className="w-full object-cover" />
+              <img src={url} alt={t('marketing.images.generatedAlt', { n: i + 1 })} className="w-full object-cover" />
               <div className="px-4 py-3">
                 <a
                   href={url}
                   download={`imagen-${i + 1}.png`}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 border border-z-border rounded-lg hover:bg-white/5 hover:text-slate-200 transition-colors w-fit"
                 >
-                  <ArrowDownTrayIcon className="w-3.5 h-3.5" /> Descargar
+                  <ArrowDownTrayIcon className="w-3.5 h-3.5" /> {t('marketing.images.download')}
                 </a>
               </div>
             </div>
@@ -240,6 +243,7 @@ function ImagesTab() {
 // ── Tab 2: Videos IA ──────────────────────────────────────────────────────────
 
 function VideosTab() {
+  const { t } = useTranslation()
   const [prompt, setPrompt]     = useState('')
   const [duration, setDuration] = useState(5)
   const [style, setStyle]       = useState('Cinematográfico')
@@ -253,7 +257,7 @@ function VideosTab() {
     const f = e.target.files?.[0]
     if (!f) return
     if (f.size > 10 * 1024 * 1024) {
-      setError('La imagen no puede superar 10 MB.')
+      setError(t('marketing.videos.refTooBig'))
       return
     }
     setImageFile(f)
@@ -281,10 +285,10 @@ function VideosTab() {
         const blob = new Blob([arr], { type: 'video/mp4' })
         setVideoUrl(URL.createObjectURL(blob))
       } else {
-        setError('El servidor no devolvió el video.')
+        setError(t('marketing.videos.noVideoReturned'))
       }
     } catch (e) {
-      setError(e.response?.data?.detail || 'Error al generar el video.')
+      setError(e.response?.data?.detail || t('marketing.videos.generateError'))
     } finally {
       setLoading(false)
     }
@@ -295,35 +299,34 @@ function VideosTab() {
       <div className="bg-z-card rounded-xl border border-z-border p-5 space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <FilmIcon className="w-4 h-4 text-purple-400" />
-          <h2 className="text-sm font-semibold text-slate-200">Generador de videos</h2>
+          <h2 className="text-sm font-semibold text-slate-200">{t('marketing.videos.title')}</h2>
         </div>
 
         <div className="rounded-lg bg-amber-500/10 border border-amber-500/20 px-4 py-2.5 text-xs text-amber-300">
-          La generación tarda entre 1 y 12 minutos. No cierres esta pestaña mientras espera.
-          Requiere configuración de Google Cloud en Ajustes.
+          {t('marketing.videos.durationWarning')}
         </div>
 
         <div>
-          <label className="text-xs text-slate-400 mb-1.5 block">Descripción del video *</label>
+          <label className="text-xs text-slate-400 mb-1.5 block">{t('marketing.videos.descLabel')}</label>
           <textarea
             rows={3}
             value={prompt}
             onChange={e => setPrompt(e.target.value)}
-            placeholder="ej: producto de belleza girando sobre fondo negro, iluminación profesional, efecto bokeh, 5 segundos"
+            placeholder={t('marketing.videos.descPlaceholder')}
             className="z-input-light text-sm resize-none"
           />
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Duración</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.videos.duration')}</label>
             <select value={duration} onChange={e => setDuration(Number(e.target.value))} className="z-input-light text-sm">
-              <option value={5}>5 segundos</option>
-              <option value={10}>8 segundos</option>
+              <option value={5}>{t('marketing.videos.5sec')}</option>
+              <option value={10}>{t('marketing.videos.8sec')}</option>
             </select>
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Estilo</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.videos.style')}</label>
             <select value={style} onChange={e => setStyle(e.target.value)} className="z-input-light text-sm">
               <option>Cinematográfico</option>
               <option>Publicitario</option>
@@ -332,15 +335,15 @@ function VideosTab() {
             </select>
           </div>
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Imagen base <span className="text-slate-600">(opcional)</span></label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.videos.baseImage')} <span className="text-slate-600">{t('marketing.videos.optional')}</span></label>
             <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={pickFile} />
             <button
               onClick={() => fileRef.current?.click()}
               className="z-input-light text-sm text-left w-full truncate text-slate-400 hover:text-slate-200"
             >
-              {imageFile ? imageFile.name : 'Subir imagen...'}
+              {imageFile ? imageFile.name : t('marketing.videos.uploadImage')}
             </button>
-            <p className="text-xs text-slate-600 mt-1">Sube una foto para animarla (imagen→video)</p>
+            <p className="text-xs text-slate-600 mt-1">{t('marketing.videos.baseImageHint')}</p>
           </div>
         </div>
 
@@ -355,10 +358,10 @@ function VideosTab() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              Generando video...
+              {t('marketing.videos.generatingVideo')}
             </>
           ) : (
-            <>🎬 Generar video</>
+            <>{t('marketing.videos.generateVideo')}</>
           )}
         </button>
 
@@ -376,7 +379,7 @@ function VideosTab() {
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 border border-z-border rounded-lg hover:bg-white/5 hover:text-slate-200 transition-colors w-fit"
             >
-              <ArrowDownTrayIcon className="w-3.5 h-3.5" /> Descargar MP4
+              <ArrowDownTrayIcon className="w-3.5 h-3.5" /> {t('marketing.videos.downloadMp4')}
             </a>
           </div>
         </div>
@@ -401,6 +404,7 @@ const CONTENT_TYPES = [
 ]
 
 function CopyTab({ prefill, onPrefillUsed }) {
+  const { t } = useTranslation()
   const [contentType, setContentType] = useState('Post Instagram')
   const [business, setBusiness]       = useState(prefill?.business || '')
   const [objective, setObjective]     = useState(prefill?.objective || '')
@@ -419,7 +423,7 @@ function CopyTab({ prefill, onPrefillUsed }) {
       const r = await generateCopy({ content_type: contentType, business, objective, tone, language })
       setResult(r.text || '')
     } catch (e) {
-      setError(e.response?.data?.detail || 'Error al generar el copy.')
+      setError(e.response?.data?.detail || t('marketing.copy.generateError'))
     } finally {
       setLoading(false)
     }
@@ -444,41 +448,41 @@ function CopyTab({ prefill, onPrefillUsed }) {
       <div className="bg-z-card rounded-xl border border-z-border p-5 space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <DocumentTextIcon className="w-4 h-4 text-green-400" />
-          <h2 className="text-sm font-semibold text-slate-200">Generador de copy</h2>
+          <h2 className="text-sm font-semibold text-slate-200">{t('marketing.copy.title')}</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="sm:col-span-2">
-            <label className="text-xs text-slate-400 mb-1 block">Tipo de contenido</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.copy.contentType')}</label>
             <select value={contentType} onChange={e => setContentType(e.target.value)} className="z-input-light text-sm">
-              {CONTENT_TYPES.map(t => <option key={t}>{t}</option>)}
+              {CONTENT_TYPES.map(ct => <option key={ct}>{ct}</option>)}
             </select>
           </div>
 
           <div className="sm:col-span-2">
-            <label className="text-xs text-slate-400 mb-1 block">¿De qué trata tu negocio? *</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.copy.businessLabel')}</label>
             <input
               type="text"
               value={business}
               onChange={e => setBusiness(e.target.value)}
-              placeholder="ej: tienda de envíos de dinero a México, Chicago IL"
+              placeholder={t('marketing.copy.businessPlaceholder')}
               className="z-input-light text-sm"
             />
           </div>
 
           <div className="sm:col-span-2">
-            <label className="text-xs text-slate-400 mb-1 block">Objetivo del contenido</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.copy.objectiveLabel')}</label>
             <input
               type="text"
               value={objective}
               onChange={e => setObjective(e.target.value)}
-              placeholder="ej: conseguir nuevos clientes, promoción de verano"
+              placeholder={t('marketing.copy.objectivePlaceholder')}
               className="z-input-light text-sm"
             />
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Tono</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.copy.tone')}</label>
             <select value={tone} onChange={e => setTone(e.target.value)} className="z-input-light text-sm">
               <option>Profesional</option>
               <option>Amigable</option>
@@ -489,7 +493,7 @@ function CopyTab({ prefill, onPrefillUsed }) {
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Idioma</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.copy.language')}</label>
             <select value={language} onChange={e => setLanguage(e.target.value)} className="z-input-light text-sm">
               <option>Español</option>
               <option>Inglés</option>
@@ -509,10 +513,10 @@ function CopyTab({ prefill, onPrefillUsed }) {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              Generando copy...
+              {t('marketing.copy.generatingCopy')}
             </>
           ) : (
-            <>✍️ Generar copy</>
+            <>{t('marketing.copy.generateCopy')}</>
           )}
         </button>
 
@@ -522,21 +526,21 @@ function CopyTab({ prefill, onPrefillUsed }) {
       {result && (
         <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
           <div className="px-5 py-3 border-b border-z-border flex items-center justify-between gap-2 flex-wrap">
-            <h3 className="text-sm font-semibold text-slate-200">Resultado</h3>
+            <h3 className="text-sm font-semibold text-slate-200">{t('marketing.copy.result')}</h3>
             <div className="flex gap-2">
               <button
                 onClick={generate}
                 disabled={loading}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 border border-z-border rounded-lg hover:bg-white/5 hover:text-slate-200 transition-colors disabled:opacity-40"
               >
-                <ArrowPathIcon className="w-3.5 h-3.5" /> Regenerar
+                <ArrowPathIcon className="w-3.5 h-3.5" /> {t('marketing.copy.regenerate')}
               </button>
               <button
                 onClick={copy}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-slate-400 border border-z-border rounded-lg hover:bg-white/5 hover:text-slate-200 transition-colors"
               >
                 <ClipboardDocumentIcon className="w-3.5 h-3.5" />
-                {copied ? 'Copiado ✓' : 'Copiar'}
+                {copied ? t('marketing.copy.copied') : t('marketing.copy.copy')}
               </button>
               <button
                 onClick={download}
@@ -575,6 +579,7 @@ const TYPE_BADGE = {
 }
 
 function CalendarTab({ onGenerateCopy }) {
+  const { t } = useTranslation()
   const [businessType, setBusiness] = useState('')
   const [platforms, setPlatforms]   = useState(['Instagram', 'Facebook'])
   const [frequency, setFrequency]   = useState('3 veces/semana')
@@ -593,7 +598,7 @@ function CalendarTab({ onGenerateCopy }) {
       const r = await generateCalendar({ business_type: businessType, platforms, frequency, period })
       setPosts(r.posts || [])
     } catch (e) {
-      setError(e.response?.data?.detail || 'Error al generar el calendario.')
+      setError(e.response?.data?.detail || t('marketing.calendar.generateError'))
     } finally {
       setLoading(false)
     }
@@ -604,23 +609,23 @@ function CalendarTab({ onGenerateCopy }) {
       <div className="bg-z-card rounded-xl border border-z-border p-5 space-y-4">
         <div className="flex items-center gap-2 mb-1">
           <CalendarDaysIcon className="w-4 h-4 text-amber-400" />
-          <h2 className="text-sm font-semibold text-slate-200">Generador de calendario</h2>
+          <h2 className="text-sm font-semibold text-slate-200">{t('marketing.calendar.title')}</h2>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div className="sm:col-span-2">
-            <label className="text-xs text-slate-400 mb-1 block">Tipo de negocio *</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.calendar.businessTypeLabel')}</label>
             <input
               type="text"
               value={businessType}
               onChange={e => setBusiness(e.target.value)}
-              placeholder="ej: tienda de ropa deportiva, restaurante mexicano, consultoría financiera"
+              placeholder={t('marketing.calendar.businessTypePlaceholder')}
               className="z-input-light text-sm"
             />
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Frecuencia</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.calendar.frequency')}</label>
             <select value={frequency} onChange={e => setFrequency(e.target.value)} className="z-input-light text-sm">
               <option>3 veces/semana</option>
               <option>5 veces/semana</option>
@@ -629,7 +634,7 @@ function CalendarTab({ onGenerateCopy }) {
           </div>
 
           <div>
-            <label className="text-xs text-slate-400 mb-1 block">Período</label>
+            <label className="text-xs text-slate-400 mb-1 block">{t('marketing.calendar.period')}</label>
             <select value={period} onChange={e => setPeriod(e.target.value)} className="z-input-light text-sm">
               <option>1 semana</option>
               <option>2 semanas</option>
@@ -638,7 +643,7 @@ function CalendarTab({ onGenerateCopy }) {
           </div>
 
           <div className="sm:col-span-2">
-            <label className="text-xs text-slate-400 mb-2 block">Plataformas *</label>
+            <label className="text-xs text-slate-400 mb-2 block">{t('marketing.calendar.platforms')}</label>
             <div className="flex flex-wrap gap-2">
               {PLATFORM_OPTIONS.map(p => (
                 <button
@@ -668,10 +673,10 @@ function CalendarTab({ onGenerateCopy }) {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
               </svg>
-              Generando calendario...
+              {t('marketing.calendar.generatingCalendar')}
             </>
           ) : (
-            <>📅 Generar calendario</>
+            <>{t('marketing.calendar.generateCalendar')}</>
           )}
         </button>
 
@@ -681,16 +686,16 @@ function CalendarTab({ onGenerateCopy }) {
       {posts.length > 0 && (
         <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
           <div className="px-5 py-3 border-b border-z-border">
-            <p className="text-sm font-semibold text-slate-200">{posts.length} publicaciones planificadas</p>
+            <p className="text-sm font-semibold text-slate-200">{t('marketing.calendar.plannedPosts', { count: posts.length })}</p>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[600px]">
               <thead>
                 <tr className="border-b border-z-border">
-                  <th className="text-left px-5 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">Día</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">Plataforma</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">Tipo</th>
-                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">Tema</th>
+                  <th className="text-left px-5 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">{t('marketing.calendar.headers.day')}</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">{t('marketing.calendar.headers.platform')}</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">{t('marketing.calendar.headers.type')}</th>
+                  <th className="text-left px-4 py-2.5 text-xs font-medium text-slate-500 uppercase tracking-wide">{t('marketing.calendar.headers.topic')}</th>
                   <th className="px-4 py-2.5"></th>
                 </tr>
               </thead>
@@ -713,7 +718,7 @@ function CalendarTab({ onGenerateCopy }) {
                         onClick={() => onGenerateCopy({ business: businessType, objective: post.topic })}
                         className="text-xs text-z-blue-light hover:text-blue-300 transition-colors whitespace-nowrap"
                       >
-                        ✍️ Generar copy
+                        {t('marketing.calendar.generateCopyBtn')}
                       </button>
                     </td>
                   </tr>
