@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { TrashIcon, PhoneArrowUpRightIcon, ChevronRightIcon, XMarkIcon, ForwardIcon, PhoneIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import CallDetailModal from '../components/CallDetailModal'
@@ -11,6 +12,7 @@ const OUTCOMES = ['', 'interested', 'not_interested', 'callback_requested', 'app
 const SENTIMENT_EMOJI = { positive: '😊', neutral: '😐', negative: '😞' }
 
 export default function Calls() {
+  const { t } = useTranslation()
   const [searchParams] = useSearchParams()
   const orgId = searchParams.get('org') ? Number(searchParams.get('org')) : null
   const orgName = searchParams.get('orgName') || ''
@@ -51,10 +53,10 @@ export default function Calls() {
   }
 
   const handleDeleteSelected = async () => {
-    if (!confirm(`¿Eliminar ${selected.size} llamada(s) seleccionada(s)?`)) return
+    if (!confirm(t('calls.confirmDelete', { count: selected.size }))) return
     try {
       const res = await deleteCalls({ ids: [...selected].join(',') })
-      alert(`${res.deleted} llamadas eliminadas.`)
+      alert(t('calls.callDeleted', { count: res.deleted }))
       load()
     } catch (err) { alert(err.response?.data?.detail || 'Error') }
   }
@@ -63,7 +65,7 @@ export default function Calls() {
     if (callingId) return
     setCallingId(prospectId)
     try { await callProspect(prospectId); load() }
-    catch (err) { alert(err.response?.data?.detail || 'Error al llamar') }
+    catch (err) { alert(err.response?.data?.detail || t('calls.errorCall')) }
     finally { setCallingId(null) }
   }
 
@@ -80,7 +82,7 @@ export default function Calls() {
     if (!item?.prospect_id) return
     setQueue(q => ({ ...q, calling: true }))
     try { await callProspect(item.prospect_id) }
-    catch (err) { alert(err.response?.data?.detail || 'Error al llamar') }
+    catch (err) { alert(err.response?.data?.detail || t('calls.errorCall')) }
     finally {
       setQueue(q => q ? ({ ...q, calling: false }) : null)
       load()
@@ -96,14 +98,16 @@ export default function Calls() {
   }
 
   const handleDeleteAll = async () => {
-    const scope = filterCampaign || filterOutcome ? `las ${calls.length} llamadas del filtro actual` : `TODAS las ${calls.length} llamadas`
-    if (!confirm(`¿Eliminar ${scope}? Esta acción no se puede deshacer.`)) return
+    const scope = filterCampaign || filterOutcome
+      ? t('calls.scopeFiltered', { count: calls.length })
+      : t('calls.scopeAll', { count: calls.length })
+    if (!confirm(t('calls.deleteAllConfirm', { scope }))) return
     try {
       const params = {}
       if (filterCampaign) params.campaign_id = filterCampaign
       if (filterOutcome) params.outcome = filterOutcome
       const res = await deleteCalls(params)
-      alert(`${res.deleted} llamadas eliminadas.`)
+      alert(t('calls.callDeleted', { count: res.deleted }))
       load()
     } catch (err) { alert(err.response?.data?.detail || 'Error') }
   }
@@ -116,8 +120,8 @@ export default function Calls() {
       <OrgScopeBanner orgId={orgId} orgName={orgName} />
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Llamadas</h1>
-          <p className="text-sm text-slate-500 mt-0.5">Historial y resultados de todas las llamadas realizadas</p>
+          <h1 className="text-2xl font-bold text-slate-100">{t('calls.title')}</h1>
+          <p className="text-sm text-slate-500 mt-0.5">{t('calls.subtitle')}</p>
         </div>
         {calls.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -125,20 +129,20 @@ export default function Calls() {
               <button onClick={startQueue}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-green-400 border border-green-500/30 hover:bg-green-500/10 rounded-lg transition-colors">
                 <PhoneArrowUpRightIcon className="w-3.5 h-3.5" />
-                Llamar en orden ({calls.filter(c => c.prospect_id && !c.is_demo).length})
+                {t('calls.callQueue', { count: calls.filter(c => c.prospect_id && !c.is_demo).length })}
               </button>
             )}
             {selected.size > 0 && (
               <button onClick={handleDeleteSelected}
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-lg transition-colors">
                 <TrashIcon className="w-3.5 h-3.5" />
-                Eliminar seleccionadas ({selected.size})
+                {t('calls.deleteSelected', { count: selected.size })}
               </button>
             )}
             <button onClick={handleDeleteAll}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-lg transition-colors">
               <TrashIcon className="w-3.5 h-3.5" />
-              Eliminar {filterCampaign || filterOutcome ? 'filtradas' : 'todas'}
+              {filterCampaign || filterOutcome ? t('calls.deleteFiltered') : t('calls.deleteAll')}
             </button>
           </div>
         )}
@@ -146,13 +150,13 @@ export default function Calls() {
 
       <div className="flex gap-3 flex-wrap items-center">
         <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-full sm:w-auto">
-          <option value="">Todas las campañas</option>
+          <option value="">{t('calls.allCampaigns')}</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select value={filterOutcome} onChange={e => setFilterOutcome(e.target.value)} className="z-input w-full sm:w-auto">
-          {OUTCOMES.map(o => <option key={o} value={o}>{o || 'Todos los outcomes'}</option>)}
+          {OUTCOMES.map(o => <option key={o} value={o}>{o || t('calls.allOutcomes')}</option>)}
         </select>
-        <span className="text-sm text-slate-500">{calls.length} llamadas</span>
+        <span className="text-sm text-slate-500">{t('calls.callsCount', { count: calls.length })}</span>
       </div>
 
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
@@ -164,7 +168,7 @@ export default function Calls() {
                 <input type="checkbox" checked={allChecked} ref={el => { if (el) el.indeterminate = someChecked }}
                   onChange={toggleAll} className="rounded border-slate-600 bg-slate-800 text-z-blue cursor-pointer" />
               </th>
-              {['Prospecto', 'Empresa', 'Teléfono', 'Tipo', 'Outcome', 'Sentimiento', 'Duración', 'Fecha', ''].map(h => (
+              {[t('calls.headers.prospect'), t('calls.headers.company'), t('calls.headers.phone'), t('calls.headers.type'), t('calls.headers.outcome'), t('calls.headers.sentiment'), t('calls.headers.duration'), t('calls.headers.date'), ''].map(h => (
                 <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
               ))}
             </tr>
@@ -181,8 +185,8 @@ export default function Calls() {
                 <td className="px-6 py-3 text-slate-300 font-mono text-xs" onClick={() => openDetail(call)}>{call.prospect_phone || '—'}</td>
                 <td className="px-6 py-3" onClick={() => openDetail(call)}>
                   {call.call_type === 'inbound'
-                    ? <span className="px-2 py-0.5 bg-blue-500/15 text-blue-400 text-xs rounded-full font-medium">Entrante</span>
-                    : <span className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded-full font-medium">Saliente</span>}
+                    ? <span className="px-2 py-0.5 bg-blue-500/15 text-blue-400 text-xs rounded-full font-medium">{t('calls.inbound')}</span>
+                    : <span className="px-2 py-0.5 bg-slate-700 text-slate-400 text-xs rounded-full font-medium">{t('calls.outbound')}</span>}
                 </td>
                 <td className="px-6 py-3" onClick={() => openDetail(call)}><StatusBadge status={call.outcome} /></td>
                 <td className="px-6 py-3 text-slate-400" onClick={() => openDetail(call)}>
@@ -195,7 +199,7 @@ export default function Calls() {
                 <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
                   {call.prospect_id && !call.is_demo && (
                     <button onClick={() => handleCall(call.prospect_id)} disabled={callingId === call.prospect_id}
-                      title="Volver a llamar"
+                      title={t('calls.recallBtn')}
                       className="text-slate-600 hover:text-green-400 transition-colors disabled:opacity-40">
                       <PhoneArrowUpRightIcon className="w-4 h-4" />
                     </button>
@@ -206,7 +210,7 @@ export default function Calls() {
             {calls.length === 0 && (
               <tr><td colSpan={10} className="px-6 py-12 text-center">
                 <PhoneIcon className="w-8 h-8 text-slate-600 mx-auto mb-2 opacity-40" />
-                <p className="text-slate-500 text-sm">No hay llamadas registradas todavía.</p>
+                <p className="text-slate-500 text-sm">{t('calls.noCalls')}</p>
               </td></tr>
             )}
           </tbody>
@@ -225,7 +229,7 @@ export default function Calls() {
               <div className="flex items-start justify-between mb-4">
                 <div>
                   <p className="text-xs text-slate-500 font-medium uppercase tracking-wide mb-0.5">
-                    Cola de rellamadas — {queue.index + 1} / {queue.items.length}
+                    {t('calls.queueTitle', { index: queue.index + 1, total: queue.items.length })}
                   </p>
                   <p className="text-lg font-bold text-slate-100">{item.prospect_name || '—'}</p>
                   <p className="text-sm text-slate-400">{item.prospect_company || ''}</p>
@@ -247,25 +251,25 @@ export default function Calls() {
                 <button onClick={queueCall} disabled={queue.calling}
                   className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 disabled:opacity-50 text-white font-semibold rounded-lg text-sm transition-colors flex-1 justify-center">
                   <PhoneArrowUpRightIcon className="w-4 h-4" />
-                  {queue.calling ? 'Llamando...' : 'Llamar'}
+                  {queue.calling ? t('calls.calling') : t('calls.call')}
                 </button>
                 {!isLast && (
-                  <button onClick={queueNext} title="Saltar al siguiente"
+                  <button onClick={queueNext} title={t('calls.skipNext')}
                     className="flex items-center gap-1.5 px-4 py-2.5 border border-z-border text-slate-400 hover:text-slate-200 hover:border-slate-500 rounded-lg text-sm transition-colors">
                     <ForwardIcon className="w-4 h-4" />
-                    Saltar
+                    {t('calls.skip')}
                   </button>
                 )}
                 {isLast && !queue.calling && (
                   <button onClick={() => setQueue(null)}
                     className="px-4 py-2.5 border border-z-border text-slate-400 hover:text-slate-200 rounded-lg text-sm transition-colors">
-                    Finalizar
+                    {t('calls.finish')}
                   </button>
                 )}
               </div>
               {!isLast && (
                 <p className="text-xs text-slate-600 mt-3 text-center">
-                  Siguiente: {queue.items[queue.index + 1]?.prospect_name || '—'}
+                  {t('calls.next')}{queue.items[queue.index + 1]?.prospect_name || '—'}
                 </p>
               )}
             </div>

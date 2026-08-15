@@ -224,7 +224,31 @@
     },
     "newProspect": "Nuevo Prospecto",
     "addProspect": "Agregar",
-    "adding": "Guardando..."
+    "adding": "Guardando...",
+    "subtitle": "Importa y gestiona los contactos que tus agentes van a llamar",
+    "emailContacts": "Contactos de email",
+    "scoreHeader": "Score",
+    "emailHeader": "Email",
+    "unsubscribedShort": "Des.",
+    "unsubscribedTitle": "Desuscrito",
+    "noEmail": "Sin email",
+    "callTitle": "Llamar",
+    "historyTitle": "Historial",
+    "deleteTitle": "Eliminar",
+    "view": "Ver",
+    "loading": "Cargando...",
+    "close": "Cerrar",
+    "noCampaignImportWarning": "Debes crear una campaña antes de importar prospectos.",
+    "scopeEmail": "los {{count}} contactos de email",
+    "nameLabel": "Nombre *",
+    "phoneLabel": "Teléfono *",
+    "companyLabel": "Empresa",
+    "campaignLabel": "Campaña *",
+    "digitsHint": "Solo dígitos, sin espacios ni guiones",
+    "cancel": "Cancelar",
+    "emailSentTooltip": "{{count}} email(s) enviado(s)\nÚltimo: {{date}}",
+    "scopeStatus": "los {{count}} prospectos con estado \"{{status}}\"",
+    "scopeFailedVoicemail": "todos los prospectos fallidos y con buzón de voz"
   },
   "calls": {
     "title": "Llamadas",
@@ -258,7 +282,11 @@
       "sentiment": "Sentimiento",
       "duration": "Duración",
       "date": "Fecha"
-    }
+    },
+    "subtitle": "Historial y resultados de todas las llamadas realizadas",
+    "deleteAllConfirm": "¿Eliminar {{scope}}? Esta acción no se puede deshacer.",
+    "scopeFiltered": "las {{count}} llamadas del filtro actual",
+    "scopeAll": "TODAS las {{count}} llamadas"
   },
   "leads": {
     "title": "Centro de Leads",
