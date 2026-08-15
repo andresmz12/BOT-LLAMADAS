@@ -1,11 +1,14 @@
 import asyncio
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
+import socket
 import time
 from datetime import datetime
 from typing import Optional
+from urllib.parse import urlparse
 
 import httpx
 from sqlmodel import Session
@@ -17,6 +20,31 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 TIMEOUT = 10
+
+
+class UnsafeWebhookUrlError(Exception):
+    """Raised when a configured webhook URL resolves to a non-public address."""
+
+
+def _assert_safe_webhook_url(url: str) -> None:
+    """Reject webhook URLs that point at internal/private/loopback/link-local
+    addresses (including the 169.254.169.254 cloud metadata endpoint). Org
+    admins can set this URL to anything, so without this check it's an SSRF
+    vector into our own network from any org's settings page."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https"):
+        raise UnsafeWebhookUrlError("La URL del webhook debe usar http o https")
+    host = parsed.hostname
+    if not host:
+        raise UnsafeWebhookUrlError("URL de webhook inválida")
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror:
+        raise UnsafeWebhookUrlError("No se pudo resolver el host del webhook")
+    for info in infos:
+        ip = ipaddress.ip_address(info[4][0])
+        if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast or ip.is_unspecified:
+            raise UnsafeWebhookUrlError("La URL del webhook no puede apuntar a una dirección interna/privada")
 
 
 def _build_payload(
@@ -131,6 +159,25 @@ async def _dispatch_webhook(
     last_response = ""
     success = False
     duration_ms = 0
+
+    try:
+        _assert_safe_webhook_url(organization.crm_webhook_url)
+    except UnsafeWebhookUrlError as exc:
+        logger.warning(f"[CRM_WEBHOOK] org={organization.id} blocked unsafe URL: {exc}")
+        try:
+            log_entry = WebhookLog(
+                organization_id=organization.id,
+                event_type=event_type,
+                success=False,
+                status_code=None,
+                response_text=str(exc),
+                duration_ms=0,
+            )
+            session.add(log_entry)
+            session.commit()
+        except Exception as db_exc:
+            logger.error(f"[CRM_WEBHOOK] Failed to write WebhookLog: {db_exc}")
+        return {"success": False, "status_code": None, "response": str(exc)}
 
     for attempt in range(1, MAX_RETRIES + 1):
         t0 = time.monotonic()

@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, EyeIcon } from '@heroicons/react/24/outline'
 import {
   getOrganizations, createOrganization, updateOrganization, deleteOrganization,
-  getUsers, createUser, updateUser, deleteUser,
+  getUsers, createUser, updateUser, deleteUser, resetUserPassword,
   testCRMWebhook, upgradeOrg, getOrgSecrets, getAuditLog,
 } from '../api/client'
 import SecretInput from '../components/SecretInput'
@@ -784,6 +784,8 @@ function UserModal({ user, orgs, onClose, onSaved }) {
     email: '', password: '', full_name: '', role: 'agent', organization_id: orgs[0]?.id || null
   })
   const [loading, setLoading] = useState(false)
+  const [newPassword, setNewPassword] = useState('')
+  const [resetting, setResetting] = useState(false)
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const submit = async (e) => {
@@ -796,6 +798,20 @@ function UserModal({ user, orgs, onClose, onSaved }) {
     } catch (err) {
       alert(err.response?.data?.detail || t('admin.errorGeneric'))
       setLoading(false)
+    }
+  }
+
+  const submitPasswordReset = async () => {
+    if (!newPassword) return
+    setResetting(true)
+    try {
+      await resetUserPassword(user.id, newPassword)
+      setNewPassword('')
+      alert(t('admin.userModal.passwordResetOk'))
+    } catch (err) {
+      alert(err.response?.data?.detail || t('admin.errorGeneric'))
+    } finally {
+      setResetting(false)
     }
   }
 
@@ -842,6 +858,24 @@ function UserModal({ user, orgs, onClose, onSaved }) {
               <input type="checkbox" checked={form.is_active !== false} onChange={e => set('is_active', e.target.checked)} className="w-4 h-4 accent-blue-500" />
               <span className="text-sm text-slate-300">{t('admin.userModal.active')}</span>
             </label>
+          )}
+          {user && (
+            <div className="pt-2 border-t border-z-border space-y-2">
+              <label className="block text-sm font-medium text-slate-300">{t('admin.userModal.resetPassword')}</label>
+              <div className="flex gap-2 items-start">
+                <div className="flex-1">
+                  <SecretInput
+                    value={newPassword}
+                    onChange={e => setNewPassword(e.target.value)}
+                    placeholder={t('admin.userModal.passwordPlaceholder')}
+                  />
+                </div>
+                <button type="button" onClick={submitPasswordReset} disabled={!newPassword || resetting}
+                  className="z-btn-ghost text-xs whitespace-nowrap disabled:opacity-50">
+                  {resetting ? t('admin.userModal.saving') : t('admin.userModal.resetPasswordBtn')}
+                </button>
+              </div>
+            </div>
           )}
           <div className="flex justify-end gap-3 pt-2">
             <button type="button" onClick={onClose} className="z-btn-ghost">{t('admin.userModal.cancel')}</button>

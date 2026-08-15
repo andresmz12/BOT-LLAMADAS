@@ -635,7 +635,10 @@
       "active": "Usuario activo",
       "cancel": "Cancelar",
       "save": "Guardar",
-      "saving": "Guardando..."
+      "saving": "Guardando...",
+      "resetPassword": "Restablecer contraseña",
+      "resetPasswordBtn": "Cambiar",
+      "passwordResetOk": "Contraseña actualizada correctamente."
     },
     "crmTypes": {
       "none": "Sin integración",

@@ -2,6 +2,7 @@ import os
 import hmac
 import hashlib
 import base64
+import secrets
 import jwt
 from datetime import datetime, timedelta
 from typing import Optional
@@ -10,9 +11,14 @@ SECRET_KEY = os.getenv("JWT_SECRET", "")
 if not SECRET_KEY:
     import logging as _logging
     _logging.getLogger(__name__).critical(
-        "JWT_SECRET env var is not set — using insecure fallback. Set this in production!"
+        "JWT_SECRET env var is not set — signing with a random per-process key. "
+        "All tokens will be invalidated on restart. Set JWT_SECRET in production!"
     )
-    SECRET_KEY = "dev-secret-change-in-production-ism-2024"
+    # Never fall back to a fixed string here — a fixed fallback is a value
+    # anyone with read access to this source can use to forge tokens for any
+    # user (including superadmin). A random per-boot key at least keeps the
+    # unset-env-var case from being a known, exploitable secret.
+    SECRET_KEY = secrets.token_hex(32)
 ALGORITHM = "HS256"
 TOKEN_EXPIRE_HOURS = 24
 _ITERATIONS = 200_000

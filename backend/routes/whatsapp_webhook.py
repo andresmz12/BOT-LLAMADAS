@@ -1,4 +1,8 @@
+import hashlib
+import hmac
+import json
 import logging
+import os
 from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, Query
 from fastapi.responses import PlainTextResponse
@@ -8,6 +12,18 @@ from models import Organization, WhatsAppConversation, WhatsAppMessage
 
 router = APIRouter(prefix="/webhook", tags=["whatsapp"])
 logger = logging.getLogger(__name__)
+
+
+def _verify_meta_signature(raw_body: bytes, header_sig: str) -> bool:
+    """Verify Meta's X-Hub-Signature-256 (sha256=<hex hmac>) against WHATSAPP_APP_SECRET."""
+    secret = os.getenv("WHATSAPP_APP_SECRET", "")
+    if not secret:
+        logger.warning("WHATSAPP_APP_SECRET not set — webhook signature verification skipped!")
+        return True
+    if not header_sig or not header_sig.startswith("sha256="):
+        return False
+    expected = hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(header_sig[len("sha256="):], expected)
 
 
 @router.get("/whatsapp")
@@ -33,7 +49,13 @@ async def receive_whatsapp_message(
     background_tasks: BackgroundTasks,
     session: Session = Depends(get_session),
 ):
-    body = await request.json()
+    raw_body = await request.body()
+    if not _verify_meta_signature(raw_body, request.headers.get("x-hub-signature-256", "")):
+        raise HTTPException(status_code=401, detail="Invalid webhook signature")
+    try:
+        body = json.loads(raw_body)
+    except Exception:
+        return {"status": "ignored"}
 
     try:
         entry = body["entry"][0]
