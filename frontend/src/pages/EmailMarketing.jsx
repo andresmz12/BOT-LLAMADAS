@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from 'react-i18next'
 
 // All times are stored/sent as UTC. The system operates at UTC-5.
 const UTC_OFFSET = -5
@@ -15,11 +16,11 @@ const fromUTC5ToISO = (localStr) => {
   d.setHours(d.getHours() - UTC_OFFSET)
   return d.toISOString()
 }
-const displayUTC5 = (isoUtc) => {
+const displayUTC5 = (isoUtc, locale) => {
   if (!isoUtc) return ''
   const d = new Date(isoUtc)
   d.setHours(d.getHours() + UTC_OFFSET)
-  return d.toLocaleString('es', { dateStyle: 'medium', timeStyle: 'short' })
+  return d.toLocaleString(locale || 'es', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 import {
@@ -39,25 +40,16 @@ import {
   generateEmailSequence, createEmailSequence, getEmailSequences, updateSequenceStep, deleteEmailSequence,
 } from '../api/client'
 
-const FIXED_TEMPLATES = [
-  { key: 'general',            label: 'General',       desc: 'Primer contacto o seguimiento' },
-  { key: 'interested',         label: 'Interesado',    desc: 'Prospecto mostró interés en la llamada' },
-  { key: 'callback_requested', label: 'Callback',      desc: 'Acordaron llamar de nuevo' },
-  { key: 'voicemail',          label: 'Buzón de voz',  desc: 'No se pudo hablar, se dejó buzón' },
-  { key: 'not_interested',     label: 'No interesado', desc: 'Prospecto declinó en la llamada' },
-]
-
-const PRO_GALLERY = [
-  { key: 'general',            label: 'Primer contacto',    tag: 'General',       tagColor: 'bg-slate-500/20 text-slate-400' },
-  { key: 'interested',         label: 'Prospecto caliente', tag: 'Interesado',    tagColor: 'bg-green-500/20 text-green-400' },
-  { key: 'callback_requested', label: 'Recordatorio amable',tag: 'Callback',      tagColor: 'bg-blue-500/20 text-blue-400' },
-  { key: 'voicemail',          label: 'Buzón sin respuesta',tag: 'Buzón de voz',  tagColor: 'bg-amber-500/20 text-amber-400' },
-  { key: 'not_interested',     label: 'Cierre cordial',     tag: 'No interesado', tagColor: 'bg-red-500/20 text-red-400' },
-]
-const FIXED_KEYS = new Set(FIXED_TEMPLATES.map(t => t.key))
+const FIXED_KEYS_LIST = ['general', 'interested', 'callback_requested', 'voicemail', 'not_interested']
+const FIXED_KEYS = new Set(FIXED_KEYS_LIST)
 const EMPTY_TMPL = { subject: '', greeting: '', body: '', cta_text: '', cta_url: '', cta_text_2: '', cta_url_2: '', signature: '' }
 
-const PRO_TEMPLATES = {
+// Pro-template body content is real email copy sent to the built-in
+// gallery preview — kept as plain per-language data (not routed through
+// i18next interpolation) since the strings themselves contain literal
+// {{merge_field}} tokens that must not be swallowed by t()'s own
+// interpolation engine.
+const PRO_TEMPLATES_ES = {
   general: {
     subject: 'Información sobre nuestros servicios — {{empresa}}',
     greeting: 'Estimado/a {{nombre}},',
@@ -90,8 +82,41 @@ const PRO_TEMPLATES = {
   },
 }
 
-function formatBody(text) {
-  if (!text) return '<span style="color:#9ca3af;font-style:italic">Cuerpo del mensaje...</span>'
+const PRO_TEMPLATES_EN = {
+  general: {
+    subject: 'Information about our services — {{empresa}}',
+    greeting: 'Dear {{nombre}},',
+    body: "I'm reaching out to introduce how we can help {{empresa}} improve its results.\n\nOur team has worked with companies in your industry achieving concrete, measurable results. I'd love to schedule a brief 15-minute call to share the details.\n\nWould you have availability this week?",
+    cta_text: 'Book a call', cta_url: '', signature: 'Sincerely,\n{{agente}}',
+  },
+  interested: {
+    subject: 'Next steps — {{empresa}}',
+    greeting: 'Dear {{nombre}},',
+    body: "It was a pleasure speaking with you today. I'm glad to hear about your interest.\n\nAs we discussed, here are the next steps:\n\n1. We'll prepare a personalized proposal for {{empresa}}\n2. We'll review it together on a video call\n3. We'll define the work plan\n\nWe look forward to your confirmation to get started as soon as possible.",
+    cta_text: 'Confirm meeting', cta_url: '', signature: "I'm happy to help,\n{{agente}}",
+  },
+  callback_requested: {
+    subject: "We'll be in touch soon — {{empresa}}",
+    greeting: 'Dear {{nombre}},',
+    body: 'Thank you for taking the time to speak with us today.\n\nAs agreed, one of our advisors will contact you shortly to continue the conversation and answer all your questions, with no obligation.\n\nIf you\'d prefer to reach out sooner or change the time, feel free to reply to this email.',
+    cta_text: '', cta_url: '', signature: 'See you soon,\n{{agente}}',
+  },
+  voicemail: {
+    subject: 'We tried to reach you — {{empresa}}',
+    greeting: 'Dear {{nombre}},',
+    body: "We tried to reach you today and we're sorry we couldn't speak with you directly.\n\nWe have a proposal that could be of great value to {{empresa}} and we'd like to present it to you personally.\n\nPlease let us know the best time to call by replying to this email, or book a time directly using the link below.",
+    cta_text: 'Choose a time', cta_url: '', signature: 'We remain at your service,\n{{agente}}',
+  },
+  not_interested: {
+    subject: 'Thank you for your time — {{empresa}}',
+    greeting: 'Dear {{nombre}},',
+    body: "Thank you for giving us your time today.\n\nWe completely understand that this isn't a priority right now. Circumstances change, and when the right moment comes, we'll be here to help.\n\nIf you need support in this area in the future, don't hesitate to reach out.",
+    cta_text: '', cta_url: '', signature: 'Thank you very much,\n{{agente}}',
+  },
+}
+
+function formatBody(text, emptyHtml) {
+  if (!text) return emptyHtml
   const parts = []
   for (const para of text.trim().split(/\n{2,}/)) {
     const lines = para.split('\n').filter(l => l.trim())
@@ -106,43 +131,36 @@ function formatBody(text) {
   return parts.join('')
 }
 
-function formatSignature(text) {
-  if (!text) return '<span style="font-style:italic;color:#9ca3af">Firma...</span>'
+function formatSignature(text, emptyHtml) {
+  if (!text) return emptyHtml
   return text.split('\n').join('<br>')
 }
 
-function buildCtaButton(text, url, primary) {
-  const label = text || (url ? 'Ver más →' : '')
+function buildCtaButton(text, url, primary, defaultLabel) {
+  const label = text || (url ? defaultLabel : '')
   if (!label || !url) return ''
   const bg = primary ? '#1e40af' : '#475569'
   return `<a href="${url}" style="background:${bg};color:#fff;padding:10px 24px;border-radius:4px;text-decoration:none;font-weight:600;display:inline-block;font-size:13px;margin:0 6px">${label}</a>`
 }
 
-function buildHtml(t) {
+function buildHtml(t, labels) {
   // Explicit &nbsp; separator (not just CSS margin) so the two buttons never
   // visually run together — some email clients strip inline margin on <a>.
-  const buttons = [buildCtaButton(t.cta_text, t.cta_url, true), buildCtaButton(t.cta_text_2, t.cta_url_2, false)]
+  const buttons = [buildCtaButton(t.cta_text, t.cta_url, true, labels.ctaDefault), buildCtaButton(t.cta_text_2, t.cta_url_2, false, labels.ctaDefault)]
     .filter(Boolean)
     .join('&nbsp;&nbsp;&nbsp;&nbsp;')
   const cta = buttons ? `<p style="text-align:center;margin:20px 0">${buttons}</p>` : ''
   return `<div style="font-family:Arial,sans-serif;max-width:560px;margin:0 auto;border:1px solid #e5e7eb;border-radius:4px;overflow:hidden;color:#111827">
   <div style="padding:28px 32px;border-bottom:1px solid #e5e7eb">
-    <p style="margin:0 0 16px;color:#111827;font-size:14px">${t.greeting || '<span style="color:#9ca3af;font-style:italic">Saludo...</span>'}</p>
-    <div style="line-height:1.75">${formatBody(t.body)}</div>
+    <p style="margin:0 0 16px;color:#111827;font-size:14px">${t.greeting || labels.greetingEmpty}</p>
+    <div style="line-height:1.75">${formatBody(t.body, labels.bodyEmpty)}</div>
     ${cta}
   </div>
   <div style="padding:16px 32px;background:#f9fafb">
-    <p style="color:#6b7280;font-size:12px;margin:0">${formatSignature(t.signature)}</p>
+    <p style="color:#6b7280;font-size:12px;margin:0">${formatSignature(t.signature, labels.signatureEmpty)}</p>
   </div>
 </div>`
 }
-
-const TABS = [
-  { id: 'contactos', label: 'Contactos', icon: ListBulletIcon },
-  { id: 'enviar', label: 'Enviar', icon: PaperAirplaneIcon },
-  { id: 'plantillas', label: 'Plantillas', icon: SparklesIcon },
-  { id: 'analitica', label: 'Analítica', icon: ChartBarIcon },
-]
 
 // Accordion header component
 function Section({ id, label, icon: Icon, badge, openSections, toggle, children }) {
@@ -168,6 +186,56 @@ function Section({ id, label, icon: Icon, badge, openSections, toggle, children 
 }
 
 export default function EmailMarketing() {
+  const { t, i18n } = useTranslation()
+  const dateLocale = i18n.resolvedLanguage?.startsWith('en') ? 'en' : 'es'
+  const isEn = dateLocale === 'en'
+  const PRO_TEMPLATES = isEn ? PRO_TEMPLATES_EN : PRO_TEMPLATES_ES
+
+  const FIXED_TEMPLATES = FIXED_KEYS_LIST.map(key => ({
+    key,
+    label: t(`emailMarketing.fixedTemplates.${key}.label`),
+    desc: t(`emailMarketing.fixedTemplates.${key}.desc`),
+  }))
+  const PRO_GALLERY = FIXED_KEYS_LIST.map(key => {
+    const TAG_COLOR = {
+      general: 'bg-slate-500/20 text-slate-400',
+      interested: 'bg-green-500/20 text-green-400',
+      callback_requested: 'bg-blue-500/20 text-blue-400',
+      voicemail: 'bg-amber-500/20 text-amber-400',
+      not_interested: 'bg-red-500/20 text-red-400',
+    }
+    return {
+      key,
+      label: t(`emailMarketing.proGallery.${key}.label`),
+      tag: t(`emailMarketing.proGallery.${key}.tag`),
+      tagColor: TAG_COLOR[key],
+    }
+  })
+
+  const buildHtmlLabels = {
+    greetingEmpty: `<span style="color:#9ca3af;font-style:italic">${t('emailMarketing.buildHtml.greetingPlaceholder')}</span>`,
+    bodyEmpty: `<span style="color:#9ca3af;font-style:italic">${t('emailMarketing.buildHtml.bodyPlaceholder')}</span>`,
+    signatureEmpty: `<span style="font-style:italic;color:#9ca3af">${t('emailMarketing.buildHtml.signaturePlaceholder')}</span>`,
+    ctaDefault: t('emailMarketing.buildHtml.defaultCtaLabel'),
+  }
+
+  const TABS = [
+    { id: 'contactos', label: t('emailMarketing.tabContacts'), icon: ListBulletIcon },
+    { id: 'enviar', label: t('emailMarketing.tabSend'), icon: PaperAirplaneIcon },
+    { id: 'plantillas', label: t('emailMarketing.tabTemplates'), icon: SparklesIcon },
+    { id: 'analitica', label: t('emailMarketing.tabAnalytics'), icon: ChartBarIcon },
+  ]
+
+  const LABEL_OPTIONS = [
+    { value: null, label: t('emailMarketing.lists.labelNone'), color: 'text-slate-400', bg: 'bg-slate-700/40' },
+    { value: 'interested', label: t('emailMarketing.lists.labelInterested'), color: 'text-green-400', bg: 'bg-green-500/15' },
+    { value: 'not_interested', label: t('emailMarketing.lists.labelNotInterested'), color: 'text-red-400', bg: 'bg-red-500/15' },
+    { value: 'converted', label: t('emailMarketing.lists.labelConverted'), color: 'text-yellow-400', bg: 'bg-yellow-500/15' },
+    { value: 'do_not_contact', label: t('emailMarketing.lists.labelDoNotContact'), color: 'text-slate-500', bg: 'bg-slate-800' },
+  ]
+
+  const getLabelMeta = (label) => LABEL_OPTIONS.find(o => o.value === label) || LABEL_OPTIONS[0]
+
   const [cfg, setCfg] = useState({
     email_enabled: false, email_from: '', email_from_name: '',
     sendgrid_configured: false,
@@ -286,7 +354,7 @@ export default function EmailMarketing() {
 
   const exportTrackingToExcel = () => {
     if (!trackingEvents?.length) return
-    const LABEL = { delivered: 'Entregado', open: 'Abierto', click: 'Click', bounce: 'Rebotado', dropped: 'Descartado', unsubscribe: 'Desuscrito', spamreport: 'Spam' }
+    const LABEL = { delivered: t('emailMarketing.analytics.eventDelivered'), open: t('emailMarketing.analytics.eventOpen'), click: t('emailMarketing.analytics.eventClick'), bounce: t('emailMarketing.analytics.eventBounce'), dropped: t('emailMarketing.analytics.eventDropped'), unsubscribe: t('emailMarketing.analytics.eventUnsubscribe'), spamreport: t('emailMarketing.analytics.eventSpamreport') }
     const filtered = trackingTab === 'all' ? trackingEvents : trackingEvents.filter(e => e.event_type === trackingTab)
     import('xlsx').then(XLSX => {
       const rows = filtered.map(e => ({
@@ -294,7 +362,7 @@ export default function EmailMarketing() {
         'Evento': LABEL[e.event_type] || e.event_type,
         'Plantilla': e.template_key || '',
         'URL (click)': e.url || '',
-        'Fecha y hora': e.timestamp ? new Date(e.timestamp).toLocaleString('es') : '',
+        'Fecha y hora': e.timestamp ? new Date(e.timestamp).toLocaleString(dateLocale) : '',
       }))
       const ws = XLSX.utils.json_to_sheet(rows)
       const wb = XLSX.utils.book_new()
@@ -372,7 +440,7 @@ export default function EmailMarketing() {
 
   const cancelBulk = async () => {
     if (!bulkJobId) return
-    if (!window.confirm('¿Cancelar el envío? Los emails ya enviados no se pueden deshacer.')) return
+    if (!window.confirm(t('emailMarketing.bulk.confirmCancel'))) return
     try {
       await cancelBulkSend(bulkJobId)
       setBulkJobId(null)
@@ -384,7 +452,7 @@ export default function EmailMarketing() {
   // Template helpers
   const customTemplates = Object.keys(cfg.email_templates)
     .filter(k => !FIXED_KEYS.has(k))
-    .map(k => ({ key: k, label: cfg.email_templates[k]._label || k, isCustom: true, desc: 'Plantilla personalizada' }))
+    .map(k => ({ key: k, label: cfg.email_templates[k]._label || k, isCustom: true, desc: t('emailMarketing.myTemplates.customDesc') }))
   const allTemplates = [...FIXED_TEMPLATES.map(t => ({ ...t, isCustom: false })), ...customTemplates]
 
   const getTmpl = k => { const { _label, ...rest } = cfg.email_templates[k] || { ...EMPTY_TMPL }; return rest }
@@ -406,7 +474,7 @@ export default function EmailMarketing() {
   }
 
   const deleteTemplate = async (key) => {
-    if (!confirm('¿Eliminar esta plantilla?')) return
+    if (!confirm(t('emailMarketing.myTemplates.confirmDeleteTemplate'))) return
     setCfg(p => { const t = { ...p.email_templates }; delete t[key]; return { ...p, email_templates: t } })
     if (editingTmpl === key) setEditingTmpl(null)
     try {
@@ -414,7 +482,7 @@ export default function EmailMarketing() {
       // cambios" click to persist this via omission from the saved payload.
       await deleteEmailTemplate(key)
     } catch (e) {
-      alert(e.response?.data?.detail || 'Error al eliminar la plantilla')
+      alert(e.response?.data?.detail || t('emailMarketing.myTemplates.errorDeleteTemplate'))
     }
   }
 
@@ -442,7 +510,7 @@ export default function EmailMarketing() {
         email_send_delay_ms: cfg.email_send_delay_ms ?? 0,
       })
       setSaved(true); setTimeout(() => setSaved(false), 3000)
-    } catch (e) { alert(e.response?.data?.detail || 'Error') }
+    } catch (e) { alert(e.response?.data?.detail || t('emailMarketing.genericError')) }
     finally { setSaving(false) }
   }
 
@@ -454,18 +522,18 @@ export default function EmailMarketing() {
       const created = await createEmailList({ name })
       setEmailLists(prev => [...prev, created])
       setNewListName(''); setShowNewListInput(false)
-    } catch (e) { alert(e.response?.data?.detail || 'Error al crear lista') }
+    } catch (e) { alert(e.response?.data?.detail || t('emailMarketing.lists.errorCreateList')) }
     finally { setCreatingList(false) }
   }
 
   const handleDeleteList = async (id) => {
     const list = emailLists.find(l => l.id === id)
-    if (!confirm(`¿Eliminar la lista "${list?.name}" y todos sus ${list?.total} contactos?`)) return
+    if (!confirm(t('emailMarketing.lists.confirmDeleteList', { name: list?.name, total: list?.total }))) return
     try {
       await deleteEmailList(id)
       setEmailLists(prev => prev.filter(l => l.id !== id))
       if (listContacts.id === id) setListContacts({ id: null, contacts: [], loading: false })
-    } catch (e) { alert(e.response?.data?.detail || 'Error al eliminar lista') }
+    } catch (e) { alert(e.response?.data?.detail || t('emailMarketing.lists.errorDeleteList')) }
   }
 
   const handleViewContacts = async (listId) => {
@@ -481,36 +549,26 @@ export default function EmailMarketing() {
   }
 
   const handleDeleteContact = async (listId, contactId, email) => {
-    if (!confirm(`¿Quitar "${email || 'este contacto'}" de la lista? Podrás volver a agregarlo después.`)) return
+    if (!confirm(t('emailMarketing.lists.confirmRemoveContact', { email: email || t('emailMarketing.lists.confirmRemoveContactFallback') }))) return
     try {
       await deleteEmailListContact(listId, contactId)
       setListContacts(prev => ({ ...prev, contacts: prev.contacts.filter(c => c.id !== contactId) }))
       setEmailLists(prev => prev.map(l =>
         l.id === listId ? { ...l, total: Math.max(0, l.total - 1), with_email: Math.max(0, l.with_email - 1) } : l
       ))
-    } catch (e) { alert('Error al quitar contacto') }
+    } catch (e) { alert(t('emailMarketing.lists.errorRemoveContact')) }
   }
 
   const handleUnsubscribeAndDelete = async (listId, contactId) => {
-    if (!confirm('¿Bloquear este email permanentemente? Ya no recibirá correos aunque sea reimportado en el futuro.')) return
+    if (!confirm(t('emailMarketing.lists.confirmBlockContact'))) return
     try {
       await blockContactEmail(contactId)
       setListContacts(prev => ({ ...prev, contacts: prev.contacts.filter(c => c.id !== contactId) }))
       setEmailLists(prev => prev.map(l =>
         l.id === listId ? { ...l, total: Math.max(0, l.total - 1), with_email: Math.max(0, l.with_email - 1) } : l
       ))
-    } catch (e) { alert('Error al bloquear el contacto') }
+    } catch (e) { alert(t('emailMarketing.lists.errorBlockContact')) }
   }
-
-  const LABEL_OPTIONS = [
-    { value: null, label: 'Sin clasificar', color: 'text-slate-400', bg: 'bg-slate-700/40' },
-    { value: 'interested', label: '🟢 Interesado', color: 'text-green-400', bg: 'bg-green-500/15' },
-    { value: 'not_interested', label: '🔴 No interesado', color: 'text-red-400', bg: 'bg-red-500/15' },
-    { value: 'converted', label: '⭐ Convertido', color: 'text-yellow-400', bg: 'bg-yellow-500/15' },
-    { value: 'do_not_contact', label: '🚫 No contactar', color: 'text-slate-500', bg: 'bg-slate-800' },
-  ]
-
-  const getLabelMeta = (label) => LABEL_OPTIONS.find(o => o.value === label) || LABEL_OPTIONS[0]
 
   const handleLabelContact = async (contactId, label) => {
     try {
@@ -521,7 +579,7 @@ export default function EmailMarketing() {
           c.id === contactId ? { ...c, email_label: result.email_label, unsubscribed: result.email_unsubscribed } : c
         )
       }))
-    } catch (e) { alert('Error al clasificar el contacto') }
+    } catch (e) { alert(t('emailMarketing.lists.errorLabelContact')) }
   }
 
   const handleAddContact = async () => {
@@ -540,7 +598,7 @@ export default function EmailMarketing() {
       ))
       setAddContactForm({ listId: null, name: '', email: '', company: '', saving: false, error: '' })
     } catch (e) {
-      setAddContactForm(p => ({ ...p, saving: false, error: e.response?.data?.detail || 'Error al agregar' }))
+      setAddContactForm(p => ({ ...p, saving: false, error: e.response?.data?.detail || t('emailMarketing.lists.errorAddContact') }))
     }
   }
 
@@ -548,11 +606,14 @@ export default function EmailMarketing() {
     if (!file) return
     try {
       const r = await importEmailContactsToList(listId, file)
-      const msg = `${r.imported} importados${r.skipped ? `, ${r.skipped} omitidos` : ''}${r.errors?.length ? `\n${r.errors.join('\n')}` : ''}`
+      const msg = t('emailMarketing.lists.importSummary', {
+        imported: r.imported,
+        skipped: r.skipped ? t('emailMarketing.lists.importSkipped', { count: r.skipped }) : '',
+      }) + (r.errors?.length ? `\n${r.errors.join('\n')}` : '')
       alert(msg)
       loadEmailLists()
       if (listContacts.id === listId) handleViewContacts(listId)
-    } catch (e) { alert(e.response?.data?.detail || 'Error al importar') }
+    } catch (e) { alert(e.response?.data?.detail || t('emailMarketing.lists.errorImport')) }
   }
 
   // Bulk send helpers
@@ -594,7 +655,7 @@ export default function EmailMarketing() {
         setBulkLoading(false)
       }
     } catch (e) {
-      setBulkResult({ error: e.response?.data?.detail || 'Error al iniciar el envío' })
+      setBulkResult({ error: e.response?.data?.detail || t('emailMarketing.bulk.errorStartingSend') })
       setBulkLoading(false)
     }
   }
@@ -651,19 +712,19 @@ export default function EmailMarketing() {
     try {
       const r = await importEmailContacts(f)
       setImportResult(r); loadEmailContactsCount()
-    } catch (err) { setImportResult({ error: err.response?.data?.detail || 'Error al importar' }) }
+    } catch (err) { setImportResult({ error: err.response?.data?.detail || t('emailMarketing.lists.errorImport') }) }
     finally { setImportLoading(false); e.target.value = '' }
   }
 
   const uploadTmplAttach = async (e) => {
     const f = e.target.files?.[0]; if (!f || !editingTmpl) return
-    if (f.size > 5 * 1024 * 1024) { setTmplAttachMsg({ ok: false, text: 'Máximo 5 MB' }); return }
+    if (f.size > 5 * 1024 * 1024) { setTmplAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.attachmentTooBig') }); return }
     setTmplAttachLoading(true); setTmplAttachMsg(null)
     try {
       const r = await uploadTemplateAttachment(editingTmpl, f)
       setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [editingTmpl]: { ...(p.email_templates[editingTmpl] || {}), attachment_name: r.filename } } }))
       setTmplAttachMsg({ ok: true, text: r.filename })
-    } catch (e) { setTmplAttachMsg({ ok: false, text: 'Error al subir' }) }
+    } catch (e) { setTmplAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.errorUploadAttachment') }) }
     finally { setTmplAttachLoading(false) }
   }
 
@@ -673,8 +734,8 @@ export default function EmailMarketing() {
     try {
       await deleteTemplateAttachment(editingTmpl)
       setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [editingTmpl]: { ...(p.email_templates[editingTmpl] || {}), attachment_name: null } } }))
-      setTmplAttachMsg({ ok: true, text: 'Adjunto eliminado — esta plantilla usará el adjunto global si hay uno' })
-    } catch (e) { setTmplAttachMsg({ ok: false, text: 'Error al eliminar' }) }
+      setTmplAttachMsg({ ok: true, text: t('emailMarketing.myTemplates.attachmentRemoved') })
+    } catch (e) { setTmplAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.errorDeleteAttachment') }) }
     finally { setTmplAttachLoading(false) }
   }
 
@@ -683,20 +744,20 @@ export default function EmailMarketing() {
     setTestLoading(true); setTestMsg(null)
     try {
       await sendTestEmail({ to_email: testAddr, outcome: testTmpl, template: cfg.email_templates[testTmpl] || {}, from_email_override: cfg.email_from || null, from_name_override: cfg.email_from_name || null })
-      setTestMsg({ ok: true, text: 'Prueba enviada correctamente' })
-    } catch (e) { setTestMsg({ ok: false, text: e.response?.data?.detail || 'Error' }) }
+      setTestMsg({ ok: true, text: t('emailMarketing.test.success') })
+    } catch (e) { setTestMsg({ ok: false, text: e.response?.data?.detail || t('emailMarketing.test.error') }) }
     finally { setTestLoading(false) }
   }
 
   const uploadAttach = async (e) => {
     const f = e.target.files?.[0]; if (!f) return
-    if (f.size > 5 * 1024 * 1024) { setAttachMsg({ ok: false, text: 'Máximo 5 MB' }); return }
+    if (f.size > 5 * 1024 * 1024) { setAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.attachmentTooBig') }); return }
     setAttachLoading(true); setAttachMsg(null)
     try {
       const r = await uploadEmailAttachment(f)
       setCfg(p => ({ ...p, email_attachment_name: r.filename }))
       setAttachMsg({ ok: true, text: r.filename })
-    } catch (e) { setAttachMsg({ ok: false, text: 'Error al subir' }) }
+    } catch (e) { setAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.errorUploadAttachment') }) }
     finally { setAttachLoading(false) }
   }
 
@@ -705,8 +766,8 @@ export default function EmailMarketing() {
     try {
       await deleteEmailAttachment()
       setCfg(p => ({ ...p, email_attachment_name: null }))
-      setAttachMsg({ ok: true, text: 'Adjunto global eliminado' })
-    } catch (e) { setAttachMsg({ ok: false, text: 'Error al eliminar' }) }
+      setAttachMsg({ ok: true, text: t('emailMarketing.config.globalAttachmentRemoved') })
+    } catch (e) { setAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.errorDeleteAttachment') }) }
     finally { setAttachLoading(false) }
   }
 
@@ -722,7 +783,7 @@ export default function EmailMarketing() {
   const handleGenerateSequence = async () => {
     const dates = seqDates.filter(Boolean).map(dateOnlyToUTC5ISO)
     if (!seqForm.email_list_id || !seqForm.objective || dates.length === 0) {
-      setSeqError('Completa la lista, el objetivo y al menos una fecha'); return
+      setSeqError(t('emailMarketing.sequences.errorMissingFields')); return
     }
     setSeqError(null); setSeqGenerating(true)
     try {
@@ -731,7 +792,7 @@ export default function EmailMarketing() {
         tone: seqForm.tone, language: seqForm.language, dates,
       })
       setSeqGenerated(r.emails)
-    } catch (e) { setSeqError(e.response?.data?.detail || 'Error generando la secuencia') }
+    } catch (e) { setSeqError(e.response?.data?.detail || t('emailMarketing.sequences.errorGenerating')) }
     finally { setSeqGenerating(false) }
   }
 
@@ -749,12 +810,12 @@ export default function EmailMarketing() {
       })
       setSeqGenerated(null); setSeqForm({ name: '', email_list_id: '', objective: '', tone: 'Profesional', language: 'Español' }); setSeqDates([''])
       loadSequences()
-    } catch (e) { setSeqError(e.response?.data?.detail || 'Error al programar la secuencia') }
+    } catch (e) { setSeqError(e.response?.data?.detail || t('emailMarketing.sequences.errorScheduling')) }
     finally { setSeqCreating(false) }
   }
 
   const handleCancelSequence = async (id) => {
-    if (!confirm('¿Cancelar esta secuencia? Los correos pendientes no se enviarán.')) return
+    if (!confirm(t('emailMarketing.sequences.confirmCancelSequence'))) return
     await deleteEmailSequence(id)
     loadSequences()
   }
@@ -775,27 +836,27 @@ export default function EmailMarketing() {
       {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <h1 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-          <EnvelopeIcon className="w-6 h-6 text-z-blue-light" /> Email Marketing
+          <EnvelopeIcon className="w-6 h-6 text-z-blue-light" /> {t('emailMarketing.title')}
         </h1>
         <span className={`px-2.5 py-1 text-xs rounded-full font-medium ${cfg.sendgrid_configured ? 'bg-green-500/20 text-green-400' : 'bg-amber-500/20 text-amber-400'}`}>
-          {cfg.sendgrid_configured ? '✓ Activo' : '⚠ Sin configurar'}
+          {cfg.sendgrid_configured ? t('emailMarketing.statusActive') : t('emailMarketing.statusNotConfigured')}
         </span>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-z-border mb-1">
-        {TABS.map(t => (
+        {TABS.map(tab => (
           <button
-            key={t.id}
-            onClick={() => setActiveTab(t.id)}
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
             className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium transition-colors border-b-2 -mb-px ${
-              activeTab === t.id
+              activeTab === tab.id
                 ? 'text-z-blue-light border-z-blue-light'
                 : 'text-slate-500 border-transparent hover:text-slate-300'
             }`}
           >
-            <t.icon className="w-4 h-4" />
-            {t.label}
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
           </button>
         ))}
       </div>
@@ -804,12 +865,12 @@ export default function EmailMarketing() {
       {activeTab === 'contactos' && (<>
 
       {/* ── 1. LISTAS DE EMAIL ── */}
-      <Section id="listas" label="Listas de email" icon={ListBulletIcon}
-        badge={emailLists.length > 0 ? `${emailLists.length} lista${emailLists.length !== 1 ? 's' : ''} · ${totalListContacts} contactos` : undefined}
+      <Section id="listas" label={t('emailMarketing.lists.title')} icon={ListBulletIcon}
+        badge={emailLists.length > 0 ? t('emailMarketing.lists.badgeCount', { count: emailLists.length, plural: emailLists.length !== 1 ? 's' : '', contacts: totalListContacts }) : undefined}
         openSections={openSections} toggle={toggle}>
         <div className="p-5 space-y-4">
           <p className="text-xs text-slate-500">
-            Organiza tus contactos de email en listas independientes. Cada lista puede tener sus propios contactos importados desde CSV.
+            {t('emailMarketing.lists.intro')}
           </p>
 
           {/* New list button / input */}
@@ -820,25 +881,25 @@ export default function EmailMarketing() {
                 type="text" value={newListName}
                 onChange={e => setNewListName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') handleCreateList(); if (e.key === 'Escape') { setShowNewListInput(false); setNewListName('') } }}
-                placeholder="Nombre de la lista..."
+                placeholder={t('emailMarketing.lists.namePlaceholder')}
                 className="z-input-light text-sm flex-1" />
               <button onClick={handleCreateList} disabled={!newListName.trim() || creatingList}
                 className="z-btn-primary text-xs disabled:opacity-50 whitespace-nowrap">
-                {creatingList ? 'Creando...' : 'Crear'}
+                {creatingList ? t('emailMarketing.lists.creating') : t('emailMarketing.lists.create')}
               </button>
               <button onClick={() => { setShowNewListInput(false); setNewListName('') }}
-                className="z-btn-ghost text-xs">Cancelar</button>
+                className="z-btn-ghost text-xs">{t('emailMarketing.lists.cancel')}</button>
             </div>
           ) : (
             <button onClick={() => setShowNewListInput(true)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-400 border border-blue-400/30 rounded-lg hover:bg-blue-400/10 transition-colors">
-              <PlusIcon className="w-3.5 h-3.5" /> Nueva lista
+              <PlusIcon className="w-3.5 h-3.5" /> {t('emailMarketing.lists.newList')}
             </button>
           )}
 
           {/* Lists */}
           {emailLists.length === 0 ? (
-            <p className="text-sm text-slate-600 text-center py-4">No hay listas creadas aún.</p>
+            <p className="text-sm text-slate-600 text-center py-4">{t('emailMarketing.lists.noLists')}</p>
           ) : (
             <div className="space-y-2">
               {emailLists.map(list => (
@@ -850,7 +911,7 @@ export default function EmailMarketing() {
                       <div className="min-w-0">
                         <p className="text-sm font-semibold text-slate-200 truncate">{list.name}</p>
                         <p className="text-xs text-slate-500">
-                          {list.total} total · <span className="text-green-400">{list.with_email} con email válido</span>
+                          {t('emailMarketing.lists.totalWithEmail', { total: list.total, withEmail: list.with_email })}
                         </p>
                       </div>
                     </div>
@@ -868,7 +929,7 @@ export default function EmailMarketing() {
                       <button
                         onClick={() => listImportRefs.current[list.id]?.click()}
                         className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-blue-400 border border-blue-400/30 rounded-lg hover:bg-blue-400/10 transition-colors">
-                        <PlusIcon className="w-3 h-3" /> CSV
+                        <PlusIcon className="w-3 h-3" /> {t('emailMarketing.lists.csvBtn')}
                       </button>
                       <button
                         onClick={() => setAddContactForm(p => p.listId === list.id
@@ -876,13 +937,13 @@ export default function EmailMarketing() {
                           : { listId: list.id, name: '', email: '', company: '', saving: false, error: '' }
                         )}
                         className={`flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${addContactForm.listId === list.id ? 'text-slate-200 border-slate-400/40 bg-white/10' : 'text-blue-400 border-blue-400/30 hover:bg-blue-400/10'}`}>
-                        <PlusIcon className="w-3 h-3" /> Manual
+                        <PlusIcon className="w-3 h-3" /> {t('emailMarketing.lists.manualBtn')}
                       </button>
                       <button
                         onClick={() => handleViewContacts(list.id)}
                         className={`flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${listContacts.id === list.id ? 'text-slate-200 border-slate-400/40 bg-white/10' : 'text-slate-400 border-z-border hover:bg-white/5'}`}>
                         <EyeIcon className="w-3 h-3" />
-                        {listContacts.id === list.id ? 'Ocultar' : 'Ver'}
+                        {listContacts.id === list.id ? t('emailMarketing.lists.hide') : t('emailMarketing.lists.view')}
                       </button>
                       <button
                         onClick={() => handleDeleteList(list.id)}
@@ -895,29 +956,29 @@ export default function EmailMarketing() {
                   {/* Inline add-contact form */}
                   {addContactForm.listId === list.id && (
                     <div className="border-t border-z-border bg-white/3 px-4 py-3 space-y-2">
-                      <p className="text-xs font-medium text-slate-400">Agregar contacto manualmente</p>
+                      <p className="text-xs font-medium text-slate-400">{t('emailMarketing.lists.addManualTitle')}</p>
                       <div className="grid grid-cols-3 gap-2">
                         <input
-                          type="text" placeholder="Nombre" value={addContactForm.name}
+                          type="text" placeholder={t('emailMarketing.lists.namePh')} value={addContactForm.name}
                           onChange={e => setAddContactForm(p => ({ ...p, name: e.target.value }))}
                           className="z-input-light text-xs" />
                         <input
-                          type="email" placeholder="Email *" value={addContactForm.email}
+                          type="email" placeholder={t('emailMarketing.lists.emailPh')} value={addContactForm.email}
                           onChange={e => setAddContactForm(p => ({ ...p, email: e.target.value }))}
                           onKeyDown={e => e.key === 'Enter' && handleAddContact()}
                           className="z-input-light text-xs" />
                         <input
-                          type="text" placeholder="Empresa" value={addContactForm.company}
+                          type="text" placeholder={t('emailMarketing.lists.companyPh')} value={addContactForm.company}
                           onChange={e => setAddContactForm(p => ({ ...p, company: e.target.value }))}
                           className="z-input-light text-xs" />
                       </div>
                       <div className="flex items-center gap-2">
                         <button onClick={handleAddContact} disabled={!addContactForm.email.trim() || addContactForm.saving}
                           className="z-btn-primary text-xs disabled:opacity-50">
-                          {addContactForm.saving ? 'Guardando...' : 'Agregar'}
+                          {addContactForm.saving ? t('emailMarketing.lists.saving') : t('emailMarketing.lists.add')}
                         </button>
                         <button onClick={() => setAddContactForm({ listId: null, name: '', email: '', company: '', saving: false, error: '' })}
-                          className="z-btn-ghost text-xs">Cancelar</button>
+                          className="z-btn-ghost text-xs">{t('emailMarketing.lists.cancel')}</button>
                         {addContactForm.error && <p className="text-xs text-red-400">{addContactForm.error}</p>}
                       </div>
                     </div>
@@ -927,15 +988,15 @@ export default function EmailMarketing() {
                   {listContacts.id === list.id && (
                     <div className="border-t border-z-border">
                       {listContacts.loading ? (
-                        <p className="text-center text-slate-500 text-sm py-6 animate-pulse">Cargando contactos...</p>
+                        <p className="text-center text-slate-500 text-sm py-6 animate-pulse">{t('emailMarketing.lists.loadingContacts')}</p>
                       ) : listContacts.contacts.length === 0 ? (
-                        <p className="text-center text-slate-600 text-sm py-6">Sin contactos. Importa un CSV para comenzar.</p>
+                        <p className="text-center text-slate-600 text-sm py-6">{t('emailMarketing.lists.noContacts')}</p>
                       ) : (
                         <div>
                           <div className="px-3 py-2 border-b border-z-border flex gap-2">
                             <input
                               type="text"
-                              placeholder="Buscar por nombre, email o empresa..."
+                              placeholder={t('emailMarketing.lists.searchPlaceholder')}
                               value={contactSearch}
                               onChange={e => setContactSearch(e.target.value)}
                               className="flex-1 bg-black/30 border border-z-border rounded px-3 py-1.5 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-z-blue"
@@ -944,9 +1005,9 @@ export default function EmailMarketing() {
                               value={contactLabelFilter}
                               onChange={e => setContactLabelFilter(e.target.value)}
                               className="bg-black/30 border border-z-border rounded px-2 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-z-blue cursor-pointer"
-                              title="Filtrar por clasificación"
+                              title={t('emailMarketing.lists.filterTitle')}
                             >
-                              <option value="all">Todos</option>
+                              <option value="all">{t('emailMarketing.lists.filterAll')}</option>
                               {LABEL_OPTIONS.map(o => (
                                 <option key={o.value || 'none'} value={o.value || 'none'}>{o.label}</option>
                               ))}
@@ -956,7 +1017,7 @@ export default function EmailMarketing() {
                           <table className="w-full text-xs min-w-[480px]">
                             <thead className="bg-black/20 sticky top-0">
                               <tr>
-                                {['Nombre', 'Email', 'Estado', 'Empresa', ''].map(h => (
+                                {[t('emailMarketing.lists.headers.name'), t('emailMarketing.lists.headers.email'), t('emailMarketing.lists.headers.status'), t('emailMarketing.lists.headers.company'), ''].map(h => (
                                   <th key={h} className="px-3 py-2 text-left font-medium text-slate-500 uppercase">{h}</th>
                                 ))}
                               </tr>
@@ -977,8 +1038,8 @@ export default function EmailMarketing() {
                                   <td className="px-3 py-2 text-slate-200 font-medium max-w-[120px] truncate">{c.name || '—'}</td>
                                   <td className="px-3 py-2 font-mono text-slate-300 max-w-[160px] truncate">
                                     {c.unsubscribed
-                                      ? <span className="text-red-400">{c.email} <span className="text-xs">(desuscrito)</span></span>
-                                      : c.email || <span className="text-slate-600 italic">sin email</span>}
+                                      ? <span className="text-red-400">{c.email} <span className="text-xs">{t('emailMarketing.lists.unsubscribedTag')}</span></span>
+                                      : c.email || <span className="text-slate-600 italic">{t('emailMarketing.lists.noEmail')}</span>}
                                   </td>
                                   <td className="px-3 py-2">
                                     {/* Classification dropdown */}
@@ -986,7 +1047,7 @@ export default function EmailMarketing() {
                                       value={c.email_label || ''}
                                       onChange={e => handleLabelContact(c.id, e.target.value || null)}
                                       className={`text-xs rounded px-2 py-1 border-0 outline-none cursor-pointer ${getLabelMeta(c.email_label || null).bg} ${getLabelMeta(c.email_label || null).color}`}
-                                      title="Clasificar contacto"
+                                      title={t('emailMarketing.lists.classifyTitle')}
                                     >
                                       {LABEL_OPTIONS.map(o => (
                                         <option key={o.value || ''} value={o.value || ''}>{o.label}</option>
@@ -999,18 +1060,18 @@ export default function EmailMarketing() {
                                       <button
                                         onClick={() => handleDeleteContact(list.id, c.id, c.email)}
                                         className="flex items-center gap-1 px-2 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 rounded transition-colors"
-                                        title="Quitar de esta lista (puede volver a agregarse)"
+                                        title={t('emailMarketing.lists.removeTitle')}
                                       >
                                         <TrashIcon className="w-3.5 h-3.5" />
-                                        Quitar
+                                        {t('emailMarketing.lists.removeBtn')}
                                       </button>
                                       <button
                                         onClick={() => handleUnsubscribeAndDelete(list.id, c.id)}
                                         className="flex items-center gap-1 px-2 py-1 text-xs text-amber-500 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors"
-                                        title="Bloquear permanentemente: nunca recibirá correos aunque sea reimportado"
+                                        title={t('emailMarketing.lists.blockTitle')}
                                       >
                                         <UserMinusIcon className="w-3.5 h-3.5" />
-                                        Bloquear
+                                        {t('emailMarketing.lists.blockBtn')}
                                       </button>
                                     </div>
                                   </td>
@@ -1036,25 +1097,25 @@ export default function EmailMarketing() {
       {activeTab === 'enviar' && (<>
 
       {/* ── 2. ENVÍO MASIVO ── */}
-      <Section id="envio" label="Envío masivo" icon={PaperAirplaneIcon} openSections={openSections} toggle={toggle}>
+      <Section id="envio" label={t('emailMarketing.bulk.title')} icon={PaperAirplaneIcon} openSections={openSections} toggle={toggle}>
         <div className="p-5 space-y-4">
-          <p className="text-xs text-slate-500">Selecciona el segmento y la plantilla, revisa el resumen y confirma el envío.</p>
+          <p className="text-xs text-slate-500">{t('emailMarketing.bulk.intro')}</p>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Destinatarios</label>
+              <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.bulk.recipients')}</label>
               <select value={bulkCampaign} onChange={e => { setBulkCampaign(e.target.value); setConfirmStep(false); setBulkResult(null) }}
                 className="z-input-light text-sm">
-                <option value="">Todos (campañas + listas)</option>
+                <option value="">{t('emailMarketing.bulk.allOption')}</option>
                 {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 <option value="email_only">
-                  Contactos de email {emailContactsCount ? `(${emailContactsCount.with_email})` : ''}
+                  {t('emailMarketing.bulk.emailContactsOption', { count: emailContactsCount ? `(${emailContactsCount.with_email})` : '' })}
                 </option>
                 {emailLists.length > 0 && (
-                  <optgroup label="── Listas de email ──">
+                  <optgroup label={t('emailMarketing.bulk.listsGroup')}>
                     {emailLists.map(l => (
                       <option key={`list:${l.id}`} value={`list:${l.id}`}>
-                        {l.name} ({l.with_email} contactos)
+                        {t('emailMarketing.bulk.listOption', { name: l.name, count: l.with_email })}
                       </option>
                     ))}
                   </optgroup>
@@ -1062,10 +1123,10 @@ export default function EmailMarketing() {
               </select>
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Plantilla</label>
+              <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.bulk.template')}</label>
               <select value={bulkTmpl} onChange={e => { setBulkTmpl(e.target.value); setConfirmStep(false); setBulkResult(null) }}
                 className="z-input-light text-sm">
-                {allTemplates.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                {allTemplates.map(tp => <option key={tp.key} value={tp.key}>{tp.label}</option>)}
               </select>
             </div>
           </div>
@@ -1073,17 +1134,17 @@ export default function EmailMarketing() {
           {/* Batch size */}
           <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-z-border">
             <div className="flex-1">
-              <p className="text-xs font-medium text-slate-300">Envío por tandas</p>
-              <p className="text-xs text-slate-500 mt-0.5">Limita cuántos emails se envían por ejecución para evitar filtros de spam. Los no contactados van siempre primero.</p>
+              <p className="text-xs font-medium text-slate-300">{t('emailMarketing.bulk.batchTitle')}</p>
+              <p className="text-xs text-slate-500 mt-0.5">{t('emailMarketing.bulk.batchHint')}</p>
             </div>
             <select value={bulkBatchSize} onChange={e => { setBulkBatchSize(e.target.value); setConfirmStep(false); setBulkResult(null) }}
               className="z-input-light text-sm w-36 flex-shrink-0">
-              <option value="">Sin límite</option>
-              <option value="50">50 por tanda</option>
-              <option value="100">100 por tanda</option>
-              <option value="200">200 por tanda</option>
-              <option value="500">500 por tanda</option>
-              <option value="1000">1000 por tanda</option>
+              <option value="">{t('emailMarketing.bulk.noLimit')}</option>
+              <option value="50">{t('emailMarketing.bulk.perBatch', { n: 50 })}</option>
+              <option value="100">{t('emailMarketing.bulk.perBatch', { n: 100 })}</option>
+              <option value="200">{t('emailMarketing.bulk.perBatch', { n: 200 })}</option>
+              <option value="500">{t('emailMarketing.bulk.perBatch', { n: 500 })}</option>
+              <option value="1000">{t('emailMarketing.bulk.perBatch', { n: 1000 })}</option>
             </select>
           </div>
 
@@ -1093,10 +1154,10 @@ export default function EmailMarketing() {
             return (
               <>
                 {subj
-                  ? <p className="text-xs text-slate-400">Asunto: <span className="text-slate-300 italic">"{subj}"</span></p>
-                  : <p className="text-xs text-amber-400">⚠ La plantilla seleccionada no tiene asunto configurado</p>}
+                  ? <p className="text-xs text-slate-400">{t('emailMarketing.bulk.subjectLabel')} <span className="text-slate-300 italic">"{subj}"</span></p>
+                  : <p className="text-xs text-amber-400">{t('emailMarketing.bulk.noSubjectWarning')}</p>}
                 {!body?.trim() && (
-                  <p className="text-xs text-amber-400">⚠ La plantilla seleccionada no tiene cuerpo del mensaje — se enviaría prácticamente vacía</p>
+                  <p className="text-xs text-amber-400">{t('emailMarketing.bulk.noBodyWarning')}</p>
                 )}
               </>
             )
@@ -1104,48 +1165,48 @@ export default function EmailMarketing() {
 
           {!cfg.sendgrid_configured && (
             <p className="text-xs text-amber-400 bg-amber-400/5 border border-amber-400/20 rounded-lg px-3 py-2">
-              ⚠ El administrador debe configurar SendGrid antes de poder enviar emails.
+              {t('emailMarketing.bulk.sendgridWarning')}
             </p>
           )}
 
           {!confirmStep && !bulkResult && (
             <button onClick={prepareSend} disabled={!cfg.sendgrid_configured} className="z-btn-primary w-full disabled:opacity-40">
-              Preparar envío
+              {t('emailMarketing.bulk.prepareSend')}
             </button>
           )}
 
           {confirmStep && !bulkLoading && (
             <div className="rounded-xl border border-z-border bg-white/5 overflow-hidden">
               <div className="px-4 py-3 border-b border-z-border">
-                <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Resumen del envío</p>
+                <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">{t('emailMarketing.bulk.summaryTitle')}</p>
               </div>
               <div className="px-4 py-3 space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Destinatarios</span>
+                  <span className="text-slate-400">{t('emailMarketing.bulk.recipientsLabel')}</span>
                   <span className="text-slate-200 font-medium">
                     {bulkCampaign.startsWith('list:')
-                      ? emailLists.find(l => l.id === Number(bulkCampaign.slice(5)))?.name || 'Lista'
+                      ? emailLists.find(l => l.id === Number(bulkCampaign.slice(5)))?.name || t('emailMarketing.bulk.listFallback')
                       : bulkCampaign === 'email_only'
-                        ? `Contactos de email (${emailContactsCount?.with_email ?? '…'})`
+                        ? t('emailMarketing.bulk.emailContactsWithCount', { count: emailContactsCount?.with_email ?? '…' })
                         : bulkCampaign
-                          ? campaigns.find(c => String(c.id) === bulkCampaign)?.name || 'Campaña'
-                          : 'Todos (campañas + listas, sin duplicados)'}
+                          ? campaigns.find(c => String(c.id) === bulkCampaign)?.name || t('emailMarketing.bulk.campaignFallback')
+                          : t('emailMarketing.bulk.recipientsAllFallback')}
                   </span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Plantilla</span>
-                  <span className="text-slate-200 font-medium">{allTemplates.find(t => t.key === bulkTmpl)?.label}</span>
+                  <span className="text-slate-400">{t('emailMarketing.bulk.templateLabel')}</span>
+                  <span className="text-slate-200 font-medium">{allTemplates.find(tp => tp.key === bulkTmpl)?.label}</span>
                 </div>
                 <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Remitente</span>
+                  <span className="text-slate-400">{t('emailMarketing.bulk.senderLabel')}</span>
                   <span className="text-slate-200">{cfg.email_from_name || '—'} &lt;{cfg.email_from || '—'}&gt;</span>
                 </div>
-                {recipientLoading && <div className="pt-1 text-xs text-slate-500 animate-pulse">Calculando destinatarios...</div>}
+                {recipientLoading && <div className="pt-1 text-xs text-slate-500 animate-pulse">{t('emailMarketing.bulk.calculatingRecipients')}</div>}
                 {!recipientLoading && recipientStats && (
                   <div className="pt-1 border-t border-z-border mt-2 space-y-1">
                     <div className="flex justify-between text-sm">
                       <span className="text-slate-400">
-                        {bulkBatchSize ? `Esta tanda (de ${recipientStats.will_receive} totales)` : 'Recibirán el email'}
+                        {bulkBatchSize ? t('emailMarketing.bulk.thisBatchOf', { total: recipientStats.will_receive }) : t('emailMarketing.bulk.willReceive')}
                       </span>
                       <span className="text-green-400 font-bold">
                         {bulkBatchSize ? recipientStats.will_receive_this_batch : recipientStats.will_receive}
@@ -1153,23 +1214,23 @@ export default function EmailMarketing() {
                     </div>
                     {bulkBatchSize && recipientStats.will_receive > recipientStats.will_receive_this_batch && (
                       <div className="flex justify-between text-xs text-slate-500">
-                        <span>Pendientes para próximas tandas</span>
+                        <span>{t('emailMarketing.bulk.pendingNextBatches')}</span>
                         <span>{recipientStats.will_receive - recipientStats.will_receive_this_batch}</span>
                       </div>
                     )}
                     {recipientStats.without_email > 0 && (
-                      <div className="flex justify-between text-xs text-slate-500"><span>Sin email</span><span>{recipientStats.without_email}</span></div>
+                      <div className="flex justify-between text-xs text-slate-500"><span>{t('emailMarketing.bulk.withoutEmail')}</span><span>{recipientStats.without_email}</span></div>
                     )}
                     {recipientStats.unsubscribed > 0 && (
-                      <div className="flex justify-between text-xs text-slate-500"><span>Desuscritos</span><span>{recipientStats.unsubscribed}</span></div>
+                      <div className="flex justify-between text-xs text-slate-500"><span>{t('emailMarketing.bulk.unsubscribed')}</span><span>{recipientStats.unsubscribed}</span></div>
                     )}
                     {recipientStats.labeled > 0 && (
-                      <div className="flex justify-between text-xs text-slate-500"><span>Clasificados (excluidos)</span><span>{recipientStats.labeled}</span></div>
+                      <div className="flex justify-between text-xs text-slate-500"><span>{t('emailMarketing.bulk.labeledExcluded')}</span><span>{recipientStats.labeled}</span></div>
                     )}
-                    {(bulkBatchSize ? recipientStats.will_receive_this_batch : recipientStats.will_receive) === 0 && <p className="text-xs text-amber-400">⚠ No hay destinatarios válidos.</p>}
+                    {(bulkBatchSize ? recipientStats.will_receive_this_batch : recipientStats.will_receive) === 0 && <p className="text-xs text-amber-400">{t('emailMarketing.bulk.noValidRecipients')}</p>}
                     <button onClick={loadRecipientDetail} disabled={recipientDetailLoading}
                       className="mt-2 w-full text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:border-blue-400/50 rounded-lg py-1.5 transition-colors disabled:opacity-50">
-                      {recipientDetailLoading ? 'Cargando...' : 'Ver lista completa de contactos'}
+                      {recipientDetailLoading ? t('emailMarketing.bulk.loading') : t('emailMarketing.bulk.viewFullList')}
                     </button>
                   </div>
                 )}
@@ -1179,7 +1240,7 @@ export default function EmailMarketing() {
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input type="checkbox" checked={scheduleMode} onChange={e => { setScheduleMode(e.target.checked); if (!e.target.checked) setScheduleAt('') }}
                     className="w-4 h-4 rounded accent-blue-500" />
-                  <span className="text-sm text-slate-300">Programar envío para más tarde</span>
+                  <span className="text-sm text-slate-300">{t('emailMarketing.bulk.scheduleLater')}</span>
                 </label>
                 {scheduleMode && (
                   <input
@@ -1195,12 +1256,12 @@ export default function EmailMarketing() {
                 <button onClick={sendBulk} disabled={bulkLoading || (bulkBatchSize ? recipientStats?.will_receive_this_batch : recipientStats?.will_receive) === 0 || (scheduleMode && !scheduleAt)}
                   className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white text-sm font-semibold rounded-lg transition-colors">
                   {scheduleMode && scheduleAt
-                    ? `Programar para ${displayUTC5(fromUTC5ToISO(scheduleAt))}`
-                    : `Confirmar envío${recipientStats ? ` (${bulkBatchSize ? recipientStats.will_receive_this_batch : recipientStats.will_receive})` : ''}`}
+                    ? t('emailMarketing.bulk.scheduleFor', { date: displayUTC5(fromUTC5ToISO(scheduleAt), dateLocale) })
+                    : (recipientStats ? t('emailMarketing.bulk.confirmSendCount', { count: bulkBatchSize ? recipientStats.will_receive_this_batch : recipientStats.will_receive }) : t('emailMarketing.bulk.confirmSend'))}
                 </button>
                 <button onClick={() => { setConfirmStep(false); setScheduleMode(false); setScheduleAt('') }}
                   className="px-4 py-2 text-slate-400 hover:text-slate-200 text-sm border border-z-border rounded-lg hover:bg-white/5 transition-colors">
-                  Cancelar
+                  {t('emailMarketing.bulk.cancel')}
                 </button>
               </div>
             </div>
@@ -1222,10 +1283,10 @@ export default function EmailMarketing() {
                   )}
                   <span className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
                     {bulkJobProgress?.status === 'paused'
-                      ? '⏸ Envío en pausa'
+                      ? t('emailMarketing.bulk.pausedStatus')
                       : bulkLoading
-                        ? (batchNumber > 1 ? `Enviando lote ${batchNumber}...` : 'Enviando emails en progreso...')
-                        : `Lote ${batchNumber} completado`}
+                        ? (batchNumber > 1 ? t('emailMarketing.bulk.sendingBatch', { n: batchNumber }) : t('emailMarketing.bulk.sendingInProgress'))
+                        : t('emailMarketing.bulk.batchCompleted', { n: batchNumber })}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -1239,19 +1300,19 @@ export default function EmailMarketing() {
                             : 'text-amber-400 border-amber-500/30 hover:bg-amber-500/10'
                         }`}
                       >
-                        {bulkJobProgress.status === 'paused' ? '▶ Reanudar' : '⏸ Pausar'}
+                        {bulkJobProgress.status === 'paused' ? t('emailMarketing.bulk.resume') : t('emailMarketing.bulk.pause')}
                       </button>
                       <button
                         onClick={cancelBulk}
                         className="text-xs px-2.5 py-1 rounded-lg border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
                       >
-                        ✕ Cancelar
+                        {t('emailMarketing.bulk.cancelBtn')}
                       </button>
                     </>
                   )}
                   {bulkJobProgress && (
                     <span className="text-sm font-bold text-green-400">
-                      {bulkJobProgress.sent} / {bulkJobProgress.total}
+                      {t('emailMarketing.bulk.sentOf', { sent: bulkJobProgress.sent, total: bulkJobProgress.total })}
                     </span>
                   )}
                 </div>
@@ -1266,16 +1327,16 @@ export default function EmailMarketing() {
                         style={{ width: `${bulkJobProgress.total ? (bulkJobProgress.sent / bulkJobProgress.total) * 100 : 0}%` }} />
                     </div>
                     <div className="flex justify-between text-xs text-slate-500 mt-1">
-                      <span>{bulkJobProgress.sent} enviados</span>
-                      {bulkJobProgress.skipped > 0 && <span className="text-red-400">{bulkJobProgress.skipped} fallidos</span>}
-                      <span>{bulkJobProgress.total - bulkJobProgress.sent - bulkJobProgress.skipped} pendientes</span>
+                      <span>{t('emailMarketing.bulk.sentCount', { count: bulkJobProgress.sent })}</span>
+                      {bulkJobProgress.skipped > 0 && <span className="text-red-400">{t('emailMarketing.bulk.failedCount', { count: bulkJobProgress.skipped })}</span>}
+                      <span>{t('emailMarketing.bulk.pendingCount', { count: bulkJobProgress.total - bulkJobProgress.sent - bulkJobProgress.skipped })}</span>
                     </div>
                   </div>
 
                   {/* Sent emails list */}
                   {bulkJobProgress.sent_list?.length > 0 && (
                     <div className="px-4 pb-2">
-                      <p className="text-xs text-slate-500 mb-1 mt-2">Enviados</p>
+                      <p className="text-xs text-slate-500 mb-1 mt-2">{t('emailMarketing.bulk.sentList')}</p>
                       <div className="max-h-48 overflow-y-auto space-y-0.5 rounded-lg bg-white/[0.03] border border-z-border p-2">
                         {bulkJobProgress.sent_list.slice().reverse().map((item, i) => (
                           <div key={i} className="flex items-center gap-2 text-xs py-0.5">
@@ -1291,7 +1352,7 @@ export default function EmailMarketing() {
                   {/* Failed emails */}
                   {bulkJobProgress.failed_list?.length > 0 && (
                     <div className="px-4 pb-3 border-t border-z-border mt-1">
-                      <p className="text-xs text-red-400 mb-1 mt-2">Fallidos</p>
+                      <p className="text-xs text-red-400 mb-1 mt-2">{t('emailMarketing.bulk.failedList')}</p>
                       <div className="max-h-32 overflow-y-auto space-y-0.5">
                         {bulkJobProgress.failed_list.map((item, i) => (
                           <div key={i} className="flex justify-between text-xs">
@@ -1310,11 +1371,11 @@ export default function EmailMarketing() {
                   {bulkBatchSize && recipientStats?.will_receive_this_batch > 0 && (
                     <button onClick={sendNextBatch}
                       className="px-4 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
-                      Siguiente lote ({recipientStats.will_receive_this_batch} restantes) →
+                      {t('emailMarketing.bulk.nextBatch', { count: recipientStats.will_receive_this_batch })}
                     </button>
                   )}
                   <button onClick={() => { setBulkJobProgress(null); setBulkJobId(null); setBatchNumber(1) }}
-                    className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Nuevo envío</button>
+                    className="text-xs text-slate-500 hover:text-slate-300 transition-colors">{t('emailMarketing.bulk.newSend')}</button>
                 </div>
               )}
             </div>
@@ -1328,18 +1389,18 @@ export default function EmailMarketing() {
                 </div>
                 <div>
                   <p className={`text-sm font-semibold ${bulkResult.error ? 'text-red-300' : bulkResult.scheduled ? 'text-blue-300' : 'text-green-300'}`}>
-                    {bulkResult.error ? 'Error al enviar' : bulkResult.scheduled ? 'Envío programado' : `email${bulkResult.sent !== 1 ? 's' : ''} enviado${bulkResult.sent !== 1 ? 's' : ''} correctamente`}
+                    {bulkResult.error ? t('emailMarketing.bulk.errorSending') : bulkResult.scheduled ? t('emailMarketing.bulk.scheduledSuccess') : t('emailMarketing.bulk.emailsSentSuccess', { plural: bulkResult.sent !== 1 ? 's' : '' })}
                   </p>
                   <p className="text-xs text-slate-400 mt-0.5">
                     {bulkResult.error ? bulkResult.error
-                      : bulkResult.scheduled ? `Se enviará el ${displayUTC5(bulkResult.scheduled_at)} (UTC-5)`
-                      : bulkResult.skipped ? `${bulkResult.skipped} no pudieron enviarse` : 'Todos los emails fueron entregados'}
+                      : bulkResult.scheduled ? t('emailMarketing.bulk.willSendOn', { date: displayUTC5(bulkResult.scheduled_at, dateLocale) })
+                      : bulkResult.skipped ? t('emailMarketing.bulk.someSkipped', { count: bulkResult.skipped }) : t('emailMarketing.bulk.allDelivered')}
                   </p>
                 </div>
               </div>
               <div className="px-5 py-3 border-t border-white/5">
                 <button onClick={() => { setBulkResult(null); setErrorsOpen(false) }}
-                  className="text-xs text-slate-500 hover:text-slate-300 transition-colors">Nuevo envío</button>
+                  className="text-xs text-slate-500 hover:text-slate-300 transition-colors">{t('emailMarketing.bulk.newSend')}</button>
               </div>
             </div>
           )}
@@ -1352,9 +1413,9 @@ export default function EmailMarketing() {
       {activeTab === 'plantillas' && (<>
 
       {/* ── 3. PLANTILLAS PROFESIONALES ── */}
-      <Section id="plantillas-pro" label="Plantillas profesionales" icon={SparklesIcon} openSections={openSections} toggle={toggle}>
+      <Section id="plantillas-pro" label={t('emailMarketing.pro.title')} icon={SparklesIcon} openSections={openSections} toggle={toggle}>
         <div className="divide-y divide-z-border">
-          <p className="px-5 py-3 text-xs text-slate-500">Correos corporativos listos para usar. Haz clic en "Ver" para previsualizar y "Usar" para cargarlo en tu plantilla.</p>
+          <p className="px-5 py-3 text-xs text-slate-500">{t('emailMarketing.pro.intro')}</p>
           {PRO_GALLERY.map(({ key, label, tag, tagColor }) => {
             const pro = PRO_TEMPLATES[key]
             const isOpen = previewProKey === key
@@ -1365,23 +1426,23 @@ export default function EmailMarketing() {
                     <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${tagColor}`}>{tag}</span>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-slate-200">{label}</p>
-                      <p className="text-xs text-slate-500 truncate">{pro.subject.replace(/{{empresa}}/g, 'Empresa')}</p>
+                      <p className="text-xs text-slate-500 truncate">{pro.subject.replace(/{{empresa}}/g, t('emailMarketing.pro.companyPlaceholder'))}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
                     <button onClick={() => setPreviewProKey(isOpen ? null : key)}
                       className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-400 border border-z-border rounded-lg hover:bg-white/5 transition-colors">
-                      <EyeIcon className="w-3.5 h-3.5" /> {isOpen ? 'Cerrar' : 'Ver'}
+                      <EyeIcon className="w-3.5 h-3.5" /> {isOpen ? t('emailMarketing.pro.close') : t('emailMarketing.pro.view')}
                     </button>
                     <button onClick={() => { loadProTemplate(key); setEditingTmpl(key); setPreviewOpen(false); toggle('mis-plantillas'); setTimeout(() => editorRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 80) }}
                       className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-amber-400 border border-amber-400/30 rounded-lg hover:bg-amber-400/10 transition-colors font-medium">
-                      <SparklesIcon className="w-3.5 h-3.5" /> Usar
+                      <SparklesIcon className="w-3.5 h-3.5" /> {t('emailMarketing.pro.use')}
                     </button>
                   </div>
                 </div>
                 {isOpen && (
                   <div className="rounded-lg overflow-hidden border border-gray-200 bg-white"
-                    dangerouslySetInnerHTML={{ __html: buildHtml({ ...pro, greeting: pro.greeting.replace(/{{nombre}}/g, 'Carlos'), body: pro.body.replace(/{{nombre}}/g, 'Carlos').replace(/{{empresa}}/g, 'Empresa ABC').replace(/{{agente}}/g, 'Isabella'), signature: pro.signature.replace(/{{agente}}/g, 'Isabella') }) }} />
+                    dangerouslySetInnerHTML={{ __html: buildHtml({ ...pro, greeting: pro.greeting.replace(/{{nombre}}/g, 'Carlos'), body: pro.body.replace(/{{nombre}}/g, 'Carlos').replace(/{{empresa}}/g, 'Empresa ABC').replace(/{{agente}}/g, 'Isabella'), signature: pro.signature.replace(/{{agente}}/g, 'Isabella') }, buildHtmlLabels) }} />
                 )}
               </div>
             )
@@ -1390,14 +1451,14 @@ export default function EmailMarketing() {
       </Section>
 
       {/* ── 4. MIS PLANTILLAS ── */}
-      <Section id="mis-plantillas" label="Mis plantillas" icon={PencilSquareIcon} openSections={openSections} toggle={toggle}>
+      <Section id="mis-plantillas" label={t('emailMarketing.myTemplates.title')} icon={PencilSquareIcon} openSections={openSections} toggle={toggle}>
         <div>
           {/* New template input */}
           <div className="px-5 py-3 border-b border-z-border flex items-center justify-between">
-            <p className="text-xs text-slate-500">Haz clic en una para editarla. Las 5 fijas se usan en envíos automáticos post-llamada.</p>
+            <p className="text-xs text-slate-500">{t('emailMarketing.myTemplates.intro')}</p>
             <button onClick={() => setShowNewInput(p => !p)}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-blue-400 border border-blue-400/30 rounded-lg hover:bg-blue-400/10 transition-colors ml-3 flex-shrink-0">
-              <PlusIcon className="w-3.5 h-3.5" /> Nueva
+              <PlusIcon className="w-3.5 h-3.5" /> {t('emailMarketing.myTemplates.new')}
             </button>
           </div>
           {showNewInput && (
@@ -1405,14 +1466,14 @@ export default function EmailMarketing() {
               <input autoFocus type="text" value={newTmplName}
                 onChange={e => setNewTmplName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') createTemplate(); if (e.key === 'Escape') { setShowNewInput(false); setNewTmplName('') } }}
-                placeholder="Nombre de la plantilla..." className="z-input-light text-sm flex-1" />
-              <button onClick={createTemplate} disabled={!newTmplName.trim()} className="z-btn-primary text-xs disabled:opacity-50 whitespace-nowrap">Crear</button>
-              <button onClick={() => { setShowNewInput(false); setNewTmplName('') }} className="z-btn-ghost text-xs">Cancelar</button>
+                placeholder={t('emailMarketing.myTemplates.namePlaceholder')} className="z-input-light text-sm flex-1" />
+              <button onClick={createTemplate} disabled={!newTmplName.trim()} className="z-btn-primary text-xs disabled:opacity-50 whitespace-nowrap">{t('emailMarketing.myTemplates.create')}</button>
+              <button onClick={() => { setShowNewInput(false); setNewTmplName('') }} className="z-btn-ghost text-xs">{t('emailMarketing.myTemplates.cancel')}</button>
             </div>
           )}
           <div className="divide-y divide-z-border">
             <div className="px-4 py-2 bg-white/3">
-              <p className="text-xs text-slate-600 uppercase tracking-wide font-medium">Automáticas post-llamada</p>
+              <p className="text-xs text-slate-600 uppercase tracking-wide font-medium">{t('emailMarketing.myTemplates.autoSection')}</p>
             </div>
             {FIXED_TEMPLATES.map(({ key, label, desc }) => {
               const filled = isFilled(key)
@@ -1429,7 +1490,7 @@ export default function EmailMarketing() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 ml-3">
-                    {filled && <span className="text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">Configurada</span>}
+                    {filled && <span className="text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">{t('emailMarketing.myTemplates.configured')}</span>}
                     <PencilSquareIcon className="w-4 h-4 text-slate-500" />
                   </div>
                 </div>
@@ -1438,7 +1499,7 @@ export default function EmailMarketing() {
             {customTemplates.length > 0 && (
               <>
                 <div className="px-4 py-2 bg-white/3">
-                  <p className="text-xs text-slate-600 uppercase tracking-wide font-medium">Mis plantillas personalizadas</p>
+                  <p className="text-xs text-slate-600 uppercase tracking-wide font-medium">{t('emailMarketing.myTemplates.customSection')}</p>
                 </div>
                 {customTemplates.map(({ key, label }) => {
                   const filled = isFilled(key)
@@ -1451,11 +1512,11 @@ export default function EmailMarketing() {
                         <span className={`w-2 h-2 rounded-full flex-shrink-0 ${filled ? 'bg-green-400' : 'bg-slate-600'}`} />
                         <div className="min-w-0">
                           <p className="text-sm font-medium text-slate-200">{label}</p>
-                          <p className="text-xs text-slate-500 truncate">{filled && subject ? subject : 'Plantilla personalizada'}</p>
+                          <p className="text-xs text-slate-500 truncate">{filled && subject ? subject : t('emailMarketing.myTemplates.customDesc')}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0 ml-3" onClick={e => e.stopPropagation()}>
-                        {filled && <span className="text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">Configurada</span>}
+                        {filled && <span className="text-xs text-green-400 bg-green-400/10 px-2 py-0.5 rounded-full">{t('emailMarketing.myTemplates.configured')}</span>}
                         <button onClick={() => deleteTemplate(key)} className="p-1 text-slate-600 hover:text-red-400 transition-colors">
                           <TrashIcon className="w-4 h-4" />
                         </button>
@@ -1478,49 +1539,49 @@ export default function EmailMarketing() {
                       className="text-sm font-semibold bg-transparent text-blue-400 border-b border-blue-400/40 focus:outline-none focus:border-blue-400 pb-0.5" />
                   ) : (
                     <h2 className="text-sm font-semibold text-slate-200">
-                      Editando: <span className="text-blue-400">{editingMeta?.label}</span>
+                      {t('emailMarketing.myTemplates.editingLabel')} <span className="text-blue-400">{editingMeta?.label}</span>
                     </h2>
                   )}
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Variables: <span className="font-mono text-blue-400">{'{{nombre}}  {{empresa}}  {{telefono}}  {{fecha}}  {{agente}}'}</span>
+                    {t('emailMarketing.myTemplates.variablesLabel')} <span className="font-mono text-blue-400">{'{{nombre}}  {{empresa}}  {{telefono}}  {{fecha}}  {{agente}}'}</span>
                   </p>
                 </div>
                 <button onClick={() => loadProTemplate(editingTmpl)}
                   className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-400 border border-amber-400/30 rounded-lg hover:bg-amber-400/10 transition-colors">
-                  <SparklesIcon className="w-3.5 h-3.5" /> Plantilla profesional
+                  <SparklesIcon className="w-3.5 h-3.5" /> {t('emailMarketing.myTemplates.proTemplateBtn')}
                 </button>
               </div>
               <p className="px-5 pt-3 text-xs text-amber-400/80 bg-amber-400/5">
-                ⚠ Los cambios no se guardan solos — recuerda pulsar "Guardar cambios" (más abajo) antes de salir de aquí.
+                {t('emailMarketing.myTemplates.unsavedWarning')}
               </p>
               <div className="p-5 space-y-3">
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Asunto del email</label>
+                  <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.myTemplates.subjectLabel')}</label>
                   <input type="text" value={editingData.subject}
                     onChange={e => setTmplField(editingTmpl, 'subject', e.target.value)}
-                    placeholder="ej: Próximos pasos — {{empresa}}" className="z-input-light text-sm" />
+                    placeholder={`${t('emailMarketing.myTemplates.subjectPlaceholderPrefix')}{{empresa}}`} className="z-input-light text-sm" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Saludo</label>
+                  <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.myTemplates.greetingLabel')}</label>
                   <input type="text" value={editingData.greeting}
                     onChange={e => setTmplField(editingTmpl, 'greeting', e.target.value)}
-                    placeholder="Estimado/a {{nombre}}," className="z-input-light text-sm" />
+                    placeholder={`${t('emailMarketing.myTemplates.greetingPlaceholderPrefix')}{{nombre}}${t('emailMarketing.myTemplates.greetingPlaceholderSuffix')}`} className="z-input-light text-sm" />
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Cuerpo del mensaje</label>
+                  <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.myTemplates.bodyLabel')}</label>
                   <textarea rows={6} value={editingData.body}
                     onChange={e => setTmplField(editingTmpl, 'body', e.target.value)}
-                    placeholder="Escribe el contenido del email aquí..." className="z-input-light text-sm resize-none" />
+                    placeholder={t('emailMarketing.myTemplates.bodyPlaceholder')} className="z-input-light text-sm resize-none" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Texto del botón 1 (opcional)</label>
+                    <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.myTemplates.cta1TextLabel')}</label>
                     <input type="text" value={editingData.cta_text}
                       onChange={e => setTmplField(editingTmpl, 'cta_text', e.target.value)}
-                      placeholder="Agendar llamada" className="z-input-light text-sm" />
+                      placeholder={t('emailMarketing.myTemplates.cta1TextPlaceholder')} className="z-input-light text-sm" />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">URL del botón 1</label>
+                    <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.myTemplates.cta1UrlLabel')}</label>
                     <input type="url" value={editingData.cta_url}
                       onChange={e => setTmplField(editingTmpl, 'cta_url', e.target.value)}
                       placeholder="https://calendly.com/..." className="z-input-light text-sm" />
@@ -1528,33 +1589,33 @@ export default function EmailMarketing() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">Texto del botón 2 (opcional)</label>
+                    <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.myTemplates.cta2TextLabel')}</label>
                     <input type="text" value={editingData.cta_text_2 || ''}
                       onChange={e => setTmplField(editingTmpl, 'cta_text_2', e.target.value)}
-                      placeholder="Ver catálogo" className="z-input-light text-sm" />
+                      placeholder={t('emailMarketing.myTemplates.cta2TextPlaceholder')} className="z-input-light text-sm" />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-400 mb-1 block">URL del botón 2 (opcional)</label>
+                    <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.myTemplates.cta2UrlLabel')}</label>
                     <input type="url" value={editingData.cta_url_2 || ''}
                       onChange={e => setTmplField(editingTmpl, 'cta_url_2', e.target.value)}
                       placeholder="https://ejemplo.com/..." className="z-input-light text-sm" />
                   </div>
                 </div>
                 <div>
-                  <label className="text-xs text-slate-400 mb-1 block">Firma</label>
+                  <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.myTemplates.signatureLabel')}</label>
                   <textarea rows={2} value={editingData.signature}
                     onChange={e => setTmplField(editingTmpl, 'signature', e.target.value)}
-                    placeholder={'Atentamente,\n{{agente}}'} className="z-input-light text-sm resize-none" />
+                    placeholder={`${t('emailMarketing.myTemplates.signaturePlaceholderPrefix')}{{agente}}`} className="z-input-light text-sm resize-none" />
                 </div>
                 <div>
                   <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
-                    <PaperClipIcon className="w-3.5 h-3.5" /> Adjunto para esta plantilla (PDF o imagen, máx. 5 MB)
+                    <PaperClipIcon className="w-3.5 h-3.5" /> {t('emailMarketing.myTemplates.attachmentLabel')}
                   </label>
                   <div className="flex items-center gap-3">
                     <input ref={tmplAttachRef} type="file" accept=".pdf,image/*" className="hidden" onChange={uploadTmplAttach} />
                     <button onClick={() => tmplAttachRef.current?.click()} disabled={tmplAttachLoading}
                       className="z-btn-ghost border border-z-border text-xs disabled:opacity-50">
-                      {tmplAttachLoading ? 'Subiendo...' : cfg.email_templates[editingTmpl]?.attachment_name ? 'Reemplazar adjunto' : 'Subir adjunto'}
+                      {tmplAttachLoading ? t('emailMarketing.myTemplates.uploading') : cfg.email_templates[editingTmpl]?.attachment_name ? t('emailMarketing.myTemplates.replaceAttachment') : t('emailMarketing.myTemplates.uploadAttachment')}
                     </button>
                     {cfg.email_templates[editingTmpl]?.attachment_name && (
                       <>
@@ -1563,14 +1624,14 @@ export default function EmailMarketing() {
                         </span>
                         <button onClick={removeTmplAttach} disabled={tmplAttachLoading}
                           className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
-                          Quitar
+                          {t('emailMarketing.myTemplates.remove')}
                         </button>
                       </>
                     )}
                   </div>
                   {cfg.email_templates[editingTmpl]?.attachment_name && (
                     <p className="text-xs text-amber-400/80 mt-1">
-                      ⚠ Esta plantilla tiene su propio adjunto y siempre usará este archivo en lugar del adjunto global de "Configuración automática", aunque lo cambies allí.
+                      {t('emailMarketing.myTemplates.attachmentOverrideWarning')}
                     </p>
                   )}
                   {tmplAttachMsg && (
@@ -1582,11 +1643,11 @@ export default function EmailMarketing() {
                 <button onClick={() => setPreviewOpen(p => !p)}
                   className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors">
                   <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${previewOpen ? 'rotate-180' : ''}`} />
-                  {previewOpen ? 'Ocultar vista previa' : 'Ver vista previa del email'}
+                  {previewOpen ? t('emailMarketing.myTemplates.hidePreview') : t('emailMarketing.myTemplates.showPreview')}
                 </button>
                 {previewOpen && (
                   <div className="rounded-lg overflow-hidden border border-gray-200"
-                    dangerouslySetInnerHTML={{ __html: buildHtml(editingData) }} />
+                    dangerouslySetInnerHTML={{ __html: buildHtml(editingData, buildHtmlLabels) }} />
                 )}
               </div>
             </div>
@@ -1595,29 +1656,29 @@ export default function EmailMarketing() {
       </Section>
 
       {/* ── Configuración automática (también visible aquí para no perderla de vista al editar plantillas) ── */}
-      <Section id="config" label="Configuración automática" icon={Cog6ToothIcon} openSections={openSections} toggle={toggle}>
+      <Section id="config" label={t('emailMarketing.config.title')} icon={Cog6ToothIcon} openSections={openSections} toggle={toggle}>
         <div className="p-5 space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Email remitente</label>
+              <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.config.senderEmail')}</label>
               <input type="email" value={cfg.email_from} onChange={e => setCfg(p => ({ ...p, email_from: e.target.value }))}
                 placeholder="info@empresa.com" className="z-input-light text-sm" />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Nombre remitente</label>
+              <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.config.senderName')}</label>
               <input type="text" value={cfg.email_from_name} onChange={e => setCfg(p => ({ ...p, email_from_name: e.target.value }))}
-                placeholder="Isabella - Mi Empresa" className="z-input-light text-sm" />
+                placeholder={t('emailMarketing.config.senderNamePlaceholder')} className="z-input-light text-sm" />
             </div>
           </div>
           <div className="border-t border-z-border pt-4">
             <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
-              <PaperClipIcon className="w-3.5 h-3.5" /> Adjunto global (PDF o imagen, máx. 5 MB)
+              <PaperClipIcon className="w-3.5 h-3.5" /> {t('emailMarketing.config.globalAttachmentLabel')}
             </label>
             <div className="flex items-center gap-3">
               <input ref={attachRef} type="file" accept=".pdf,image/*" className="hidden" onChange={uploadAttach} />
               <button onClick={() => attachRef.current?.click()} disabled={attachLoading}
                 className="z-btn-ghost border border-z-border text-xs disabled:opacity-50">
-                {attachLoading ? 'Subiendo...' : cfg.email_attachment_name ? 'Reemplazar adjunto' : 'Subir adjunto'}
+                {attachLoading ? t('emailMarketing.myTemplates.uploading') : cfg.email_attachment_name ? t('emailMarketing.myTemplates.replaceAttachment') : t('emailMarketing.myTemplates.uploadAttachment')}
               </button>
               {cfg.email_attachment_name && (
                 <>
@@ -1626,14 +1687,14 @@ export default function EmailMarketing() {
                   </span>
                   <button onClick={removeAttach} disabled={attachLoading}
                     className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
-                    Quitar
+                    {t('emailMarketing.myTemplates.remove')}
                   </button>
                 </>
               )}
             </div>
             {cfg.email_attachment_name && (
               <p className="text-xs text-slate-500 mt-1">
-                Se adjunta a todos los envíos que no tengan su propio adjunto por plantilla.
+                {t('emailMarketing.config.globalAttachmentHint')}
               </p>
             )}
             {attachMsg && (
@@ -1643,34 +1704,34 @@ export default function EmailMarketing() {
             )}
           </div>
           <div className="border-t border-z-border pt-4">
-            <label className="text-xs text-slate-400 mb-1.5 block">Delay entre envíos</label>
+            <label className="text-xs text-slate-400 mb-1.5 block">{t('emailMarketing.config.delayLabel')}</label>
             <select value={cfg.email_send_delay_ms} onChange={e => setCfg(p => ({ ...p, email_send_delay_ms: Number(e.target.value) }))}
               className="z-input-light text-sm w-full sm:w-auto">
-              <option value={0}>Sin delay (máxima velocidad)</option>
-              <option value={500}>500 ms</option>
-              <option value={1000}>1 segundo</option>
-              <option value={2000}>2 segundos</option>
-              <option value={5000}>5 segundos</option>
+              <option value={0}>{t('emailMarketing.config.delayNone')}</option>
+              <option value={500}>{t('emailMarketing.config.delay500')}</option>
+              <option value={1000}>{t('emailMarketing.config.delay1s')}</option>
+              <option value={2000}>{t('emailMarketing.config.delay2s')}</option>
+              <option value={5000}>{t('emailMarketing.config.delay5s')}</option>
             </select>
-            <p className="text-xs text-slate-500 mt-1">Un delay evita que grandes envíos activen filtros de spam.</p>
+            <p className="text-xs text-slate-500 mt-1">{t('emailMarketing.config.delayHint')}</p>
           </div>
           <div className="border-t border-z-border pt-4 space-y-2">
             <div className="flex items-center justify-between mb-1">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Automático post-llamada</p>
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{t('emailMarketing.config.autoSectionTitle')}</p>
               <label className="flex items-center gap-2 cursor-pointer">
                 <div onClick={() => setCfg(p => ({ ...p, email_enabled: !p.email_enabled }))}
                   className={`relative w-9 h-5 rounded-full transition-colors cursor-pointer ${cfg.email_enabled ? 'bg-blue-500' : 'bg-slate-700'}`}>
                   <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${cfg.email_enabled ? 'translate-x-4' : ''}`} />
                 </div>
-                <span className="text-xs text-slate-400">{cfg.email_enabled ? 'Activo' : 'Inactivo'}</span>
+                <span className="text-xs text-slate-400">{cfg.email_enabled ? t('emailMarketing.config.active') : t('emailMarketing.config.inactive')}</span>
               </label>
             </div>
-            <p className="text-xs text-slate-500">Selecciona para qué resultados enviar email automáticamente:</p>
+            <p className="text-xs text-slate-500">{t('emailMarketing.config.autoSectionHint')}</p>
             {[
-              { flag: 'email_send_on_interested',    label: 'Interesado' },
-              { flag: 'email_send_on_callback',       label: 'Callback' },
-              { flag: 'email_send_on_voicemail',      label: 'Buzón de voz' },
-              { flag: 'email_send_on_not_interested', label: 'No interesado' },
+              { flag: 'email_send_on_interested',    label: t('emailMarketing.config.flagInterested') },
+              { flag: 'email_send_on_callback',       label: t('emailMarketing.config.flagCallback') },
+              { flag: 'email_send_on_voicemail',      label: t('emailMarketing.config.flagVoicemail') },
+              { flag: 'email_send_on_not_interested', label: t('emailMarketing.config.flagNotInterested') },
             ].map(({ flag, label }) => (
               <label key={flag} className={`flex items-center gap-2.5 cursor-pointer ${!cfg.email_enabled ? 'opacity-40 pointer-events-none' : ''}`}>
                 <input type="checkbox" checked={cfg[flag]}
@@ -1682,9 +1743,9 @@ export default function EmailMarketing() {
           </div>
           <div className="flex items-center gap-3 pt-2">
             <button onClick={save} disabled={saving} className="z-btn-primary disabled:opacity-50">
-              {saving ? 'Guardando...' : 'Guardar cambios'}
+              {saving ? t('emailMarketing.config.saving') : t('emailMarketing.config.save')}
             </button>
-            {saved && <span className="flex items-center gap-1.5 text-sm text-green-400"><CheckCircleIcon className="w-4 h-4" /> Guardado</span>}
+            {saved && <span className="flex items-center gap-1.5 text-sm text-green-400"><CheckCircleIcon className="w-4 h-4" /> {t('emailMarketing.config.saved')}</span>}
           </div>
         </div>
       </Section>
@@ -1695,31 +1756,31 @@ export default function EmailMarketing() {
       {activeTab === 'enviar' && (<>
 
       {/* ── 5. ENVÍO DE PRUEBA ── */}
-      <Section id="prueba" label="Envío de prueba" icon={EnvelopeIcon} openSections={openSections} toggle={toggle}>
+      <Section id="prueba" label={t('emailMarketing.test.title')} icon={EnvelopeIcon} openSections={openSections} toggle={toggle}>
         <div className="p-5 space-y-3">
-          <p className="text-xs text-slate-500">Verifica que el email se ve bien antes de enviarlo a tus prospectos. Se envía con datos de ejemplo.</p>
+          <p className="text-xs text-slate-500">{t('emailMarketing.test.intro')}</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Tu correo</label>
+              <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.test.yourEmail')}</label>
               <input type="email" value={testAddr} onChange={e => setTestAddr(e.target.value)}
                 placeholder="mi@correo.com" className="z-input-light text-sm" />
             </div>
             <div>
-              <label className="text-xs text-slate-400 mb-1 block">Plantilla a probar</label>
+              <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.test.templateToTest')}</label>
               <select value={testTmpl} onChange={e => setTestTmpl(e.target.value)} className="z-input-light text-sm">
-                {allTemplates.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+                {allTemplates.map(tp => <option key={tp.key} value={tp.key}>{tp.label}</option>)}
               </select>
             </div>
           </div>
           {(() => {
             const subj = cfg.email_templates[testTmpl]?.subject
             return subj
-              ? <p className="text-xs text-slate-400">Asunto: <span className="italic">"{subj}"</span></p>
-              : <p className="text-xs text-amber-400">⚠ Sin asunto configurado</p>
+              ? <p className="text-xs text-slate-400">{t('emailMarketing.test.subjectLabel')} <span className="italic">"{subj}"</span></p>
+              : <p className="text-xs text-amber-400">{t('emailMarketing.test.noSubject')}</p>
           })()}
           <button onClick={sendTest} disabled={testLoading || !testAddr || !cfg.sendgrid_configured}
             className="z-btn-primary disabled:opacity-50">
-            {testLoading ? 'Enviando...' : 'Enviar prueba'}
+            {testLoading ? t('emailMarketing.test.sending') : t('emailMarketing.test.send')}
           </button>
           {testMsg && (
             <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
@@ -1735,11 +1796,11 @@ export default function EmailMarketing() {
           <div className="px-5 py-4 border-b border-z-border flex items-center gap-2">
             <ClockIcon className="w-4 h-4 text-blue-400" />
             <div>
-              <h2 className="text-sm font-semibold text-slate-200">Envíos programados</h2>
+              <h2 className="text-sm font-semibold text-slate-200">{t('emailMarketing.scheduled.title')}</h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                {scheduledJobs.filter(j => j.status === 'pending').length} pendiente{scheduledJobs.filter(j => j.status === 'pending').length !== 1 ? 's' : ''}
+                {t('emailMarketing.scheduled.pendingCount', { count: scheduledJobs.filter(j => j.status === 'pending').length })}
                 {scheduledJobs.some(j => j.status === 'failed') && (
-                  <span className="text-red-400"> · {scheduledJobs.filter(j => j.status === 'failed').length} fallido{scheduledJobs.filter(j => j.status === 'failed').length !== 1 ? 's' : ''}</span>
+                  <span className="text-red-400"> · {t('emailMarketing.scheduled.failedCount', { count: scheduledJobs.filter(j => j.status === 'failed').length })}</span>
                 )}
               </p>
             </div>
@@ -1749,14 +1810,14 @@ export default function EmailMarketing() {
               <div key={j.id} className="px-5 py-3 flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-sm text-slate-200 font-medium flex items-center gap-2">
-                    {j.email_only ? 'Contactos de email' : j.campaign_id ? `Campaña #${j.campaign_id}` : 'Todos los prospectos'}
-                    <span className="text-xs text-slate-500 font-normal">· plantilla: {j.template_key}</span>
+                    {j.email_only ? t('emailMarketing.scheduled.emailContacts') : j.campaign_id ? t('emailMarketing.scheduled.campaignNum', { id: j.campaign_id }) : t('emailMarketing.scheduled.allProspects')}
+                    <span className="text-xs text-slate-500 font-normal">{t('emailMarketing.scheduled.templateLabel', { key: j.template_key })}</span>
                     {j.status === 'failed' && (
-                      <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-400">Fallido</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-red-500/15 text-red-400">{t('emailMarketing.scheduled.failedBadge')}</span>
                     )}
                   </p>
                   <p className={`text-xs mt-0.5 ${j.status === 'failed' ? 'text-red-300' : 'text-blue-300'}`}>
-                    {displayUTC5(j.scheduled_at)} <span className="text-slate-600">(UTC-5)</span>
+                    {displayUTC5(j.scheduled_at, dateLocale)} <span className="text-slate-600">(UTC-5)</span>
                   </p>
                   {j.status === 'failed' && j.error && (
                     <p className="text-xs text-red-400/80 mt-0.5">{j.error}</p>
@@ -1767,20 +1828,20 @@ export default function EmailMarketing() {
                     onClick={() => setRescheduleModal({ id: j.id, scheduled_at: toUTC5Display(j.scheduled_at) })}
                     className="text-xs text-blue-400 hover:text-blue-300 border border-blue-500/30 hover:bg-blue-500/10 px-3 py-1 rounded-lg transition-colors"
                   >
-                    {j.status === 'failed' ? 'Reintentar' : 'Reprogramar'}
+                    {j.status === 'failed' ? t('emailMarketing.scheduled.retry') : t('emailMarketing.scheduled.reschedule')}
                   </button>
                   <button
                     onClick={async () => {
                       try {
                         await cancelScheduledEmail(j.id)
                       } catch (e) {
-                        alert(e.response?.data?.detail || 'Error al cancelar')
+                        alert(e.response?.data?.detail || t('emailMarketing.scheduled.errorCancel'))
                       }
                       loadScheduled()
                     }}
                     className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 px-3 py-1 rounded-lg transition-colors"
                   >
-                    Cancelar
+                    {t('emailMarketing.scheduled.cancel')}
                   </button>
                 </div>
               </div>
@@ -1790,34 +1851,33 @@ export default function EmailMarketing() {
       )}
 
       {/* ── Secuencias de correo (drip campaigns) ── */}
-      <Section id="secuencias" label="Secuencias de correo" icon={SparklesIcon}
-        badge={sequences.length > 0 ? `${sequences.length} secuencia${sequences.length !== 1 ? 's' : ''}` : undefined}
+      <Section id="secuencias" label={t('emailMarketing.sequences.title')} icon={SparklesIcon}
+        badge={sequences.length > 0 ? t('emailMarketing.sequences.badgeCount', { count: sequences.length, plural: sequences.length !== 1 ? 's' : '' }) : undefined}
         openSections={openSections} toggle={toggle}>
         <div className="p-5 space-y-5">
           <p className="text-xs text-slate-500">
-            Define las fechas de envío y el objetivo, y la IA generará todos los correos de la secuencia de una sola vez.
-            Podrás revisarlos y editarlos antes de programarlos.
+            {t('emailMarketing.sequences.intro')}
           </p>
 
           {!seqGenerated && (
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <input type="text" placeholder="Nombre de la secuencia" value={seqForm.name}
+                <input type="text" placeholder={t('emailMarketing.sequences.namePlaceholder')} value={seqForm.name}
                   onChange={e => setSeqForm(p => ({ ...p, name: e.target.value }))}
                   className="z-input-light text-sm" />
                 <select value={seqForm.email_list_id}
                   onChange={e => setSeqForm(p => ({ ...p, email_list_id: e.target.value }))}
                   className="z-input-light text-sm">
-                  <option value="">Selecciona una lista...</option>
+                  <option value="">{t('emailMarketing.sequences.selectList')}</option>
                   {emailLists.map(l => <option key={l.id} value={l.id}>{l.name} ({l.with_email})</option>)}
                 </select>
               </div>
-              <textarea placeholder="Objetivo de la secuencia (ej: presentar el servicio y conseguir una llamada en 3 correos)"
+              <textarea placeholder={t('emailMarketing.sequences.objectivePlaceholder')}
                 value={seqForm.objective} onChange={e => setSeqForm(p => ({ ...p, objective: e.target.value }))}
                 rows={2} className="z-input-light text-sm w-full" />
               <div className="grid grid-cols-2 gap-3">
                 <select value={seqForm.tone} onChange={e => setSeqForm(p => ({ ...p, tone: e.target.value }))} className="z-input-light text-sm">
-                  {['Profesional', 'Cercano', 'Persuasivo', 'Urgente'].map(t => <option key={t} value={t}>{t}</option>)}
+                  {['Profesional', 'Cercano', 'Persuasivo', 'Urgente'].map(tone => <option key={tone} value={tone}>{tone}</option>)}
                 </select>
                 <select value={seqForm.language} onChange={e => setSeqForm(p => ({ ...p, language: e.target.value }))} className="z-input-light text-sm">
                   {['Español', 'Inglés', 'Spanglish'].map(l => <option key={l} value={l}>{l}</option>)}
@@ -1825,7 +1885,7 @@ export default function EmailMarketing() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs text-slate-400">Fechas de envío</label>
+                <label className="text-xs text-slate-400">{t('emailMarketing.sequences.sendDatesLabel')}</label>
                 {seqDates.map((d, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <input type="date" value={d} onChange={e => updateSeqDate(i, e.target.value)} className="z-input-light text-sm" />
@@ -1837,37 +1897,37 @@ export default function EmailMarketing() {
                   </div>
                 ))}
                 <button onClick={addSeqDate} className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300">
-                  <PlusIcon className="w-3.5 h-3.5" /> Agregar fecha
+                  <PlusIcon className="w-3.5 h-3.5" /> {t('emailMarketing.sequences.addDate')}
                 </button>
               </div>
 
               {seqError && <p className="text-xs text-red-400">{seqError}</p>}
               <button onClick={handleGenerateSequence} disabled={seqGenerating}
                 className="z-btn-primary disabled:opacity-50 flex items-center gap-1.5">
-                <SparklesIcon className="w-4 h-4" /> {seqGenerating ? 'Generando con IA...' : 'Generar con IA'}
+                <SparklesIcon className="w-4 h-4" /> {seqGenerating ? t('emailMarketing.sequences.generating') : t('emailMarketing.sequences.generate')}
               </button>
             </div>
           )}
 
           {seqGenerated && (
             <div className="space-y-3">
-              <p className="text-xs text-slate-400">Revisa y edita cada correo antes de programar la secuencia.</p>
+              <p className="text-xs text-slate-400">{t('emailMarketing.sequences.reviewHint')}</p>
               {seqGenerated.map((em, i) => (
                 <div key={i} className="border border-z-border rounded-lg p-3 space-y-2">
-                  <p className="text-xs text-blue-300">Correo {i + 1} · {displayUTC5(em.date)} <span className="text-slate-600">(UTC-5)</span></p>
+                  <p className="text-xs text-blue-300">{t('emailMarketing.sequences.emailN', { n: i + 1 })} · {displayUTC5(em.date, dateLocale)} <span className="text-slate-600">(UTC-5)</span></p>
                   <input type="text" value={em.subject} onChange={e => updateGeneratedEmail(i, 'subject', e.target.value)}
-                    className="z-input-light text-sm w-full" placeholder="Asunto" />
+                    className="z-input-light text-sm w-full" placeholder={t('emailMarketing.sequences.subjectPlaceholder')} />
                   <textarea value={em.body} onChange={e => updateGeneratedEmail(i, 'body', e.target.value)}
-                    rows={4} className="z-input-light text-sm w-full" placeholder="Cuerpo del correo" />
+                    rows={4} className="z-input-light text-sm w-full" placeholder={t('emailMarketing.sequences.bodyPlaceholder')} />
                 </div>
               ))}
               {seqError && <p className="text-xs text-red-400">{seqError}</p>}
               <div className="flex gap-2">
                 <button onClick={handleConfirmSequence} disabled={seqCreating || !seqForm.name}
                   className="z-btn-primary disabled:opacity-50">
-                  {seqCreating ? 'Programando...' : 'Confirmar y programar'}
+                  {seqCreating ? t('emailMarketing.sequences.scheduling') : t('emailMarketing.sequences.confirmAndSchedule')}
                 </button>
-                <button onClick={() => setSeqGenerated(null)} className="z-btn-ghost text-xs">Descartar</button>
+                <button onClick={() => setSeqGenerated(null)} className="z-btn-ghost text-xs">{t('emailMarketing.sequences.discard')}</button>
               </div>
             </div>
           )}
@@ -1879,12 +1939,12 @@ export default function EmailMarketing() {
                   <div className="px-4 py-3 flex items-center justify-between bg-white/5">
                     <div>
                       <p className="text-sm text-slate-200 font-medium">{seq.name}</p>
-                      <p className="text-xs text-slate-500">{seq.steps.length} correo{seq.steps.length !== 1 ? 's' : ''} · {seq.status}</p>
+                      <p className="text-xs text-slate-500">{t('emailMarketing.sequences.emailsCount', { count: seq.steps.length, plural: seq.steps.length !== 1 ? 's' : '', status: seq.status })}</p>
                     </div>
                     {seq.status === 'scheduled' && (
                       <button onClick={() => handleCancelSequence(seq.id)}
                         className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 px-3 py-1 rounded-lg transition-colors">
-                        Cancelar secuencia
+                        {t('emailMarketing.sequences.cancelSequence')}
                       </button>
                     )}
                   </div>
@@ -1892,8 +1952,8 @@ export default function EmailMarketing() {
                     {seq.steps.map(s => (
                       <div key={s.job_id} className="px-4 py-2.5 flex items-center justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="text-sm text-slate-300 truncate">Paso {s.step}: {s.subject}</p>
-                          <p className="text-xs text-slate-500">{displayUTC5(s.scheduled_at)} <span className="text-slate-600">(UTC-5)</span></p>
+                          <p className="text-sm text-slate-300 truncate">{t('emailMarketing.sequences.stepLabel', { n: s.step, subject: s.subject })}</p>
+                          <p className="text-xs text-slate-500">{displayUTC5(s.scheduled_at, dateLocale)} <span className="text-slate-600">(UTC-5)</span></p>
                         </div>
                         <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
                           s.status === 'done' ? 'bg-green-500/15 text-green-400' :
@@ -1917,9 +1977,9 @@ export default function EmailMarketing() {
       {rescheduleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
           <div className="bg-z-card border border-z-border rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-xl">
-            <h3 className="text-base font-semibold text-slate-100">Reprogramar envío</h3>
+            <h3 className="text-base font-semibold text-slate-100">{t('emailMarketing.reschedule.title')}</h3>
             <div>
-              <label className="text-xs text-slate-400 mb-1.5 block">Nueva fecha y hora</label>
+              <label className="text-xs text-slate-400 mb-1.5 block">{t('emailMarketing.reschedule.newDateTime')}</label>
               <input
                 type="datetime-local"
                 value={rescheduleModal.scheduled_at}
@@ -1928,18 +1988,18 @@ export default function EmailMarketing() {
               />
             </div>
             <div className="flex gap-2 justify-end">
-              <button onClick={() => setRescheduleModal(null)} className="z-btn-ghost text-xs">Cancelar</button>
+              <button onClick={() => setRescheduleModal(null)} className="z-btn-ghost text-xs">{t('emailMarketing.reschedule.cancel')}</button>
               <button
                 onClick={async () => {
                   try {
                     await rescheduleEmail(rescheduleModal.id, fromUTC5ToISO(rescheduleModal.scheduled_at))
                     setRescheduleModal(null)
                     loadScheduled()
-                  } catch (e) { alert(e.response?.data?.detail || 'Error al reprogramar') }
+                  } catch (e) { alert(e.response?.data?.detail || t('emailMarketing.reschedule.error')) }
                 }}
                 className="z-btn-primary text-xs"
               >
-                Guardar
+                {t('emailMarketing.reschedule.save')}
               </button>
             </div>
           </div>
@@ -1950,16 +2010,16 @@ export default function EmailMarketing() {
       {activeTab === 'analitica' && (<>
 
       {/* ── 7. SEGUIMIENTO DE EMAILS ── */}
-      <Section id="seguimiento" label="Seguimiento de emails" icon={ChartBarIcon} openSections={openSections} toggle={toggle}>
+      <Section id="seguimiento" label={t('emailMarketing.analytics.trackingTitle')} icon={ChartBarIcon} openSections={openSections} toggle={toggle}>
         <div className="p-5 space-y-4">
           <p className="text-xs text-slate-500">
-            Eventos de tracking enviados por SendGrid: entregas, aperturas, clicks, rebotes y desuscripciones.
+            {t('emailMarketing.analytics.trackingIntro')}
           </p>
 
           {!trackingEvents && (
             <button onClick={loadTrackingEvents} disabled={trackingLoading}
               className="z-btn-primary disabled:opacity-50">
-              {trackingLoading ? 'Cargando...' : 'Cargar eventos'}
+              {trackingLoading ? t('emailMarketing.analytics.loading') : t('emailMarketing.analytics.loadEvents')}
             </button>
           )}
 
@@ -1967,13 +2027,13 @@ export default function EmailMarketing() {
             <>
               {/* Tabs */}
               {(() => {
-                const TABS = [
-                  { key: 'all',         label: 'Todos' },
-                  { key: 'delivered',   label: 'Entregados' },
-                  { key: 'open',        label: 'Abiertos' },
-                  { key: 'click',       label: 'Clicks' },
-                  { key: 'bounce',      label: 'Rebotados' },
-                  { key: 'unsubscribe', label: 'Desuscritos' },
+                const ANALYTICS_TABS = [
+                  { key: 'all',         label: t('emailMarketing.analytics.tabAll') },
+                  { key: 'delivered',   label: t('emailMarketing.analytics.tabDelivered') },
+                  { key: 'open',        label: t('emailMarketing.analytics.tabOpen') },
+                  { key: 'click',       label: t('emailMarketing.analytics.tabClick') },
+                  { key: 'bounce',      label: t('emailMarketing.analytics.tabBounce') },
+                  { key: 'unsubscribe', label: t('emailMarketing.analytics.tabUnsubscribe') },
                 ]
                 const counts = {}
                 trackingEvents.forEach(e => { counts[e.event_type] = (counts[e.event_type] || 0) + 1 })
@@ -1983,16 +2043,16 @@ export default function EmailMarketing() {
                   <>
                     <div className="flex items-center justify-between gap-2 flex-wrap">
                       <div className="flex gap-1 flex-wrap">
-                        {TABS.map(t => {
-                          const count = t.key === 'all' ? trackingEvents.length : (counts[t.key] || 0)
+                        {ANALYTICS_TABS.map(tab => {
+                          const count = tab.key === 'all' ? trackingEvents.length : (counts[tab.key] || 0)
                           const COLOR = { delivered: 'text-green-400', open: 'text-blue-400', click: 'text-purple-400', bounce: 'text-red-400', unsubscribe: 'text-amber-400' }
                           return (
-                            <button key={t.key}
-                              onClick={() => setTrackingTab(t.key)}
-                              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${trackingTab === t.key ? 'bg-white/10 border-slate-500/60 text-slate-200' : 'border-z-border text-slate-500 hover:bg-white/5'}`}>
-                              {t.label}
+                            <button key={tab.key}
+                              onClick={() => setTrackingTab(tab.key)}
+                              className={`px-3 py-1.5 text-xs rounded-lg border transition-colors ${trackingTab === tab.key ? 'bg-white/10 border-slate-500/60 text-slate-200' : 'border-z-border text-slate-500 hover:bg-white/5'}`}>
+                              {tab.label}
                               {count > 0 && (
-                                <span className={`ml-1.5 font-bold ${trackingTab === t.key ? 'text-slate-300' : (COLOR[t.key] || 'text-slate-400')}`}>{count}</span>
+                                <span className={`ml-1.5 font-bold ${trackingTab === tab.key ? 'text-slate-300' : (COLOR[tab.key] || 'text-slate-400')}`}>{count}</span>
                               )}
                             </button>
                           )
@@ -2001,11 +2061,11 @@ export default function EmailMarketing() {
                       <div className="flex items-center gap-2">
                         <button onClick={loadTrackingEvents} disabled={trackingLoading}
                           className="text-xs text-slate-500 hover:text-slate-300 transition-colors">
-                          {trackingLoading ? 'Actualizando...' : '↻ Actualizar'}
+                          {trackingLoading ? t('emailMarketing.analytics.updating') : t('emailMarketing.analytics.refresh')}
                         </button>
                         <button onClick={exportTrackingToExcel} disabled={!filtered.length}
                           className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-400 border border-green-400/30 rounded-lg hover:bg-green-400/10 transition-colors disabled:opacity-40">
-                          <ArrowDownTrayIcon className="w-3.5 h-3.5" /> Exportar Excel
+                          <ArrowDownTrayIcon className="w-3.5 h-3.5" /> {t('emailMarketing.analytics.exportExcel')}
                         </button>
                       </div>
                     </div>
@@ -2013,14 +2073,14 @@ export default function EmailMarketing() {
                     {/* Table */}
                     {filtered.length === 0 ? (
                       <p className="text-center text-slate-600 text-sm py-8">
-                        {trackingTab === 'all' ? 'No hay eventos registrados aún. Los eventos aparecerán aquí cuando SendGrid envíe notificaciones de tracking.' : 'Sin eventos de este tipo.'}
+                        {trackingTab === 'all' ? t('emailMarketing.analytics.noEventsAll') : t('emailMarketing.analytics.noEventsFiltered')}
                       </p>
                     ) : (
                       <div className="overflow-x-auto max-h-96 overflow-y-auto rounded-xl border border-z-border">
                         <table className="w-full text-xs min-w-[500px]">
                           <thead className="bg-black/20 sticky top-0">
                             <tr>
-                              {['Email', 'Evento', 'Plantilla', 'URL / Detalle', 'Fecha y hora'].map(h => (
+                              {[t('emailMarketing.analytics.headers.email'), t('emailMarketing.analytics.headers.event'), t('emailMarketing.analytics.headers.template'), t('emailMarketing.analytics.headers.urlDetail'), t('emailMarketing.analytics.headers.date')].map(h => (
                                 <th key={h} className="px-3 py-2.5 text-left font-medium text-slate-500 uppercase tracking-wide">{h}</th>
                               ))}
                             </tr>
@@ -2036,7 +2096,7 @@ export default function EmailMarketing() {
                                 unsubscribe: 'bg-amber-500/15 text-amber-400',
                                 spamreport:  'bg-orange-500/15 text-orange-400',
                               }
-                              const LABEL = { delivered: 'Entregado', open: 'Abierto', click: 'Click', bounce: 'Rebotado', dropped: 'Descartado', unsubscribe: 'Desuscrito', spamreport: 'Spam' }
+                              const LABEL = { delivered: t('emailMarketing.analytics.eventDelivered'), open: t('emailMarketing.analytics.eventOpen'), click: t('emailMarketing.analytics.eventClick'), bounce: t('emailMarketing.analytics.eventBounce'), dropped: t('emailMarketing.analytics.eventDropped'), unsubscribe: t('emailMarketing.analytics.eventUnsubscribe'), spamreport: t('emailMarketing.analytics.eventSpamreport') }
                               return (
                                 <tr key={ev.id} className="hover:bg-white/[0.02]">
                                   <td className="px-3 py-2 font-mono text-slate-300 max-w-[180px] truncate">{ev.email}</td>
@@ -2052,7 +2112,7 @@ export default function EmailMarketing() {
                                       : <span className="text-slate-700">—</span>}
                                   </td>
                                   <td className="px-3 py-2 text-slate-500 whitespace-nowrap">
-                                    {ev.timestamp ? new Date(ev.timestamp).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
+                                    {ev.timestamp ? new Date(ev.timestamp).toLocaleString(dateLocale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
                                   </td>
                                 </tr>
                               )
@@ -2061,7 +2121,7 @@ export default function EmailMarketing() {
                         </table>
                       </div>
                     )}
-                    <p className="text-xs text-slate-700">Mostrando los últimos 2,000 eventos. Usa "Exportar Excel" para el historial completo.</p>
+                    <p className="text-xs text-slate-700">{t('emailMarketing.analytics.showingLast')}</p>
                   </>
                 )
               })()}
@@ -2072,13 +2132,13 @@ export default function EmailMarketing() {
 
       {/* ── 8. HISTORIAL DE ENVÍOS ── */}
       {emailHistory.length > 0 && (
-        <Section id="historial" label="Historial de envíos" icon={ClockIcon}
-          badge={`${emailHistory.length} envíos`} openSections={openSections} toggle={toggle}>
+        <Section id="historial" label={t('emailMarketing.history.title')} icon={ClockIcon}
+          badge={t('emailMarketing.history.badgeCount', { count: emailHistory.length })} openSections={openSections} toggle={toggle}>
           <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[520px]">
               <thead className="bg-black/20">
                 <tr>
-                  {['Fecha', 'Plantilla', 'Campaña', 'Enviados', 'Fallidos', 'Por', ''].map(h => (
+                  {[t('emailMarketing.history.headers.date'), t('emailMarketing.history.headers.template'), t('emailMarketing.history.headers.campaign'), t('emailMarketing.history.headers.sent'), t('emailMarketing.history.headers.failed'), t('emailMarketing.history.headers.by'), ''].map(h => (
                     <th key={h} className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                   ))}
                 </tr>
@@ -2087,20 +2147,20 @@ export default function EmailMarketing() {
                 {emailHistory.map(h => (
                   <tr key={h.id} className="hover:bg-white/[0.02]">
                     <td className="px-4 py-2.5 text-xs text-slate-400 whitespace-nowrap">
-                      {new Date(h.sent_at).toLocaleString('es', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      {new Date(h.sent_at).toLocaleString(dateLocale, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                     </td>
                     <td className="px-4 py-2.5 text-xs text-slate-300 max-w-[160px]">
-                      <p className="font-medium truncate">{allTemplates.find(t => t.key === h.template_key)?.label || h.template_key}</p>
+                      <p className="font-medium truncate">{allTemplates.find(tp => tp.key === h.template_key)?.label || h.template_key}</p>
                       {h.template_subject && <p className="text-slate-500 truncate">{h.template_subject}</p>}
                     </td>
-                    <td className="px-4 py-2.5 text-xs text-slate-400">{h.campaign_name || 'Todos'}</td>
+                    <td className="px-4 py-2.5 text-xs text-slate-400">{h.campaign_name || t('emailMarketing.history.allCampaigns')}</td>
                     <td className="px-4 py-2.5"><span className="text-green-400 font-bold text-sm">{h.total_sent}</span></td>
                     <td className="px-4 py-2.5">
                       {h.total_errors > 0 ? (
                         <button
                           onClick={() => setErrorDetailLog(h)}
                           className="text-red-400 font-medium text-sm hover:text-red-300 hover:underline transition-colors"
-                          title="Ver detalle de errores"
+                          title={t('emailMarketing.history.viewErrorsTitle')}
                         >
                           {h.total_errors} ▸
                         </button>
@@ -2115,17 +2175,17 @@ export default function EmailMarketing() {
                           <button
                             onClick={() => setSentDetailLog(h)}
                             className="text-xs text-slate-400 hover:text-slate-200 border border-slate-600/40 hover:border-slate-500/60 rounded-lg px-2.5 py-1 transition-colors whitespace-nowrap"
-                            title="Ver quiénes recibieron este envío"
+                            title={t('emailMarketing.history.viewSentTitle')}
                           >
-                            Ver enviados
+                            {t('emailMarketing.history.viewSent')}
                           </button>
                         )}
                         <button
                           onClick={() => resumeFromHistory(h)}
                           className="text-xs text-blue-400 hover:text-blue-300 border border-blue-400/20 hover:border-blue-400/40 rounded-lg px-2.5 py-1 transition-colors whitespace-nowrap"
-                          title="Pre-llenar el formulario con estos parámetros para enviar el siguiente lote"
+                          title={t('emailMarketing.history.resumeTitle')}
                         >
-                          Reanudar →
+                          {t('emailMarketing.history.resume')}
                         </button>
                       </div>
                     </td>
@@ -2145,9 +2205,9 @@ export default function EmailMarketing() {
           <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-3xl max-h-[85vh] flex flex-col">
             <div className="flex items-center justify-between p-5 border-b border-z-border flex-shrink-0">
               <div>
-                <h2 className="text-base font-bold text-slate-100">Lista de contactos</h2>
+                <h2 className="text-base font-bold text-slate-100">{t('emailMarketing.recipientDetailModal.title')}</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {recipientDetail.will_receive.length} recibirán · {recipientDetail.skipped.length} omitidos
+                  {t('emailMarketing.recipientDetailModal.summary', { willReceive: recipientDetail.will_receive.length, skipped: recipientDetail.skipped.length })}
                 </p>
               </div>
               <button onClick={() => setRecipientDetailOpen(false)} className="text-slate-500 hover:text-slate-300">
@@ -2157,20 +2217,20 @@ export default function EmailMarketing() {
             <div className="flex border-b border-z-border flex-shrink-0">
               <button onClick={() => setRecipientDetailTab('will_receive')}
                 className={`px-5 py-3 text-sm font-medium transition-colors ${recipientDetailTab === 'will_receive' ? 'text-green-400 border-b-2 border-green-400' : 'text-slate-500 hover:text-slate-300'}`}>
-                Recibirán el email ({recipientDetail.will_receive.length})
+                {t('emailMarketing.recipientDetailModal.willReceiveTab', { count: recipientDetail.will_receive.length })}
               </button>
               <button onClick={() => setRecipientDetailTab('skipped')}
                 className={`px-5 py-3 text-sm font-medium transition-colors ${recipientDetailTab === 'skipped' ? 'text-amber-400 border-b-2 border-amber-400' : 'text-slate-500 hover:text-slate-300'}`}>
-                Omitidos ({recipientDetail.skipped.length})
+                {t('emailMarketing.recipientDetailModal.skippedTab', { count: recipientDetail.skipped.length })}
               </button>
             </div>
             <div className="overflow-auto flex-1">
               {recipientDetailTab === 'will_receive' && (
                 recipientDetail.will_receive.length === 0
-                  ? <p className="text-center text-slate-500 text-sm py-10">No hay contactos que recibirán el email</p>
+                  ? <p className="text-center text-slate-500 text-sm py-10">{t('emailMarketing.recipientDetailModal.noWillReceive')}</p>
                   : <table className="w-full text-sm">
                       <thead className="bg-black/20 sticky top-0">
-                        <tr>{['Nombre', 'Email', 'Teléfono', 'Campaña'].map(h => (
+                        <tr>{[t('emailMarketing.recipientDetailModal.headers.name'), t('emailMarketing.recipientDetailModal.headers.email'), t('emailMarketing.recipientDetailModal.headers.phone'), t('emailMarketing.recipientDetailModal.headers.campaign')].map(h => (
                           <th key={h} className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                         ))}</tr>
                       </thead>
@@ -2188,10 +2248,10 @@ export default function EmailMarketing() {
               )}
               {recipientDetailTab === 'skipped' && (
                 recipientDetail.skipped.length === 0
-                  ? <p className="text-center text-slate-500 text-sm py-10">No hay contactos omitidos</p>
+                  ? <p className="text-center text-slate-500 text-sm py-10">{t('emailMarketing.recipientDetailModal.noSkipped')}</p>
                   : <table className="w-full text-sm">
                       <thead className="bg-black/20 sticky top-0">
-                        <tr>{['Nombre', 'Email', 'Teléfono', 'Campaña', 'Razón'].map(h => (
+                        <tr>{[t('emailMarketing.recipientDetailModal.headers.name'), t('emailMarketing.recipientDetailModal.headers.email'), t('emailMarketing.recipientDetailModal.headers.phone'), t('emailMarketing.recipientDetailModal.headers.campaign'), t('emailMarketing.recipientDetailModal.headers.reason')].map(h => (
                           <th key={h} className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                         ))}</tr>
                       </thead>
@@ -2199,7 +2259,7 @@ export default function EmailMarketing() {
                         {recipientDetail.skipped.map(c => (
                           <tr key={c.id} className="hover:bg-white/[0.02]">
                             <td className="px-4 py-2.5 text-slate-200 font-medium">{c.name || '—'}</td>
-                            <td className="px-4 py-2.5 text-slate-400 font-mono text-xs">{c.email || <span className="text-slate-600 italic">sin email</span>}</td>
+                            <td className="px-4 py-2.5 text-slate-400 font-mono text-xs">{c.email || <span className="text-slate-600 italic">{t('emailMarketing.lists.noEmail')}</span>}</td>
                             <td className="px-4 py-2.5 text-slate-400 text-xs">{c.phone || '—'}</td>
                             <td className="px-4 py-2.5 text-slate-500 text-xs">{c.campaign || '—'}</td>
                             <td className="px-4 py-2.5">
@@ -2214,7 +2274,7 @@ export default function EmailMarketing() {
               )}
             </div>
             <div className="p-4 border-t border-z-border flex-shrink-0 flex justify-end">
-              <button onClick={() => setRecipientDetailOpen(false)} className="z-btn-ghost text-sm">Cerrar</button>
+              <button onClick={() => setRecipientDetailOpen(false)} className="z-btn-ghost text-sm">{t('emailMarketing.recipientDetailModal.close')}</button>
             </div>
           </div>
         </div>
@@ -2226,9 +2286,9 @@ export default function EmailMarketing() {
           <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between p-5 border-b border-z-border flex-shrink-0">
               <div>
-                <h2 className="text-base font-bold text-slate-100">Destinatarios del envío</h2>
+                <h2 className="text-base font-bold text-slate-100">{t('emailMarketing.sentDetailModal.title')}</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {sentDetailLog.total_sent} email{sentDetailLog.total_sent !== 1 ? 's' : ''} enviados
+                  {t('emailMarketing.sentDetailModal.summary', { count: sentDetailLog.total_sent, plural: sentDetailLog.total_sent !== 1 ? 's' : '' })}
                   {sentDetailLog.template_subject && ` · "${sentDetailLog.template_subject}"`}
                 </p>
               </div>
@@ -2244,8 +2304,8 @@ export default function EmailMarketing() {
                 <table className="w-full text-sm">
                   <thead className="bg-black/20 sticky top-0">
                     <tr>
-                      <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Nombre</th>
-                      <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Email</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">{t('emailMarketing.sentDetailModal.headers.name')}</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">{t('emailMarketing.sentDetailModal.headers.email')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-z-border">
@@ -2259,14 +2319,14 @@ export default function EmailMarketing() {
                 </table>
               ) : (
                 <div className="p-8 text-center">
-                  <p className="text-slate-400 text-sm">Detalle no disponible para este envío.</p>
-                  <p className="text-xs mt-1 text-slate-600">Los envíos anteriores a esta versión no guardan el detalle de destinatarios.</p>
+                  <p className="text-slate-400 text-sm">{t('emailMarketing.sentDetailModal.noDetail')}</p>
+                  <p className="text-xs mt-1 text-slate-600">{t('emailMarketing.sentDetailModal.noDetailHint')}</p>
                 </div>
               )}
             </div>
 
             <div className="p-4 border-t border-z-border flex-shrink-0 flex justify-end">
-              <button onClick={() => setSentDetailLog(null)} className="z-btn-ghost text-sm">Cerrar</button>
+              <button onClick={() => setSentDetailLog(null)} className="z-btn-ghost text-sm">{t('emailMarketing.sentDetailModal.close')}</button>
             </div>
           </div>
         </div>
@@ -2278,9 +2338,9 @@ export default function EmailMarketing() {
           <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-2xl max-h-[80vh] flex flex-col">
             <div className="flex items-center justify-between p-5 border-b border-z-border flex-shrink-0">
               <div>
-                <h2 className="text-base font-bold text-slate-100">Detalle de fallos</h2>
+                <h2 className="text-base font-bold text-slate-100">{t('emailMarketing.errorDetailModal.title')}</h2>
                 <p className="text-xs text-slate-500 mt-0.5">
-                  {errorDetailLog.total_errors} email{errorDetailLog.total_errors !== 1 ? 's' : ''} no pudieron enviarse
+                  {t('emailMarketing.errorDetailModal.summary', { count: errorDetailLog.total_errors, plural: errorDetailLog.total_errors !== 1 ? 's' : '' })}
                   {errorDetailLog.template_subject && ` · "${errorDetailLog.template_subject}"`}
                 </p>
               </div>
@@ -2296,8 +2356,8 @@ export default function EmailMarketing() {
                 <table className="w-full text-sm">
                   <thead className="bg-black/20 sticky top-0">
                     <tr>
-                      <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Email</th>
-                      <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">Error</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">{t('emailMarketing.errorDetailModal.headers.email')}</th>
+                      <th className="px-4 py-2.5 text-left text-xs font-medium text-slate-500 uppercase">{t('emailMarketing.errorDetailModal.headers.error')}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-z-border">
@@ -2311,17 +2371,17 @@ export default function EmailMarketing() {
                 </table>
               ) : (
                 <div className="p-8 text-center">
-                  <p className="text-slate-400 text-sm">No hay detalle disponible para este envío.</p>
-                  <p className="text-xs mt-1 text-slate-600">Los envíos anteriores a esta versión no guardan el detalle de errores.</p>
+                  <p className="text-slate-400 text-sm">{t('emailMarketing.errorDetailModal.noDetail')}</p>
+                  <p className="text-xs mt-1 text-slate-600">{t('emailMarketing.errorDetailModal.noDetailHint')}</p>
                 </div>
               )}
             </div>
 
             <div className="p-4 border-t border-z-border flex-shrink-0 flex justify-between items-center">
               <span className="text-xs text-slate-600">
-                {errorDetailLog.error_details?.length > 0 ? 'Causas comunes: email inválido, dominio inexistente, buzón lleno, o bloqueado por spam.' : ''}
+                {errorDetailLog.error_details?.length > 0 ? t('emailMarketing.errorDetailModal.commonCauses') : ''}
               </span>
-              <button onClick={() => setErrorDetailLog(null)} className="z-btn-ghost text-sm">Cerrar</button>
+              <button onClick={() => setErrorDetailLog(null)} className="z-btn-ghost text-sm">{t('emailMarketing.errorDetailModal.close')}</button>
             </div>
           </div>
         </div>
