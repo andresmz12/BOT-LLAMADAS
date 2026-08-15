@@ -273,20 +273,31 @@ def seed_initial_data():
             session.commit()
             session.refresh(org)
 
-        # 2. Superadmin
-        admin_email = os.getenv("SUPERADMIN_EMAIL", "admin@ismconsulting.com")
-        admin_password = os.getenv("SUPERADMIN_PASSWORD", "ISMadmin2024!")
-        admin = session.exec(select(User).where(User.email == admin_email)).first()
-        if not admin:
-            admin = User(
-                email=admin_email,
-                password_hash=hash_password(admin_password),
-                full_name="Super Admin",
-                role="superadmin",
-                organization_id=org.id,
+        # 2. Superadmin — only auto-created when both env vars are explicitly
+        # set. A hardcoded fallback here would mean every deployment that
+        # forgets to configure these ends up with a publicly-known-from-source
+        # superadmin login.
+        admin_email = os.getenv("SUPERADMIN_EMAIL", "")
+        admin_password = os.getenv("SUPERADMIN_PASSWORD", "")
+        if admin_email and admin_password:
+            admin = session.exec(select(User).where(User.email == admin_email)).first()
+            if not admin:
+                admin = User(
+                    email=admin_email,
+                    password_hash=hash_password(admin_password),
+                    full_name="Super Admin",
+                    role="superadmin",
+                    organization_id=org.id,
+                )
+                session.add(admin)
+                session.commit()
+        else:
+            import logging
+            logging.getLogger(__name__).critical(
+                "SUPERADMIN_EMAIL/SUPERADMIN_PASSWORD not set — skipping superadmin "
+                "auto-creation. Set both env vars and restart to bootstrap the account, "
+                "or use POST /auth/setup."
             )
-            session.add(admin)
-            session.commit()
 
         # 3. Default agent Isabella
         agent = session.exec(select(AgentConfig)).first()

@@ -195,7 +195,7 @@ async def test_email(
         "telefono": "+10000000000",
         "fecha": _dt.utcnow().strftime("%d/%m/%Y"),
     }
-    subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(data.outcome, "Email de prueba"), tmpl_vars)
+    subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(data.outcome, "Email de prueba"), tmpl_vars, escape=False)
     color     = tmpl.get("color") or "#4F46E5"
     greeting  = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
     body_text = _fill(tmpl.get("body") or "Este es un email de prueba enviado desde ZyraVoice.", tmpl_vars)
@@ -476,7 +476,7 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
                 "telefono": pdata["phone"],
                 "fecha":    datetime.utcnow().strftime("%d/%m/%Y"),
             }
-            subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(template_key, "Mensaje"), tmpl_vars)
+            subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(template_key, "Mensaje"), tmpl_vars, escape=False)
             color     = tmpl.get("color") or "#4F46E5"
             greeting  = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
             body_text = _fill(tmpl.get("body") or "", tmpl_vars)
@@ -1723,7 +1723,17 @@ async def sendgrid_events(
     request: Request,
     session: Session = Depends(get_session),
 ):
-    """Public endpoint that receives SendGrid event webhooks (no auth required)."""
+    """Receives SendGrid event webhooks. Configure the Event Webhook URL in
+    SendGrid as .../email/events?token=<SENDGRID_EVENTS_TOKEN> — without a
+    configured token this stays open (logged), since SendGrid's own signed
+    webhook support needs a public key we don't require operators to set up."""
+    expected_token = os.getenv("SENDGRID_EVENTS_TOKEN", "")
+    if expected_token:
+        if request.query_params.get("token", "") != expected_token:
+            raise HTTPException(status_code=401, detail="Invalid token")
+    else:
+        logger.warning("SENDGRID_EVENTS_TOKEN not set — /email/events is unauthenticated")
+
     try:
         body = await request.json()
     except Exception:

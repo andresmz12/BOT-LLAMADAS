@@ -2,7 +2,7 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import Session, select, func
 from sqlalchemy import desc
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional
 from database import get_session
 from models import Organization, User, WebhookLog
@@ -71,6 +71,19 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     organization_id: Optional[int] = None
     is_active: Optional[bool] = None
+
+
+class UserPasswordReset(BaseModel):
+    password: str
+
+    @field_validator("password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 8:
+            raise ValueError("La contraseña debe tener al menos 8 caracteres")
+        if len(v) > 128:
+            raise ValueError("Contraseña demasiado larga")
+        return v
 
 
 @router.post("/organizations")
@@ -310,6 +323,23 @@ def update_user(
     session.refresh(user)
     log_action(session, current_user, "user.update", details=f"{user.full_name} <{user.email}> fields: {', '.join(changed)}")
     return user.dict(exclude={"password_hash"})
+
+
+@router.put("/users/{user_id}/password")
+def reset_user_password(
+    user_id: int,
+    data: UserPasswordReset,
+    current_user: User = Depends(require_superadmin),
+    session: Session = Depends(get_session),
+):
+    user = session.get(User, user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    user.password_hash = hash_password(data.password)
+    session.add(user)
+    session.commit()
+    log_action(session, current_user, "user.password_reset", details=f"{user.full_name} <{user.email}>")
+    return {"ok": True}
 
 
 @router.delete("/users/{user_id}")

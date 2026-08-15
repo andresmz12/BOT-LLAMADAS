@@ -213,7 +213,7 @@ async def _run_scheduled_email(job_id: int):
                         "agente": from_name, "resumen": "", "telefono": prospect.phone or "",
                         "fecha": _dt.utcnow().strftime("%d/%m/%Y"),
                     }
-                    subject = _fill(job.subject_override or tmpl.get("subject") or DEFAULT_SUBJECT.get(job.template_key, "Mensaje de ZyraVoice"), tmpl_vars)
+                    subject = _fill(job.subject_override or tmpl.get("subject") or DEFAULT_SUBJECT.get(job.template_key, "Mensaje de ZyraVoice"), tmpl_vars, escape=False)
                     color = tmpl.get("color") or "#4F46E5"
                     greeting = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
                     body_text = _fill(job.body_override or tmpl.get("body") or "", tmpl_vars)
@@ -391,9 +391,9 @@ async def lifespan(app: FastAPI):
     if not os.getenv("RETELL_WEBHOOK_SECRET"):
         logger.warning("⚠️  RETELL_WEBHOOK_SECRET not set — webhook signature verification is DISABLED")
     if not os.getenv("JWT_SECRET"):
-        logger.warning("⚠️  JWT_SECRET not set — using insecure development key")
-    if not os.getenv("SUPERADMIN_PASSWORD"):
-        logger.warning("⚠️  SUPERADMIN_PASSWORD not set — using default hardcoded password, CHANGE THIS IN PRODUCTION")
+        logger.warning("⚠️  JWT_SECRET not set — signing with a random per-process key, all sessions will be invalidated on every restart")
+    if not os.getenv("SUPERADMIN_EMAIL") or not os.getenv("SUPERADMIN_PASSWORD"):
+        logger.warning("⚠️  SUPERADMIN_EMAIL/SUPERADMIN_PASSWORD not set — no superadmin account will be auto-created")
 
     # Resume bulk email sends that were running/paused/resuming when the backend
     # last stopped. A claim based purely on status is NOT enough on Railway: during

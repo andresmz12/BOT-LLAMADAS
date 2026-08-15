@@ -635,7 +635,10 @@
       "active": "Active user",
       "cancel": "Cancel",
       "save": "Save",
-      "saving": "Saving..."
+      "saving": "Saving...",
+      "resetPassword": "Reset password",
+      "resetPasswordBtn": "Change",
+      "passwordResetOk": "Password updated successfully."
     },
     "crmTypes": {
       "none": "No integration",

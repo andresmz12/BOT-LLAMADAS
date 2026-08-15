@@ -1,5 +1,6 @@
 import os
 import base64
+import html
 import json
 import logging
 from datetime import datetime
@@ -61,7 +62,7 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
                 pass
         tmpl = templates.get(outcome, {})
 
-        subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(outcome, "Seguimiento"), tmpl_vars)
+        subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(outcome, "Seguimiento"), tmpl_vars, escape=False)
         color     = tmpl.get("color") or "#4F46E5"
         greeting  = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
         body_text = _fill(tmpl.get("body") or "", tmpl_vars)
@@ -119,9 +120,15 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
         log.error(f"[EMAIL] failed for outcome={outcome}: {e}", exc_info=True)
 
 
-def _fill(text: str, variables: dict) -> str:
+def _fill(text: str, variables: dict, escape: bool = True) -> str:
+    """Substitute {{var}} merge fields into email text. Values are
+    HTML-escaped by default since they come from prospect data (CSV import /
+    CRM webhook ingestion) — untrusted input that must not be able to inject
+    markup into the outbound HTML email body. Pass escape=False for plain-text
+    fields (e.g. the subject line), which are never rendered as HTML."""
     for k, v in variables.items():
-        text = text.replace("{{" + k + "}}", str(v))
+        value = html.escape(str(v)) if escape else str(v)
+        text = text.replace("{{" + k + "}}", value)
     return text
 
 
