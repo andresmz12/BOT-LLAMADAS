@@ -328,10 +328,8 @@ function VideosTab() {
           <div>
             <label className="text-xs text-slate-400 mb-1 block">{t('marketing.videos.style')}</label>
             <select value={style} onChange={e => setStyle(e.target.value)} className="z-input-light text-sm">
-              <option>Cinematográfico</option>
-              <option>Publicitario</option>
-              <option>Minimalista</option>
-              <option>Documental</option>
+              {['Cinematográfico', 'Publicitario', 'Minimalista', 'Documental'].map(s =>
+                <option key={s} value={s}>{t(`marketing.videos.styles.${s}`)}</option>)}
             </select>
           </div>
           <div>
@@ -455,7 +453,7 @@ function CopyTab({ prefill, onPrefillUsed }) {
           <div className="sm:col-span-2">
             <label className="text-xs text-slate-400 mb-1 block">{t('marketing.copy.contentType')}</label>
             <select value={contentType} onChange={e => setContentType(e.target.value)} className="z-input-light text-sm">
-              {CONTENT_TYPES.map(ct => <option key={ct}>{ct}</option>)}
+              {CONTENT_TYPES.map(ct => <option key={ct} value={ct}>{t(`marketing.copy.contentTypes.${ct}`)}</option>)}
             </select>
           </div>
 
@@ -484,20 +482,16 @@ function CopyTab({ prefill, onPrefillUsed }) {
           <div>
             <label className="text-xs text-slate-400 mb-1 block">{t('marketing.copy.tone')}</label>
             <select value={tone} onChange={e => setTone(e.target.value)} className="z-input-light text-sm">
-              <option>Profesional</option>
-              <option>Amigable</option>
-              <option>Urgente</option>
-              <option>Inspirador</option>
-              <option>Divertido</option>
+              {['Profesional', 'Amigable', 'Urgente', 'Inspirador', 'Divertido'].map(tn =>
+                <option key={tn} value={tn}>{t(`marketing.copy.tones.${tn}`)}</option>)}
             </select>
           </div>
 
           <div>
             <label className="text-xs text-slate-400 mb-1 block">{t('marketing.copy.language')}</label>
             <select value={language} onChange={e => setLanguage(e.target.value)} className="z-input-light text-sm">
-              <option>Español</option>
-              <option>Inglés</option>
-              <option>Spanglish</option>
+              {['Español', 'Inglés', 'Spanglish'].map(lg =>
+                <option key={lg} value={lg}>{t(`marketing.copy.languages.${lg}`)}</option>)}
             </select>
           </div>
         </div>

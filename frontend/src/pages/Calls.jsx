@@ -58,7 +58,7 @@ export default function Calls() {
       const res = await deleteCalls({ ids: [...selected].join(',') })
       alert(t('calls.callDeleted', { count: res.deleted }))
       load()
-    } catch (err) { alert(err.response?.data?.detail || 'Error') }
+    } catch (err) { alert(err.response?.data?.detail || t('calls.genericError')) }
   }
 
   const handleCall = async (prospectId) => {
@@ -109,7 +109,7 @@ export default function Calls() {
       const res = await deleteCalls(params)
       alert(t('calls.callDeleted', { count: res.deleted }))
       load()
-    } catch (err) { alert(err.response?.data?.detail || 'Error') }
+    } catch (err) { alert(err.response?.data?.detail || t('calls.genericError')) }
   }
 
   const allChecked = calls.length > 0 && selected.size === calls.length
@@ -154,7 +154,7 @@ export default function Calls() {
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
         <select value={filterOutcome} onChange={e => setFilterOutcome(e.target.value)} className="z-input w-full sm:w-auto">
-          {OUTCOMES.map(o => <option key={o} value={o}>{o || t('calls.allOutcomes')}</option>)}
+          {OUTCOMES.map(o => <option key={o} value={o}>{o ? t(`status.${o}`) : t('calls.allOutcomes')}</option>)}
         </select>
         <span className="text-sm text-slate-500">{t('calls.callsCount', { count: calls.length })}</span>
       </div>

@@ -372,7 +372,8 @@
     "cancel": "Cancelar",
     "emailSentTooltip": "{{count}} email(s) enviado(s)\nÚltimo: {{date}}",
     "scopeStatus": "los {{count}} prospectos con estado \"{{status}}\"",
-    "scopeFailedVoicemail": "todos los prospectos fallidos y con buzón de voz"
+    "scopeFailedVoicemail": "todos los prospectos fallidos y con buzón de voz",
+    "genericError": "Error"
   },
   "calls": {
     "title": "Llamadas",
@@ -410,7 +411,8 @@
     "subtitle": "Historial y resultados de todas las llamadas realizadas",
     "deleteAllConfirm": "¿Eliminar {{scope}}? Esta acción no se puede deshacer.",
     "scopeFiltered": "las {{count}} llamadas del filtro actual",
-    "scopeAll": "TODAS las {{count}} llamadas"
+    "scopeAll": "TODAS las {{count}} llamadas",
+    "genericError": "Error"
   },
   "leads": {
     "title": "Centro de Leads",
@@ -761,7 +763,8 @@
     "countryHint": "Se añadirá {{code}} a números sin código de país",
     "columnsNote": "Columnas: {{c1}} — o — {{c2}} — o — {{c3}}",
     "previewNote": "Vista previa ({{count}} filas) — los teléfonos sin {{code}} lo recibirán automáticamente:",
-    "successSkipped": "{{imported}} prospectos importados.\n{{skipped}} omitidos por duplicado (ya existen en tu organización)."
+    "successSkipped": "{{imported}} prospectos importados.\n{{skipped}} omitidos por duplicado (ya existen en tu organización).",
+    "genericError": "Error"
   },
   "upgrade": {
     "freePlan": "Plan gratuito",
@@ -1202,7 +1205,13 @@
       "baseImageHint": "Sube una foto para animarla (imagen→video)",
       "generatingVideo": "Generando video...",
       "generateVideo": "🎬 Generar video",
-      "downloadMp4": "Descargar MP4"
+      "downloadMp4": "Descargar MP4",
+      "styles": {
+        "Cinematográfico": "Cinematográfico",
+        "Publicitario": "Publicitario",
+        "Minimalista": "Minimalista",
+        "Documental": "Documental"
+      }
     },
     "copy": {
       "generateError": "Error al generar el copy.",
@@ -1219,7 +1228,30 @@
       "result": "Resultado",
       "regenerate": "Regenerar",
       "copied": "Copiado ✓",
-      "copy": "Copiar"
+      "copy": "Copiar",
+      "contentTypes": {
+        "Post Instagram": "Post Instagram",
+        "Post Facebook": "Post Facebook",
+        "Guión TikTok/Reels 30s": "Guión TikTok/Reels 30s",
+        "Guión TikTok/Reels 60s": "Guión TikTok/Reels 60s",
+        "Email de ventas": "Email de ventas",
+        "SMS de seguimiento": "SMS de seguimiento",
+        "Script de llamada": "Script de llamada",
+        "Bio de negocio": "Bio de negocio",
+        "Slogan / Tagline": "Slogan / Tagline"
+      },
+      "tones": {
+        "Profesional": "Profesional",
+        "Amigable": "Amigable",
+        "Urgente": "Urgente",
+        "Inspirador": "Inspirador",
+        "Divertido": "Divertido"
+      },
+      "languages": {
+        "Español": "Español",
+        "Inglés": "Inglés",
+        "Spanglish": "Spanglish"
+      }
     },
     "calendar": {
       "generateError": "Error al generar el calendario.",
@@ -1554,7 +1586,18 @@
       "stepLabel": "Paso {{n}}: {{subject}}",
       "errorMissingFields": "Completa la lista, el objetivo y al menos una fecha",
       "errorGenerating": "Error generando la secuencia",
-      "errorScheduling": "Error al programar la secuencia"
+      "errorScheduling": "Error al programar la secuencia",
+      "tones": {
+        "Profesional": "Profesional",
+        "Cercano": "Cercano",
+        "Persuasivo": "Persuasivo",
+        "Urgente": "Urgente"
+      },
+      "languages": {
+        "Español": "Español",
+        "Inglés": "Inglés",
+        "Spanglish": "Spanglish"
+      }
     },
     "reschedule": {
       "title": "Reprogramar envío",

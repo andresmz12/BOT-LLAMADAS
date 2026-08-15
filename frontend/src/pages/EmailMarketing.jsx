@@ -1877,10 +1877,12 @@ export default function EmailMarketing() {
                 rows={2} className="z-input-light text-sm w-full" />
               <div className="grid grid-cols-2 gap-3">
                 <select value={seqForm.tone} onChange={e => setSeqForm(p => ({ ...p, tone: e.target.value }))} className="z-input-light text-sm">
-                  {['Profesional', 'Cercano', 'Persuasivo', 'Urgente'].map(tone => <option key={tone} value={tone}>{tone}</option>)}
+                  {['Profesional', 'Cercano', 'Persuasivo', 'Urgente'].map(tone =>
+                    <option key={tone} value={tone}>{t(`emailMarketing.sequences.tones.${tone}`)}</option>)}
                 </select>
                 <select value={seqForm.language} onChange={e => setSeqForm(p => ({ ...p, language: e.target.value }))} className="z-input-light text-sm">
-                  {['Español', 'Inglés', 'Spanglish'].map(l => <option key={l} value={l}>{l}</option>)}
+                  {['Español', 'Inglés', 'Spanglish'].map(l =>
+                    <option key={l} value={l}>{t(`emailMarketing.sequences.languages.${l}`)}</option>)}
                 </select>
               </div>
 

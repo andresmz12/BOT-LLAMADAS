@@ -71,7 +71,7 @@ export default function ImportCSVModal({ campaigns, onClose, onImported }) {
       alert(msg)
       onImported()
     } catch (err) {
-      alert('Error: ' + (err.response?.data?.detail || err.message))
+      alert(t('import.genericError') + ': ' + (err.response?.data?.detail || err.message))
     } finally {
       setLoading(false)
     }
