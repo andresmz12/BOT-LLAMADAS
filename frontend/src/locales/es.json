@@ -360,7 +360,217 @@
     "crmCustomLabel": "Webhook personalizado"
   },
   "admin": {
-    "title": "Panel de Administración"
+    "title": "Panel de Administración",
+    "tabOrgs": "Organizaciones",
+    "tabUsers": "Usuarios",
+    "tabAudit": "Audit Log",
+    "orgs": {
+      "title": "Organizaciones",
+      "new": "Nueva",
+      "headers": {
+        "id": "ID",
+        "name": "Nombre",
+        "contact": "Contacto",
+        "plan": "Plan",
+        "demos": "Demos",
+        "crm": "CRM",
+        "active": "Activa",
+        "actions": "Acciones"
+      },
+      "since": "Desde {{date}}",
+      "noOrgs": "No hay organizaciones",
+      "active": "Activa",
+      "inactive": "Inactiva",
+      "viewDataTitle": "Ver datos de esta organización",
+      "planBtn": "✎ Plan",
+      "upgradePrompt": "Plan para \"{{name}}\" (free / starter / pro / enterprise):",
+      "confirmDelete": "¿Eliminar la organización \"{{name}}\"? Esta acción no se puede deshacer.",
+      "errorDelete": "Error al eliminar"
+    },
+    "users": {
+      "title": "Usuarios",
+      "new": "Nuevo",
+      "headers": {
+        "name": "Nombre",
+        "email": "Email",
+        "phone": "Teléfono",
+        "role": "Rol",
+        "org": "Organización",
+        "registered": "Registrado",
+        "active": "Activo",
+        "actions": "Acciones"
+      },
+      "noUsers": "No hay usuarios",
+      "active": "Activo",
+      "inactive": "Inactivo",
+      "confirmDelete": "¿Eliminar permanentemente a \"{{name}}\" ({{email}})?"
+    },
+    "audit": {
+      "title": "Audit Log",
+      "retentionNote": "Cada entrada se elimina automáticamente a los 60 días.",
+      "allOrgs": "Todas las organizaciones",
+      "allActions": "Todas las acciones",
+      "headers": {
+        "date": "Fecha",
+        "user": "Usuario",
+        "org": "Organización",
+        "action": "Acción",
+        "details": "Detalles",
+        "ip": "IP"
+      },
+      "loading": "Cargando...",
+      "noEntries": "Sin entradas",
+      "actions": {
+        "login": "Inicio de sesión",
+        "logout": "Cierre de sesión",
+        "team_member.create": "Asesor creado",
+        "team_member.update": "Asesor editado",
+        "team_member.delete": "Asesor eliminado",
+        "campaign.create": "Campaña creada",
+        "campaign.update": "Campaña editada",
+        "campaign.start": "Campaña iniciada",
+        "campaign.delete": "Campaña eliminada",
+        "agent.create": "Agente creado",
+        "agent.update": "Agente editado",
+        "agent.sync": "Agente sincronizado",
+        "agent.delete": "Agente eliminado",
+        "prospects.import": "Prospectos importados",
+        "prospects.delete_all": "Prospectos eliminados (masivo)",
+        "settings.credentials_update": "Credenciales actualizadas",
+        "org.create": "Organización creada",
+        "org.update": "Organización editada",
+        "org.upgrade": "Plan cambiado",
+        "org.delete": "Organización eliminada",
+        "user.create": "Usuario creado",
+        "user.update": "Usuario editado",
+        "user.delete": "Usuario eliminado"
+      }
+    },
+    "errorGeneric": "Error",
+    "orgModal": {
+      "editTitle": "Editar Organización",
+      "newTitle": "Nueva Organización",
+      "revealKeys": "Revelar claves",
+      "revealing": "Cargando...",
+      "revealError": "No se pudieron obtener las claves",
+      "name": "Nombre",
+      "plan": "Plan",
+      "minutesLimit": "Límite de minutos/mes",
+      "minutesLimitPlaceholder": "Vacío = ilimitado",
+      "minutesLimitHint": "Minutos de llamada permitidos por mes. Vacío = sin límite.",
+      "retellPhone": "Retell Phone Number",
+      "active": "Organización activa",
+      "marketingTitle": "Marketing IA",
+      "marketingEnable": "Activar módulo de Marketing IA para esta organización",
+      "marketingHint": "Permite a los usuarios de esta org generar imágenes, videos y copy con IA.",
+      "whatsappTitle": "WhatsApp Bot",
+      "whatsappEnable": "Activar bot conversacional",
+      "phoneNumberId": "Phone Number ID",
+      "phoneNumberIdHint": "Meta for Developers → WhatsApp → API Setup",
+      "waTokenPlaceholder": "Token permanente de Meta",
+      "verifyToken": "Verify Token",
+      "verifyTokenPlaceholder": "zyra-wa-secreto-2025",
+      "verifyTokenHint": "String secreto que eliges tú — úsalo al registrar el webhook en Meta",
+      "emailTitle": "Email Marketing",
+      "emailEnable": "Activar envío de emails post-llamada",
+      "sendgridPlaceholder": "SG.••••••••",
+      "sendgridHint": "Clave privada de SendGrid — solo visible para superadmins, nunca expuesta al cliente.",
+      "senderEmail": "Email remitente",
+      "senderName": "Nombre remitente",
+      "senderNamePlaceholder": "Isabella - Mi Empresa",
+      "crmTitle": "Integración CRM / Webhook",
+      "crmPlatform": "Plataforma CRM",
+      "crmEnable": "Activar envío al CRM",
+      "webhookUrl": "URL del Webhook",
+      "webhookSecret": "Secreto de firma (opcional)",
+      "webhookSecretPlaceholder": "Clave para verificar firma HMAC SHA-256",
+      "webhookSecretHint": "Tu CRM puede verificar el header ",
+      "sendWhen": "Enviar datos cuando:",
+      "always": "(siempre)",
+      "testConnection": "Probar conexión",
+      "testing": "Enviando prueba...",
+      "testSuccess": "✓ Conexión exitosa (HTTP {{code}}) — webhook recibido correctamente",
+      "testError": "✗ Error {{code}}: {{msg}}",
+      "instructionsFor": "Instrucciones para {{crm}}",
+      "cancel": "Cancelar",
+      "save": "Guardar",
+      "saving": "Guardando..."
+    },
+    "userModal": {
+      "editTitle": "Editar Usuario",
+      "newTitle": "Nuevo Usuario",
+      "fullName": "Nombre completo",
+      "email": "Email",
+      "password": "Contraseña",
+      "passwordPlaceholder": "Contraseña del usuario",
+      "role": "Rol",
+      "org": "Organización",
+      "noOrg": "Sin organización",
+      "active": "Usuario activo",
+      "cancel": "Cancelar",
+      "save": "Guardar",
+      "saving": "Guardando..."
+    },
+    "crmTypes": {
+      "none": "Sin integración",
+      "zapier": "Zapier",
+      "make": "Make (Integromat)",
+      "gohighlevel": "GoHighLevel",
+      "hubspot": "HubSpot",
+      "monday": "Monday.com",
+      "zoho": "Zoho CRM",
+      "airtable": "Airtable",
+      "notion": "Notion",
+      "pipedrive": "Pipedrive",
+      "salesforce": "Salesforce",
+      "n8n": "n8n",
+      "custom": "Webhook personalizado"
+    },
+    "crmNativeLabels": {
+      "monday": {
+        "apiKey": "API Key de Monday",
+        "boardId": "Board ID",
+        "boardIdPlaceholder": "ej: 1234567890"
+      },
+      "hubspot": {
+        "apiKey": "API Key de HubSpot",
+        "boardId": "Pipeline ID (opcional)",
+        "boardIdPlaceholder": "ej: default"
+      },
+      "gohighlevel": {
+        "apiKey": "API Key de GoHighLevel",
+        "boardId": "Location ID",
+        "boardIdPlaceholder": "ej: abc123xyz"
+      },
+      "zoho": {
+        "apiKey": "OAuth Token de Zoho"
+      },
+      "salesforce": {
+        "apiKey": "Access Token de Salesforce",
+        "instanceUrl": "Instance URL"
+      }
+    },
+    "crmInstructions": {
+      "zapier": "1. Ve a zapier.com → \"Create Zap\"\n2. Trigger: \"Webhooks by Zapier\" → \"Catch Hook\"\n3. Copia la URL generada y pégala arriba\n4. Action: conecta con tu CRM favorito (HubSpot, Salesforce, etc.)",
+      "make": "1. Ve a make.com → \"Create a new scenario\"\n2. Agrega el módulo \"Webhooks\" → \"Custom Webhook\"\n3. Copia la URL generada y pégala arriba\n4. Conecta con tu CRM en el módulo siguiente",
+      "gohighlevel": "1. Ve a Settings → Integrations → Webhooks\n2. Haz clic en \"Add Webhook\"\n3. Pega la URL de ZyraVoice\n4. Selecciona los eventos: Contact Created, Call Ended",
+      "hubspot": "1. Ve a Settings → Integrations → Private Apps\n2. Crea una app y copia el Webhook URL\n3. O usa Zapier/Make como intermediario para mayor flexibilidad",
+      "monday": "1. Ve a tu Board → Integrations → Webhooks\n2. Crea un webhook entrante\n3. Copia la URL generada y pégala arriba",
+      "airtable": "1. Airtable no tiene webhooks nativos directos\n2. Usa Make o Zapier como intermediario\n3. En Make: módulo \"Airtable\" → \"Create a Record\"\n4. En Zapier: Action → Airtable → \"Create Record\"",
+      "notion": "1. Notion no tiene webhooks nativos\n2. Usa Make o Zapier como intermediario\n3. En Make: módulo \"Notion\" → \"Create a Database Item\"\n4. En Zapier: Action → Notion → \"Create Database Item\"",
+      "pipedrive": "1. Ve a Tools → Webhooks → \"Add Webhook\"\n2. O usa Zapier para mayor flexibilidad\n3. Copia la URL y pégala arriba",
+      "salesforce": "1. Usa Zapier o Make como intermediario\n2. En Zapier: Action → Salesforce → \"Create Record\"\n3. Mapea los campos del payload de ZyraVoice",
+      "n8n": "1. Crea un workflow → \"Add first step\" → \"On webhook call\"\n2. Copia la URL de webhook generada\n3. Pégala arriba y conecta con tu CRM en el siguiente nodo",
+      "custom": "Tu servidor recibirá un POST con payload JSON de ZyraVoice.\nVerifica la autenticidad con el header X-ZyraVoice-Signature (HMAC SHA-256).\nEjemplo: X-ZyraVoice-Signature: sha256=<hex>"
+    },
+    "crmEvents": {
+      "call_ended": "Llamada finalizada",
+      "interested": "Prospecto muestra interés",
+      "appointment_scheduled": "Cita agendada",
+      "voicemail": "Buzón de voz",
+      "failed": "Llamada fallida",
+      "campaign_email_sent": "Email de campaña enviado"
+    }
   },
   "demo": {
     "title": "Llamada Demo",
@@ -422,7 +632,12 @@
     "cancel": "Cancelar",
     "importing": "Importando...",
     "confirm": "Confirmar importación",
-    "success": "{{count}} prospectos importados"
+    "success": "{{count}} prospectos importados",
+    "countryLabel": "País de los números",
+    "countryHint": "Se añadirá {{code}} a números sin código de país",
+    "columnsNote": "Columnas: {{c1}} — o — {{c2}} — o — {{c3}}",
+    "previewNote": "Vista previa ({{count}} filas) — los teléfonos sin {{code}} lo recibirán automáticamente:",
+    "successSkipped": "{{imported}} prospectos importados.\n{{skipped}} omitidos por duplicado (ya existen en tu organización)."
   },
   "upgrade": {
     "freePlan": "Plan gratuito",

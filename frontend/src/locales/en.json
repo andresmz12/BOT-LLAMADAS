@@ -360,7 +360,217 @@
     "crmCustomLabel": "Custom webhook"
   },
   "admin": {
-    "title": "Admin Panel"
+    "title": "Admin Panel",
+    "tabOrgs": "Organizations",
+    "tabUsers": "Users",
+    "tabAudit": "Audit Log",
+    "orgs": {
+      "title": "Organizations",
+      "new": "New",
+      "headers": {
+        "id": "ID",
+        "name": "Name",
+        "contact": "Contact",
+        "plan": "Plan",
+        "demos": "Demos",
+        "crm": "CRM",
+        "active": "Active",
+        "actions": "Actions"
+      },
+      "since": "Since {{date}}",
+      "noOrgs": "No organizations",
+      "active": "Active",
+      "inactive": "Inactive",
+      "viewDataTitle": "View this organization's data",
+      "planBtn": "✎ Plan",
+      "upgradePrompt": "Plan for \"{{name}}\" (free / starter / pro / enterprise):",
+      "confirmDelete": "Delete organization \"{{name}}\"? This action cannot be undone.",
+      "errorDelete": "Error deleting"
+    },
+    "users": {
+      "title": "Users",
+      "new": "New",
+      "headers": {
+        "name": "Name",
+        "email": "Email",
+        "phone": "Phone",
+        "role": "Role",
+        "org": "Organization",
+        "registered": "Registered",
+        "active": "Active",
+        "actions": "Actions"
+      },
+      "noUsers": "No users",
+      "active": "Active",
+      "inactive": "Inactive",
+      "confirmDelete": "Permanently delete \"{{name}}\" ({{email}})?"
+    },
+    "audit": {
+      "title": "Audit Log",
+      "retentionNote": "Each entry is automatically deleted after 60 days.",
+      "allOrgs": "All organizations",
+      "allActions": "All actions",
+      "headers": {
+        "date": "Date",
+        "user": "User",
+        "org": "Organization",
+        "action": "Action",
+        "details": "Details",
+        "ip": "IP"
+      },
+      "loading": "Loading...",
+      "noEntries": "No entries",
+      "actions": {
+        "login": "Logged in",
+        "logout": "Logged out",
+        "team_member.create": "Advisor created",
+        "team_member.update": "Advisor edited",
+        "team_member.delete": "Advisor deleted",
+        "campaign.create": "Campaign created",
+        "campaign.update": "Campaign edited",
+        "campaign.start": "Campaign started",
+        "campaign.delete": "Campaign deleted",
+        "agent.create": "Agent created",
+        "agent.update": "Agent edited",
+        "agent.sync": "Agent synced",
+        "agent.delete": "Agent deleted",
+        "prospects.import": "Prospects imported",
+        "prospects.delete_all": "Prospects bulk deleted",
+        "settings.credentials_update": "Credentials updated",
+        "org.create": "Organization created",
+        "org.update": "Organization edited",
+        "org.upgrade": "Plan changed",
+        "org.delete": "Organization deleted",
+        "user.create": "User created",
+        "user.update": "User edited",
+        "user.delete": "User deleted"
+      }
+    },
+    "errorGeneric": "Error",
+    "orgModal": {
+      "editTitle": "Edit Organization",
+      "newTitle": "New Organization",
+      "revealKeys": "Reveal keys",
+      "revealing": "Loading...",
+      "revealError": "Could not retrieve the keys",
+      "name": "Name",
+      "plan": "Plan",
+      "minutesLimit": "Minutes limit/month",
+      "minutesLimitPlaceholder": "Empty = unlimited",
+      "minutesLimitHint": "Call minutes allowed per month. Empty = no limit.",
+      "retellPhone": "Retell Phone Number",
+      "active": "Active organization",
+      "marketingTitle": "AI Marketing",
+      "marketingEnable": "Enable AI Marketing module for this organization",
+      "marketingHint": "Allows this org's users to generate images, videos, and copy with AI.",
+      "whatsappTitle": "WhatsApp Bot",
+      "whatsappEnable": "Enable conversational bot",
+      "phoneNumberId": "Phone Number ID",
+      "phoneNumberIdHint": "Meta for Developers → WhatsApp → API Setup",
+      "waTokenPlaceholder": "Permanent Meta token",
+      "verifyToken": "Verify Token",
+      "verifyTokenPlaceholder": "zyra-wa-secret-2025",
+      "verifyTokenHint": "A secret string you choose — use it when registering the webhook in Meta",
+      "emailTitle": "Email Marketing",
+      "emailEnable": "Enable post-call emails",
+      "sendgridPlaceholder": "SG.••••••••",
+      "sendgridHint": "SendGrid private key — visible only to superadmins, never exposed to the client.",
+      "senderEmail": "Sender email",
+      "senderName": "Sender name",
+      "senderNamePlaceholder": "Isabella - My Company",
+      "crmTitle": "CRM / Webhook Integration",
+      "crmPlatform": "CRM Platform",
+      "crmEnable": "Enable sending to CRM",
+      "webhookUrl": "Webhook URL",
+      "webhookSecret": "Signing secret (optional)",
+      "webhookSecretPlaceholder": "Key to verify HMAC SHA-256 signature",
+      "webhookSecretHint": "Your CRM can verify the header ",
+      "sendWhen": "Send data when:",
+      "always": "(always)",
+      "testConnection": "Test connection",
+      "testing": "Sending test...",
+      "testSuccess": "✓ Connection successful (HTTP {{code}}) — webhook received correctly",
+      "testError": "✗ Error {{code}}: {{msg}}",
+      "instructionsFor": "Instructions for {{crm}}",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving..."
+    },
+    "userModal": {
+      "editTitle": "Edit User",
+      "newTitle": "New User",
+      "fullName": "Full name",
+      "email": "Email",
+      "password": "Password",
+      "passwordPlaceholder": "User's password",
+      "role": "Role",
+      "org": "Organization",
+      "noOrg": "No organization",
+      "active": "Active user",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving..."
+    },
+    "crmTypes": {
+      "none": "No integration",
+      "zapier": "Zapier",
+      "make": "Make (Integromat)",
+      "gohighlevel": "GoHighLevel",
+      "hubspot": "HubSpot",
+      "monday": "Monday.com",
+      "zoho": "Zoho CRM",
+      "airtable": "Airtable",
+      "notion": "Notion",
+      "pipedrive": "Pipedrive",
+      "salesforce": "Salesforce",
+      "n8n": "n8n",
+      "custom": "Custom webhook"
+    },
+    "crmNativeLabels": {
+      "monday": {
+        "apiKey": "Monday API Key",
+        "boardId": "Board ID",
+        "boardIdPlaceholder": "e.g. 1234567890"
+      },
+      "hubspot": {
+        "apiKey": "HubSpot API Key",
+        "boardId": "Pipeline ID (optional)",
+        "boardIdPlaceholder": "e.g. default"
+      },
+      "gohighlevel": {
+        "apiKey": "GoHighLevel API Key",
+        "boardId": "Location ID",
+        "boardIdPlaceholder": "e.g. abc123xyz"
+      },
+      "zoho": {
+        "apiKey": "Zoho OAuth Token"
+      },
+      "salesforce": {
+        "apiKey": "Salesforce Access Token",
+        "instanceUrl": "Instance URL"
+      }
+    },
+    "crmInstructions": {
+      "zapier": "1. Go to zapier.com → \"Create Zap\"\n2. Trigger: \"Webhooks by Zapier\" → \"Catch Hook\"\n3. Copy the generated URL and paste it above\n4. Action: connect to your favorite CRM (HubSpot, Salesforce, etc.)",
+      "make": "1. Go to make.com → \"Create a new scenario\"\n2. Add the \"Webhooks\" module → \"Custom Webhook\"\n3. Copy the generated URL and paste it above\n4. Connect to your CRM in the next module",
+      "gohighlevel": "1. Go to Settings → Integrations → Webhooks\n2. Click \"Add Webhook\"\n3. Paste the ZyraVoice URL\n4. Select the events: Contact Created, Call Ended",
+      "hubspot": "1. Go to Settings → Integrations → Private Apps\n2. Create an app and copy the Webhook URL\n3. Or use Zapier/Make as an intermediary for more flexibility",
+      "monday": "1. Go to your Board → Integrations → Webhooks\n2. Create an incoming webhook\n3. Copy the generated URL and paste it above",
+      "airtable": "1. Airtable has no direct native webhooks\n2. Use Make or Zapier as an intermediary\n3. In Make: \"Airtable\" module → \"Create a Record\"\n4. In Zapier: Action → Airtable → \"Create Record\"",
+      "notion": "1. Notion has no native webhooks\n2. Use Make or Zapier as an intermediary\n3. In Make: \"Notion\" module → \"Create a Database Item\"\n4. In Zapier: Action → Notion → \"Create Database Item\"",
+      "pipedrive": "1. Go to Tools → Webhooks → \"Add Webhook\"\n2. Or use Zapier for more flexibility\n3. Copy the URL and paste it above",
+      "salesforce": "1. Use Zapier or Make as an intermediary\n2. In Zapier: Action → Salesforce → \"Create Record\"\n3. Map the fields from the ZyraVoice payload",
+      "n8n": "1. Create a workflow → \"Add first step\" → \"On webhook call\"\n2. Copy the generated webhook URL\n3. Paste it above and connect to your CRM in the next node",
+      "custom": "Your server will receive a POST with a ZyraVoice JSON payload.\nVerify authenticity with the X-ZyraVoice-Signature header (HMAC SHA-256).\nExample: X-ZyraVoice-Signature: sha256=<hex>"
+    },
+    "crmEvents": {
+      "call_ended": "Call finished",
+      "interested": "Prospect shows interest",
+      "appointment_scheduled": "Appointment scheduled",
+      "voicemail": "Voicemail",
+      "failed": "Failed call",
+      "campaign_email_sent": "Campaign email sent"
+    }
   },
   "demo": {
     "title": "Demo Call",
@@ -422,7 +632,12 @@
     "cancel": "Cancel",
     "importing": "Importing...",
     "confirm": "Confirm import",
-    "success": "{{count}} prospects imported"
+    "success": "{{count}} prospects imported",
+    "countryLabel": "Number country",
+    "countryHint": "{{code}} will be added to numbers without a country code",
+    "columnsNote": "Columns: {{c1}} — or — {{c2}} — or — {{c3}}",
+    "previewNote": "Preview ({{count}} rows) — phone numbers without {{code}} will get it automatically:",
+    "successSkipped": "{{imported}} prospects imported.\n{{skipped}} skipped as duplicates (already exist in your organization)."
   },
   "upgrade": {
     "freePlan": "Free plan",

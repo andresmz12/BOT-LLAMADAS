@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import Papa from 'papaparse'
 import * as XLSX from 'xlsx'
+import { useTranslation } from 'react-i18next'
 import { XMarkIcon, CloudArrowUpIcon } from '@heroicons/react/24/outline'
 import { importProspects } from '../api/client'
 
@@ -40,6 +41,7 @@ function parseExcelPreview(file, onDone) {
 }
 
 export default function ImportCSVModal({ campaigns, onClose, onImported }) {
+  const { t } = useTranslation()
   const [file, setFile] = useState(null)
   const [preview, setPreview] = useState([])
   const [campaignId, setCampaignId] = useState(campaigns[0]?.id || '')
@@ -64,8 +66,8 @@ export default function ImportCSVModal({ campaigns, onClose, onImported }) {
     try {
       const result = await importProspects(campaignId, file, countryCode)
       const msg = result.skipped_existing
-        ? `${result.imported} prospectos importados.\n${result.skipped_existing} omitidos por duplicado (ya existen en tu organización).`
-        : `${result.imported} prospectos importados.`
+        ? t('import.successSkipped', { imported: result.imported, skipped: result.skipped_existing })
+        : t('import.success', { count: result.imported })
       alert(msg)
       onImported()
     } catch (err) {
@@ -75,32 +77,30 @@ export default function ImportCSVModal({ campaigns, onClose, onImported }) {
     }
   }
 
-  const selectedCountry = COUNTRIES.find(c => c.code === countryCode) || COUNTRIES[0]
-
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-2xl">
         <div className="flex items-center justify-between p-6 border-b border-z-border">
-          <h2 className="text-lg font-bold text-slate-100">Importar prospectos</h2>
+          <h2 className="text-lg font-bold text-slate-100">{t('import.title')}</h2>
           <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
         </div>
         <div className="p-6 space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Campaña destino</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('import.targetCampaign')}</label>
               <select className="z-input" value={campaignId} onChange={e => setCampaignId(e.target.value)}>
                 {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">País de los números</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('import.countryLabel')}</label>
               <select className="z-input" value={countryCode} onChange={e => setCountryCode(e.target.value)}>
                 {COUNTRIES.map(c => (
                   <option key={c.code} value={c.code}>{c.flag} {c.label}</option>
                 ))}
               </select>
               <p className="text-xs text-slate-500 mt-1">
-                Se añadirá <span className="font-mono text-z-blue">{countryCode}</span> a números sin código de país
+                {t('import.countryHint', { code: countryCode })}
               </p>
             </div>
           </div>
@@ -114,13 +114,19 @@ export default function ImportCSVModal({ campaigns, onClose, onImported }) {
             }`}
           >
             <CloudArrowUpIcon className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-            <p className="text-sm text-slate-300">{file ? file.name : 'Arrastra tu archivo aquí o haz clic'}</p>
-            <p className="text-xs text-slate-500 mt-1">Columnas: <span className="font-mono">name, phone, company</span> — o — <span className="font-mono">Contact, Phone Number, Name</span> — o — <span className="font-mono">Nombre, Teléfono, Empresa</span></p>
+            <p className="text-sm text-slate-300">{file ? file.name : t('import.dragHint')}</p>
+            <p className="text-xs text-slate-500 mt-1 font-mono">
+              {t('import.columnsNote', {
+                c1: 'name, phone, company',
+                c2: 'Contact, Phone Number, Name',
+                c3: 'Nombre, Teléfono, Empresa',
+              })}
+            </p>
             <input ref={inputRef} type="file" accept=".csv,.xlsx,.xls" className="hidden" onChange={e => handleFile(e.target.files[0])} />
           </div>
           {preview.length > 0 && (
             <div className="overflow-x-auto">
-              <p className="text-xs text-slate-500 mb-2">Vista previa ({preview.length} filas) — los teléfonos sin <span className="font-mono">{countryCode}</span> lo recibirán automáticamente:</p>
+              <p className="text-xs text-slate-500 mb-2">{t('import.previewNote', { count: preview.length, code: countryCode })}</p>
               <table className="w-full text-xs border border-z-border rounded-lg overflow-hidden">
                 <thead className="bg-black/20">
                   <tr>{Object.keys(preview[0]).map(k => <th key={k} className="px-3 py-2 text-left font-medium text-slate-400">{k}</th>)}</tr>
@@ -136,9 +142,9 @@ export default function ImportCSVModal({ campaigns, onClose, onImported }) {
             </div>
           )}
           <div className="flex justify-end gap-3">
-            <button onClick={onClose} className="z-btn-ghost">Cancelar</button>
+            <button onClick={onClose} className="z-btn-ghost">{t('import.cancel')}</button>
             <button onClick={submit} disabled={!file || !campaignId || loading} className="z-btn-primary disabled:opacity-50">
-              {loading ? 'Importando...' : 'Confirmar importación'}
+              {loading ? t('import.importing') : t('import.confirm')}
             </button>
           </div>
         </div>

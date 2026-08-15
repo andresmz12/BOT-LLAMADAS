@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, EyeIcon } from '@heroicons/react/24/outline'
 import {
   getOrganizations, createOrganization, updateOrganization, deleteOrganization,
@@ -8,32 +9,6 @@ import {
 } from '../api/client'
 import SecretInput from '../components/SecretInput'
 import { fmtDate } from '../utils/date'
-
-const AUDIT_ACTION_LABELS = {
-  login: 'Inicio de sesión',
-  logout: 'Cierre de sesión',
-  'team_member.create': 'Asesor creado',
-  'team_member.update': 'Asesor editado',
-  'team_member.delete': 'Asesor eliminado',
-  'campaign.create': 'Campaña creada',
-  'campaign.update': 'Campaña editada',
-  'campaign.start': 'Campaña iniciada',
-  'campaign.delete': 'Campaña eliminada',
-  'agent.create': 'Agente creado',
-  'agent.update': 'Agente editado',
-  'agent.sync': 'Agente sincronizado',
-  'agent.delete': 'Agente eliminado',
-  'prospects.import': 'Prospectos importados',
-  'prospects.delete_all': 'Prospectos eliminados (masivo)',
-  'settings.credentials_update': 'Credenciales actualizadas',
-  'org.create': 'Organización creada',
-  'org.update': 'Organización editada',
-  'org.upgrade': 'Plan cambiado',
-  'org.delete': 'Organización eliminada',
-  'user.create': 'Usuario creado',
-  'user.update': 'Usuario editado',
-  'user.delete': 'Usuario eliminado',
-}
 
 const AUDIT_ACTION_COLOR = (action) => {
   if (action.endsWith('.delete') || action === 'user.delete') return 'bg-red-500/15 text-red-400'
@@ -46,21 +21,7 @@ const AUDIT_ACTION_COLOR = (action) => {
 const ROLES = ['superadmin', 'admin', 'agent']
 const PLANS = ['free', 'starter', 'pro', 'enterprise']
 
-const CRM_TYPES = [
-  { value: 'none', label: 'Sin integración' },
-  { value: 'zapier', label: 'Zapier' },
-  { value: 'make', label: 'Make (Integromat)' },
-  { value: 'gohighlevel', label: 'GoHighLevel' },
-  { value: 'hubspot', label: 'HubSpot' },
-  { value: 'monday', label: 'Monday.com' },
-  { value: 'zoho', label: 'Zoho CRM' },
-  { value: 'airtable', label: 'Airtable' },
-  { value: 'notion', label: 'Notion' },
-  { value: 'pipedrive', label: 'Pipedrive' },
-  { value: 'salesforce', label: 'Salesforce' },
-  { value: 'n8n', label: 'n8n' },
-  { value: 'custom', label: 'Webhook personalizado' },
-]
+const CRM_TYPE_VALUES = ['none', 'zapier', 'make', 'gohighlevel', 'hubspot', 'monday', 'zoho', 'airtable', 'notion', 'pipedrive', 'salesforce', 'n8n', 'custom']
 
 const CRM_PLACEHOLDERS = {
   zapier: 'https://hooks.zapier.com/hooks/catch/...',
@@ -71,82 +32,17 @@ const CRM_PLACEHOLDERS = {
 
 const NATIVE_CRM_TYPES = ['monday', 'hubspot', 'gohighlevel', 'zoho', 'salesforce']
 
-const NATIVE_CRM_LABELS = {
-  monday:       { apiKey: 'API Key de Monday',        boardId: 'Board ID', boardIdPlaceholder: 'ej: 1234567890' },
-  hubspot:      { apiKey: 'API Key de HubSpot',       boardId: 'Pipeline ID (opcional)', boardIdPlaceholder: 'ej: default' },
-  gohighlevel:  { apiKey: 'API Key de GoHighLevel',   boardId: 'Location ID', boardIdPlaceholder: 'ej: abc123xyz' },
-  zoho:         { apiKey: 'OAuth Token de Zoho',      boardId: null },
-  salesforce:   { apiKey: 'Access Token de Salesforce', boardId: null },
-}
-
-const CRM_INSTRUCTIONS = {
-  zapier: `1. Ve a zapier.com → "Create Zap"
-2. Trigger: "Webhooks by Zapier" → "Catch Hook"
-3. Copia la URL generada y pégala arriba
-4. Action: conecta con tu CRM favorito (HubSpot, Salesforce, etc.)`,
-
-  make: `1. Ve a make.com → "Create a new scenario"
-2. Agrega el módulo "Webhooks" → "Custom Webhook"
-3. Copia la URL generada y pégala arriba
-4. Conecta con tu CRM en el módulo siguiente`,
-
-  gohighlevel: `1. Ve a Settings → Integrations → Webhooks
-2. Haz clic en "Add Webhook"
-3. Pega la URL de ZyraVoice
-4. Selecciona los eventos: Contact Created, Call Ended`,
-
-  hubspot: `1. Ve a Settings → Integrations → Private Apps
-2. Crea una app y copia el Webhook URL
-3. O usa Zapier/Make como intermediario para mayor flexibilidad`,
-
-  monday: `1. Ve a tu Board → Integrations → Webhooks
-2. Crea un webhook entrante
-3. Copia la URL generada y pégala arriba`,
-
-  airtable: `1. Airtable no tiene webhooks nativos directos
-2. Usa Make o Zapier como intermediario
-3. En Make: módulo "Airtable" → "Create a Record"
-4. En Zapier: Action → Airtable → "Create Record"`,
-
-  notion: `1. Notion no tiene webhooks nativos
-2. Usa Make o Zapier como intermediario
-3. En Make: módulo "Notion" → "Create a Database Item"
-4. En Zapier: Action → Notion → "Create Database Item"`,
-
-  pipedrive: `1. Ve a Tools → Webhooks → "Add Webhook"
-2. O usa Zapier para mayor flexibilidad
-3. Copia la URL y pégala arriba`,
-
-  salesforce: `1. Usa Zapier o Make como intermediario
-2. En Zapier: Action → Salesforce → "Create Record"
-3. Mapea los campos del payload de ZyraVoice`,
-
-  n8n: `1. Crea un workflow → "Add first step" → "On webhook call"
-2. Copia la URL de webhook generada
-3. Pégala arriba y conecta con tu CRM en el siguiente nodo`,
-
-  custom: `Tu servidor recibirá un POST con payload JSON de ZyraVoice.
-Verifica la autenticidad con el header X-ZyraVoice-Signature (HMAC SHA-256).
-Ejemplo: X-ZyraVoice-Signature: sha256=<hex>`,
-}
-
-const CRM_EVENTS_OPTIONS = [
-  { value: 'call_ended', label: 'Llamada finalizada', always: true },
-  { value: 'interested', label: 'Prospecto muestra interés' },
-  { value: 'appointment_scheduled', label: 'Cita agendada' },
-  { value: 'voicemail', label: 'Buzón de voz' },
-  { value: 'failed', label: 'Llamada fallida' },
-  { value: 'campaign_email_sent', label: 'Email de campaña enviado' },
-]
-
-const ORG_DATA_LINKS = [
-  ['Agentes', '/agents'],
-  ['Llamadas', '/calls'],
-  ['Prospectos', '/prospects'],
-  ['Campañas', '/campaigns'],
+const CRM_EVENTS_VALUES = [
+  { value: 'call_ended', always: true },
+  { value: 'interested' },
+  { value: 'appointment_scheduled' },
+  { value: 'voicemail' },
+  { value: 'failed' },
+  { value: 'campaign_email_sent' },
 ]
 
 export default function Admin() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const [tab, setTab] = useState('orgs')
   const [orgs, setOrgs] = useState([])
@@ -154,6 +50,15 @@ export default function Admin() {
   const [modal, setModal] = useState(null)
   const [dataMenuOrgId, setDataMenuOrgId] = useState(null)
   const [dataMenuPos, setDataMenuPos] = useState({ top: 0, left: 0 })
+
+  const ORG_DATA_LINKS = [
+    [t('agents.title'), '/agents'],
+    [t('calls.title'), '/calls'],
+    [t('prospects.title'), '/prospects'],
+    [t('campaigns.title'), '/campaigns'],
+  ]
+
+  const AUDIT_ACTION_LABELS = t('admin.audit.actions', { returnObjects: true })
 
   const toggleDataMenu = (org, e) => {
     if (dataMenuOrgId === org.id) { setDataMenuOrgId(null); return }
@@ -186,30 +91,30 @@ export default function Admin() {
   useEffect(() => { if (tab === 'audit') loadAuditLog() }, [tab, auditFilterOrg, auditFilterAction])
 
   const handleDeleteUser = async (user) => {
-    if (!confirm(`¿Eliminar permanentemente a "${user.full_name}" (${user.email})?`)) return
+    if (!confirm(t('admin.users.confirmDelete', { name: user.full_name, email: user.email }))) return
     try { await deleteUser(user.id); loadUsers() }
-    catch (err) { alert(err.response?.data?.detail || 'Error') }
+    catch (err) { alert(err.response?.data?.detail || t('admin.errorGeneric')) }
   }
 
   const handleDeleteOrg = async (org) => {
-    if (!confirm(`¿Eliminar la organización "${org.name}"? Esta acción no se puede deshacer.`)) return
+    if (!confirm(t('admin.orgs.confirmDelete', { name: org.name }))) return
     try { await deleteOrganization(org.id); loadOrgs() }
-    catch (err) { alert(err.response?.data?.detail || 'Error al eliminar') }
+    catch (err) { alert(err.response?.data?.detail || t('admin.orgs.errorDelete')) }
   }
 
   const handleUpgrade = async (org) => {
-    const plan = prompt(`Plan para "${org.name}" (free / starter / pro / enterprise):`, org.plan || 'pro')
+    const plan = prompt(t('admin.orgs.upgradePrompt', { name: org.name }), org.plan || 'pro')
     if (!plan) return
     try { await upgradeOrg(org.id, plan.trim().toLowerCase()); loadOrgs() }
-    catch (err) { alert(err.response?.data?.detail || 'Error') }
+    catch (err) { alert(err.response?.data?.detail || t('admin.errorGeneric')) }
   }
 
   return (
     <div className="p-6 space-y-6">
-      <h1 className="text-2xl font-bold text-slate-100">Panel de Administración</h1>
+      <h1 className="text-2xl font-bold text-slate-100">{t('admin.title')}</h1>
 
       <div className="flex gap-1 bg-black/30 rounded-lg p-1 w-fit border border-z-border">
-        {[['orgs', 'Organizaciones'], ['users', 'Usuarios'], ['audit', 'Audit Log']].map(([key, label]) => (
+        {[['orgs', t('admin.tabOrgs')], ['users', t('admin.tabUsers')], ['audit', t('admin.tabAudit')]].map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)}
             className={`px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${
               tab === key ? 'bg-z-card text-slate-100 shadow' : 'text-slate-500 hover:text-slate-300'
@@ -222,17 +127,17 @@ export default function Admin() {
       {tab === 'orgs' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-slate-200">Organizaciones</h2>
+            <h2 className="text-lg font-semibold text-slate-200">{t('admin.orgs.title')}</h2>
             <button onClick={() => setModal({ type: 'org', data: null })}
               className="z-btn-primary flex items-center gap-2">
-              <PlusIcon className="w-4 h-4" /> Nueva
+              <PlusIcon className="w-4 h-4" /> {t('admin.orgs.new')}
             </button>
           </div>
           <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-black/20">
                 <tr>
-                  {['ID', 'Nombre', 'Contacto', 'Plan', 'Demos', 'CRM', 'Activa', 'Acciones'].map(h => (
+                  {[t('admin.orgs.headers.id'), t('admin.orgs.headers.name'), t('admin.orgs.headers.contact'), t('admin.orgs.headers.plan'), t('admin.orgs.headers.demos'), t('admin.orgs.headers.crm'), t('admin.orgs.headers.active'), t('admin.orgs.headers.actions')].map(h => (
                     <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                   ))}
                 </tr>
@@ -250,7 +155,7 @@ export default function Admin() {
                           <div className="text-slate-300">{contact.full_name}</div>
                           <div className="text-slate-500">{contact.email}</div>
                           <div className="text-slate-500">{contact.phone || '—'}</div>
-                          <div className="text-slate-600">Desde {fmtDate(contact.created_at)}</div>
+                          <div className="text-slate-600">{t('admin.orgs.since', { date: fmtDate(contact.created_at) })}</div>
                         </div>
                       ) : (
                         <span className="text-slate-600">—</span>
@@ -272,7 +177,7 @@ export default function Admin() {
                         <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
                           org.crm_webhook_enabled ? 'bg-green-500/20 text-green-400' : 'bg-slate-700 text-slate-400'
                         }`}>
-                          {CRM_TYPES.find(c => c.value === org.crm_type)?.label || org.crm_type}
+                          {t(`admin.crmTypes.${org.crm_type}`, { defaultValue: org.crm_type })}
                         </span>
                       ) : (
                         <span className="text-slate-600 text-xs">—</span>
@@ -280,7 +185,7 @@ export default function Admin() {
                     </td>
                     <td className="px-6 py-3">
                       <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${org.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                        {org.is_active ? 'Activa' : 'Inactiva'}
+                        {org.is_active ? t('admin.orgs.active') : t('admin.orgs.inactive')}
                       </span>
                     </td>
                     <td className="px-6 py-3">
@@ -288,7 +193,7 @@ export default function Admin() {
                         <button
                           onClick={(e) => toggleDataMenu(org, e)}
                           onBlur={() => setTimeout(() => setDataMenuOrgId(null), 150)}
-                          title="Ver datos de esta organización"
+                          title={t('admin.orgs.viewDataTitle')}
                           className="text-slate-500 hover:text-slate-300"
                         >
                           <EyeIcon className="w-4 h-4" />
@@ -313,7 +218,7 @@ export default function Admin() {
                         {org.plan !== 'enterprise' && (
                           <button onClick={() => handleUpgrade(org)}
                             className="px-2 py-0.5 bg-green-500/15 hover:bg-green-500/25 text-green-400 text-xs font-medium rounded-lg transition-colors">
-                            ✎ Plan
+                            {t('admin.orgs.planBtn')}
                           </button>
                         )}
                         <button onClick={() => setModal({ type: 'org', data: org })}
@@ -330,7 +235,7 @@ export default function Admin() {
                   )
                 })}
                 {orgs.length === 0 && (
-                  <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-500">No hay organizaciones</td></tr>
+                  <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-500">{t('admin.orgs.noOrgs')}</td></tr>
                 )}
               </tbody>
             </table>
@@ -341,17 +246,17 @@ export default function Admin() {
       {tab === 'users' && (
         <div className="space-y-4">
           <div className="flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-slate-200">Usuarios</h2>
+            <h2 className="text-lg font-semibold text-slate-200">{t('admin.users.title')}</h2>
             <button onClick={() => setModal({ type: 'user', data: null })}
               className="z-btn-primary flex items-center gap-2">
-              <PlusIcon className="w-4 h-4" /> Nuevo
+              <PlusIcon className="w-4 h-4" /> {t('admin.users.new')}
             </button>
           </div>
           <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-black/20">
                 <tr>
-                  {['Nombre', 'Email', 'Teléfono', 'Rol', 'Organización', 'Registrado', 'Activo', 'Acciones'].map(h => (
+                  {[t('admin.users.headers.name'), t('admin.users.headers.email'), t('admin.users.headers.phone'), t('admin.users.headers.role'), t('admin.users.headers.org'), t('admin.users.headers.registered'), t('admin.users.headers.active'), t('admin.users.headers.actions')].map(h => (
                     <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                   ))}
                 </tr>
@@ -369,7 +274,7 @@ export default function Admin() {
                     <td className="px-6 py-3 text-slate-500 text-xs">{fmtDate(user.created_at)}</td>
                     <td className="px-6 py-3">
                       <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${user.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}>
-                        {user.is_active ? 'Activo' : 'Inactivo'}
+                        {user.is_active ? t('admin.users.active') : t('admin.users.inactive')}
                       </span>
                     </td>
                     <td className="px-6 py-3">
@@ -387,7 +292,7 @@ export default function Admin() {
                   </tr>
                 ))}
                 {users.length === 0 && (
-                  <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-500">No hay usuarios</td></tr>
+                  <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-500">{t('admin.users.noUsers')}</td></tr>
                 )}
               </tbody>
             </table>
@@ -399,16 +304,16 @@ export default function Admin() {
         <div className="space-y-4">
           <div className="flex justify-between items-center flex-wrap gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-slate-200">Audit Log</h2>
-              <p className="text-xs text-slate-500 mt-0.5">Cada entrada se elimina automáticamente a los 60 días.</p>
+              <h2 className="text-lg font-semibold text-slate-200">{t('admin.audit.title')}</h2>
+              <p className="text-xs text-slate-500 mt-0.5">{t('admin.audit.retentionNote')}</p>
             </div>
             <div className="flex gap-2 flex-wrap">
               <select value={auditFilterOrg} onChange={e => setAuditFilterOrg(e.target.value)} className="z-input w-auto text-sm">
-                <option value="">Todas las organizaciones</option>
+                <option value="">{t('admin.audit.allOrgs')}</option>
                 {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
               </select>
               <select value={auditFilterAction} onChange={e => setAuditFilterAction(e.target.value)} className="z-input w-auto text-sm">
-                <option value="">Todas las acciones</option>
+                <option value="">{t('admin.audit.allActions')}</option>
                 {Object.entries(AUDIT_ACTION_LABELS).map(([key, label]) => (
                   <option key={key} value={key}>{label}</option>
                 ))}
@@ -419,16 +324,16 @@ export default function Admin() {
             <table className="w-full text-sm">
               <thead className="bg-black/20">
                 <tr>
-                  {['Fecha', 'Usuario', 'Organización', 'Acción', 'Detalles', 'IP'].map(h => (
+                  {[t('admin.audit.headers.date'), t('admin.audit.headers.user'), t('admin.audit.headers.org'), t('admin.audit.headers.action'), t('admin.audit.headers.details'), t('admin.audit.headers.ip')].map(h => (
                     <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-z-border">
                 {auditLoading ? (
-                  <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-500">Cargando...</td></tr>
+                  <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-500">{t('admin.audit.loading')}</td></tr>
                 ) : auditLog.length === 0 ? (
-                  <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-500">Sin entradas</td></tr>
+                  <tr><td colSpan={6} className="px-6 py-10 text-center text-slate-500">{t('admin.audit.noEntries')}</td></tr>
                 ) : auditLog.map(entry => (
                   <tr key={entry.id} className="hover:bg-white/[0.02]">
                     <td className="px-6 py-3 text-slate-500 text-xs whitespace-nowrap">{fmtDate(entry.created_at)}</td>
@@ -469,6 +374,7 @@ export default function Admin() {
 }
 
 function OrgModal({ org, onClose, onSaved }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState(org ? {
     ...org,
     crm_extra_config: (() => {
@@ -529,7 +435,7 @@ function OrgModal({ org, onClose, onSaved }) {
       const res = await testCRMWebhook(org.id)
       setTestResult(res)
     } catch (err) {
-      setTestResult({ success: false, response: err.response?.data?.detail || 'Error de conexión' })
+      setTestResult({ success: false, response: err.response?.data?.detail || t('settings.connectionError') })
     } finally {
       setTestLoading(false)
     }
@@ -552,7 +458,7 @@ function OrgModal({ org, onClose, onSaved }) {
       else await createOrganization(finalForm)
       onSaved()
     } catch (err) {
-      alert(err.response?.data?.detail || 'Error')
+      alert(err.response?.data?.detail || t('admin.errorGeneric'))
       setLoading(false)
     }
   }
@@ -563,18 +469,19 @@ function OrgModal({ org, onClose, onSaved }) {
     try {
       const secrets = await getOrgSecrets(org.id)
       setForm(f => ({ ...f, ...secrets }))
-    } catch { alert('No se pudieron obtener las claves') }
+    } catch { alert(t('admin.orgModal.revealError')) }
     finally { setRevealLoading(false) }
   }
 
   const crmType = form.crm_type || 'none'
-  const crmLabel = CRM_TYPES.find(c => c.value === crmType)?.label || crmType
+  const crmLabel = t(`admin.crmTypes.${crmType}`, { defaultValue: crmType })
+  const nativeLabels = t(`admin.crmNativeLabels.${crmType}`, { returnObjects: true, defaultValue: {} })
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-6 border-b border-z-border">
-          <h2 className="text-lg font-bold text-slate-100">{org ? 'Editar Organización' : 'Nueva Organización'}</h2>
+          <h2 className="text-lg font-bold text-slate-100">{org ? t('admin.orgModal.editTitle') : t('admin.orgModal.newTitle')}</h2>
           <div className="flex items-center gap-2">
             {org?.id && (
               <button
@@ -584,7 +491,7 @@ function OrgModal({ org, onClose, onSaved }) {
                 className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-amber-400 border border-amber-500/30 hover:bg-amber-500/10 rounded-lg transition-colors disabled:opacity-50"
               >
                 <EyeIcon className="w-3.5 h-3.5" />
-                {revealLoading ? 'Cargando...' : 'Revelar claves'}
+                {revealLoading ? t('admin.orgModal.revealing') : t('admin.orgModal.revealKeys')}
               </button>
             )}
             <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
@@ -592,76 +499,76 @@ function OrgModal({ org, onClose, onSaved }) {
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Nombre</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.name')}</label>
             <input value={form.name} onChange={e => set('name', e.target.value)} required className="z-input" />
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Plan</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.plan')}</label>
             <select value={form.plan} onChange={e => set('plan', e.target.value)} className="z-input">
               {PLANS.map(p => <option key={p} value={p}>{p}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Límite de minutos/mes</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.minutesLimit')}</label>
             <input
               type="number"
               min="0"
               value={form.minutes_limit ?? ''}
               onChange={e => set('minutes_limit', e.target.value ? parseInt(e.target.value) : null)}
-              placeholder="Vacío = ilimitado"
+              placeholder={t('admin.orgModal.minutesLimitPlaceholder')}
               className="z-input"
             />
-            <p className="text-xs text-slate-500 mt-1">Minutos de llamada permitidos por mes. Vacío = sin límite.</p>
+            <p className="text-xs text-slate-500 mt-1">{t('admin.orgModal.minutesLimitHint')}</p>
           </div>
           <SecretInput label="Retell API Key" value={form.retell_api_key} onChange={e => set('retell_api_key', e.target.value)} />
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Retell Phone Number</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.retellPhone')}</label>
             <input value={form.retell_phone_number || ''} onChange={e => set('retell_phone_number', e.target.value)}
               placeholder="+12345678901" className="z-input font-mono" />
           </div>
           <SecretInput label="Anthropic API Key" value={form.anthropic_api_key} onChange={e => set('anthropic_api_key', e.target.value)} />
           <label className="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" checked={form.is_active} onChange={e => set('is_active', e.target.checked)} className="w-4 h-4 accent-blue-500" />
-            <span className="text-sm text-slate-300">Organización activa</span>
+            <span className="text-sm text-slate-300">{t('admin.orgModal.active')}</span>
           </label>
 
           {/* ── Marketing IA ────────────────────────────────────────────────── */}
           <div className="border-t border-z-border pt-4 space-y-2">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Marketing IA</h3>
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{t('admin.orgModal.marketingTitle')}</h3>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={!!form.marketing_enabled} onChange={e => set('marketing_enabled', e.target.checked)} className="w-4 h-4 accent-blue-500" />
-              <span className="text-sm text-slate-300">Activar módulo de Marketing IA para esta organización</span>
+              <span className="text-sm text-slate-300">{t('admin.orgModal.marketingEnable')}</span>
             </label>
-            <p className="text-xs text-slate-600">Permite a los usuarios de esta org generar imágenes, videos y copy con IA.</p>
+            <p className="text-xs text-slate-600">{t('admin.orgModal.marketingHint')}</p>
           </div>
 
           {/* ── WhatsApp Bot ─────────────────────────────────────────────────── */}
           <div className="border-t border-z-border pt-4 space-y-4">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">WhatsApp Bot</h3>
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{t('admin.orgModal.whatsappTitle')}</h3>
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={!!form.whatsapp_enabled} onChange={e => set('whatsapp_enabled', e.target.checked)} className="w-4 h-4 accent-blue-500" />
-              <span className="text-sm text-slate-300">Activar bot conversacional</span>
+              <span className="text-sm text-slate-300">{t('admin.orgModal.whatsappEnable')}</span>
             </label>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Phone Number ID</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.phoneNumberId')}</label>
               <input value={form.whatsapp_phone_number_id || ''} onChange={e => set('whatsapp_phone_number_id', e.target.value)}
                 placeholder="123456789012345" className="z-input font-mono" />
-              <p className="text-xs text-slate-600 mt-1">Meta for Developers → WhatsApp → API Setup</p>
+              <p className="text-xs text-slate-600 mt-1">{t('admin.orgModal.phoneNumberIdHint')}</p>
             </div>
             <SecretInput label="WhatsApp Access Token" value={form.whatsapp_access_token || ''}
               onChange={e => set('whatsapp_access_token', e.target.value)}
-              placeholder="Token permanente de Meta" />
+              placeholder={t('admin.orgModal.waTokenPlaceholder')} />
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Verify Token</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.verifyToken')}</label>
               <input value={form.whatsapp_verify_token || ''} onChange={e => set('whatsapp_verify_token', e.target.value)}
-                placeholder="zyra-wa-secreto-2025" className="z-input font-mono" />
-              <p className="text-xs text-slate-600 mt-1">String secreto que eliges tú — úsalo al registrar el webhook en Meta</p>
+                placeholder={t('admin.orgModal.verifyTokenPlaceholder')} className="z-input font-mono" />
+              <p className="text-xs text-slate-600 mt-1">{t('admin.orgModal.verifyTokenHint')}</p>
             </div>
           </div>
 
           {/* ── Email Marketing ─────────────────────────────────────────────── */}
           <div className="border-t border-z-border pt-4 space-y-3">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">Email Marketing</h3>
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{t('admin.orgModal.emailTitle')}</h3>
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
@@ -669,19 +576,19 @@ function OrgModal({ org, onClose, onSaved }) {
                 onChange={e => set('email_enabled', e.target.checked)}
                 className="w-4 h-4 accent-blue-500"
               />
-              <span className="text-sm text-slate-300">Activar envío de emails post-llamada</span>
+              <span className="text-sm text-slate-300">{t('admin.orgModal.emailEnable')}</span>
             </label>
             <SecretInput
               label="SendGrid API Key"
               value={form.sendgrid_api_key || ''}
               onChange={e => set('sendgrid_api_key', e.target.value)}
-              placeholder="SG.••••••••"
+              placeholder={t('admin.orgModal.sendgridPlaceholder')}
             />
             <p className="text-xs text-slate-500 -mt-1">
-              Clave privada de SendGrid — solo visible para superadmins, nunca expuesta al cliente.
+              {t('admin.orgModal.sendgridHint')}
             </p>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Email remitente</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.senderEmail')}</label>
               <input
                 value={form.email_from || ''}
                 onChange={e => set('email_from', e.target.value)}
@@ -691,11 +598,11 @@ function OrgModal({ org, onClose, onSaved }) {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Nombre remitente</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.senderName')}</label>
               <input
                 value={form.email_from_name || ''}
                 onChange={e => set('email_from_name', e.target.value)}
-                placeholder="Isabella - Mi Empresa"
+                placeholder={t('admin.orgModal.senderNamePlaceholder')}
                 className="z-input"
               />
             </div>
@@ -704,17 +611,17 @@ function OrgModal({ org, onClose, onSaved }) {
           {/* ── CRM Integration ─────────────────────────────────────────────── */}
           <div className="border-t border-z-border pt-4 space-y-4">
             <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">
-              Integración CRM / Webhook
+              {t('admin.orgModal.crmTitle')}
             </h3>
 
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Plataforma CRM</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.crmPlatform')}</label>
               <select
                 value={crmType}
                 onChange={e => { set('crm_type', e.target.value); setTestResult(null) }}
                 className="z-input"
               >
-                {CRM_TYPES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
+                {CRM_TYPE_VALUES.map(c => <option key={c} value={c}>{t(`admin.crmTypes.${c}`)}</option>)}
               </select>
             </div>
 
@@ -727,28 +634,28 @@ function OrgModal({ org, onClose, onSaved }) {
                     onChange={e => set('crm_webhook_enabled', e.target.checked)}
                     className="w-4 h-4 accent-blue-500"
                   />
-                  <span className="text-sm text-slate-300">Activar envío al CRM</span>
+                  <span className="text-sm text-slate-300">{t('admin.orgModal.crmEnable')}</span>
                 </label>
 
                 {NATIVE_CRM_TYPES.includes(crmType) ? (
                   /* ── Native CRM fields ──────────────────────────────────── */
                   <>
                     <SecretInput
-                      label={NATIVE_CRM_LABELS[crmType]?.apiKey || 'API Key'}
+                      label={nativeLabels.apiKey || 'API Key'}
                       value={form.crm_api_key}
                       onChange={e => set('crm_api_key', e.target.value)}
                     />
 
-                    {NATIVE_CRM_LABELS[crmType]?.boardId && (
+                    {nativeLabels.boardId && (
                       <div>
                         <label className="block text-sm font-medium text-slate-300 mb-1">
-                          {NATIVE_CRM_LABELS[crmType].boardId}
+                          {nativeLabels.boardId}
                         </label>
                         <input
                           type="text"
                           value={form.crm_board_or_list_id || ''}
                           onChange={e => set('crm_board_or_list_id', e.target.value)}
-                          placeholder={NATIVE_CRM_LABELS[crmType].boardIdPlaceholder || ''}
+                          placeholder={nativeLabels.boardIdPlaceholder || ''}
                           className="z-input font-mono"
                         />
                       </div>
@@ -756,7 +663,7 @@ function OrgModal({ org, onClose, onSaved }) {
 
                     {crmType === 'salesforce' && (
                       <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-1">Instance URL</label>
+                        <label className="block text-sm font-medium text-slate-300 mb-1">{nativeLabels.instanceUrl}</label>
                         <input
                           type="text"
                           value={form.crm_extra_config?.instance_url || ''}
@@ -771,7 +678,7 @@ function OrgModal({ org, onClose, onSaved }) {
                   /* ── Generic webhook fields (unchanged) ─────────────────── */
                   <>
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-1">URL del Webhook</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.webhookUrl')}</label>
                       <input
                         value={form.crm_webhook_url || ''}
                         onChange={e => { set('crm_webhook_url', e.target.value); setTestResult(null) }}
@@ -781,17 +688,17 @@ function OrgModal({ org, onClose, onSaved }) {
                     </div>
 
                     <SecretInput
-                      label="Secreto de firma (opcional)"
+                      label={t('admin.orgModal.webhookSecret')}
                       value={form.crm_webhook_secret}
                       onChange={e => set('crm_webhook_secret', e.target.value)}
-                      placeholder="Clave para verificar firma HMAC SHA-256"
-                      hint={<>Tu CRM puede verificar el header <code className="text-slate-500">X-ZyraVoice-Signature</code></>}
+                      placeholder={t('admin.orgModal.webhookSecretPlaceholder')}
+                      hint={<>{t('admin.orgModal.webhookSecretHint')}<code className="text-slate-500">X-ZyraVoice-Signature</code></>}
                     />
 
                     <div>
-                      <label className="block text-sm font-medium text-slate-300 mb-2">Enviar datos cuando:</label>
+                      <label className="block text-sm font-medium text-slate-300 mb-2">{t('admin.orgModal.sendWhen')}</label>
                       <div className="space-y-1.5">
-                        {CRM_EVENTS_OPTIONS.map(ev => (
+                        {CRM_EVENTS_VALUES.map(ev => (
                           <label key={ev.value} className="flex items-center gap-2 cursor-pointer">
                             <input
                               type="checkbox"
@@ -800,8 +707,8 @@ function OrgModal({ org, onClose, onSaved }) {
                               onChange={() => !ev.always && toggleCrmEvent(ev.value)}
                               className="w-4 h-4 accent-blue-500 disabled:opacity-60"
                             />
-                            <span className="text-sm text-slate-300">{ev.label}</span>
-                            {ev.always && <span className="text-xs text-slate-600">(siempre)</span>}
+                            <span className="text-sm text-slate-300">{t(`admin.crmEvents.${ev.value}`)}</span>
+                            {ev.always && <span className="text-xs text-slate-600">{t('admin.orgModal.always')}</span>}
                           </label>
                         ))}
                       </div>
@@ -816,7 +723,7 @@ function OrgModal({ org, onClose, onSaved }) {
                           disabled={testLoading}
                           className="z-btn-ghost border border-z-border text-sm disabled:opacity-50"
                         >
-                          {testLoading ? 'Enviando prueba...' : 'Probar conexión'}
+                          {testLoading ? t('admin.orgModal.testing') : t('admin.orgModal.testConnection')}
                         </button>
                         {testResult && (
                           <div className={`text-xs rounded-lg px-3 py-2 ${
@@ -825,8 +732,8 @@ function OrgModal({ org, onClose, onSaved }) {
                               : 'bg-red-500/10 text-red-400 border border-red-500/20'
                           }`}>
                             {testResult.success
-                              ? `✓ Conexión exitosa (HTTP ${testResult.status_code}) — webhook recibido correctamente`
-                              : `✗ Error ${testResult.status_code || ''}: ${testResult.response}`
+                              ? t('admin.orgModal.testSuccess', { code: testResult.status_code })
+                              : t('admin.orgModal.testError', { code: testResult.status_code || '', msg: testResult.response })
                             }
                           </div>
                         )}
@@ -834,20 +741,20 @@ function OrgModal({ org, onClose, onSaved }) {
                     )}
 
                     {/* Instructions accordion */}
-                    {CRM_INSTRUCTIONS[crmType] && (
+                    {t(`admin.crmInstructions.${crmType}`, { defaultValue: '' }) && (
                       <div className="border border-z-border rounded-lg overflow-hidden">
                         <button
                           type="button"
                           onClick={() => setCrmAccordionOpen(o => !o)}
                           className="w-full flex items-center justify-between px-4 py-3 text-sm text-slate-400 hover:text-slate-200 hover:bg-white/[0.02] transition-colors"
                         >
-                          <span>Instrucciones para {crmLabel}</span>
+                          <span>{t('admin.orgModal.instructionsFor', { crm: crmLabel })}</span>
                           <span className="text-slate-600 text-xs">{crmAccordionOpen ? '▲' : '▼'}</span>
                         </button>
                         {crmAccordionOpen && (
                           <div className="px-4 pb-4 border-t border-z-border pt-3">
                             <pre className="text-xs text-slate-400 whitespace-pre-wrap font-sans leading-relaxed">
-                              {CRM_INSTRUCTIONS[crmType]}
+                              {t(`admin.crmInstructions.${crmType}`)}
                             </pre>
                           </div>
                         )}
@@ -860,9 +767,9 @@ function OrgModal({ org, onClose, onSaved }) {
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="z-btn-ghost">Cancelar</button>
+            <button type="button" onClick={onClose} className="z-btn-ghost">{t('admin.orgModal.cancel')}</button>
             <button type="submit" disabled={loading} className="z-btn-primary disabled:opacity-50">
-              {loading ? 'Guardando...' : 'Guardar'}
+              {loading ? t('admin.orgModal.saving') : t('admin.orgModal.save')}
             </button>
           </div>
         </form>
@@ -872,6 +779,7 @@ function OrgModal({ org, onClose, onSaved }) {
 }
 
 function UserModal({ user, orgs, onClose, onSaved }) {
+  const { t } = useTranslation()
   const [form, setForm] = useState(user || {
     email: '', password: '', full_name: '', role: 'agent', organization_id: orgs[0]?.id || null
   })
@@ -886,7 +794,7 @@ function UserModal({ user, orgs, onClose, onSaved }) {
       else await createUser(form)
       onSaved()
     } catch (err) {
-      alert(err.response?.data?.detail || 'Error')
+      alert(err.response?.data?.detail || t('admin.errorGeneric'))
       setLoading(false)
     }
   }
@@ -895,50 +803,50 @@ function UserModal({ user, orgs, onClose, onSaved }) {
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-z-card border border-z-border rounded-2xl w-full max-w-md">
         <div className="flex items-center justify-between p-6 border-b border-z-border">
-          <h2 className="text-lg font-bold text-slate-100">{user ? 'Editar Usuario' : 'Nuevo Usuario'}</h2>
+          <h2 className="text-lg font-bold text-slate-100">{user ? t('admin.userModal.editTitle') : t('admin.userModal.newTitle')}</h2>
           <button onClick={onClose}><XMarkIcon className="w-6 h-6 text-slate-500" /></button>
         </div>
         <form onSubmit={submit} className="p-6 space-y-4">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Nombre completo</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.userModal.fullName')}</label>
             <input value={form.full_name} onChange={e => set('full_name', e.target.value)} required className="z-input" />
           </div>
           {!user && <>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.userModal.email')}</label>
               <input type="email" value={form.email} onChange={e => set('email', e.target.value)} required className="z-input" />
             </div>
             <SecretInput
-              label="Contraseña"
+              label={t('admin.userModal.password')}
               value={form.password}
               onChange={e => set('password', e.target.value)}
-              placeholder="Contraseña del usuario"
+              placeholder={t('admin.userModal.passwordPlaceholder')}
               required
             />
           </>}
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Rol</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.userModal.role')}</label>
             <select value={form.role} onChange={e => set('role', e.target.value)} className="z-input">
               {ROLES.map(r => <option key={r} value={r}>{r}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-1">Organización</label>
+            <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.userModal.org')}</label>
             <select value={form.organization_id || ''} onChange={e => set('organization_id', e.target.value ? Number(e.target.value) : null)} className="z-input">
-              <option value="">Sin organización</option>
+              <option value="">{t('admin.userModal.noOrg')}</option>
               {orgs.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
             </select>
           </div>
           {user && (
             <label className="flex items-center gap-2 cursor-pointer">
               <input type="checkbox" checked={form.is_active !== false} onChange={e => set('is_active', e.target.checked)} className="w-4 h-4 accent-blue-500" />
-              <span className="text-sm text-slate-300">Usuario activo</span>
+              <span className="text-sm text-slate-300">{t('admin.userModal.active')}</span>
             </label>
           )}
           <div className="flex justify-end gap-3 pt-2">
-            <button type="button" onClick={onClose} className="z-btn-ghost">Cancelar</button>
+            <button type="button" onClick={onClose} className="z-btn-ghost">{t('admin.userModal.cancel')}</button>
             <button type="submit" disabled={loading} className="z-btn-primary disabled:opacity-50">
-              {loading ? 'Guardando...' : 'Guardar'}
+              {loading ? t('admin.userModal.saving') : t('admin.userModal.save')}
             </button>
           </div>
         </form>
