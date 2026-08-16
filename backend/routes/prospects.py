@@ -332,7 +332,13 @@ async def call_prospect(
     if not agent:
         raise HTTPException(status_code=404, detail="Agente no encontrado")
 
-    org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
+    # Use the PROSPECT's org, not the caller's — a superadmin calling a
+    # prospect from another org (via the admin panel's org-scoped view)
+    # would otherwise place the call on ISM's own Retell credentials and
+    # mis-tag the resulting Call row with the wrong organization_id.
+    org = session.get(Organization, prospect.organization_id) if prospect.organization_id else None
+    if org and org.minutes_limit and (org.minutes_used_month or 0) >= org.minutes_limit:
+        raise HTTPException(status_code=402, detail="Esta organización alcanzó su límite de minutos del plan")
     api_key = (org.retell_api_key if org else "") or ""
     from_number = (org.retell_phone_number if org else "") or ""
 
@@ -340,7 +346,7 @@ async def call_prospect(
         prospect_id=prospect.id,
         campaign_id=campaign.id,
         status="initiated",
-        organization_id=current_user.organization_id,
+        organization_id=prospect.organization_id,
     )
     session.add(call)
     session.commit()
