@@ -223,6 +223,18 @@ async def sync_to_retell(
         "begin_message_delay_ms": 700,
         # Mishearing a name or objection breaks the illusion faster than latency does.
         "stt_mode": "accurate",
+
+        # Retell always runs its own post-call analysis (call_summary,
+        # call_successful, user_sentiment) even though we never set
+        # post_call_analysis_data — it silently defaults to gpt-4.1. We don't
+        # read any of that output: voicemail detection comes from
+        # voicemail_option below (a separate, real-time feature) and every
+        # other field (outcome, sentiment, notes, appointment info) is
+        # produced by our own Claude call in summary_generator.py right
+        # after. Pinning this to the same cheap model already used for the
+        # live conversation avoids paying twice for the same analysis.
+        # Applies to every agent synced through this function, not just one.
+        "post_call_analysis_model": "claude-4.5-haiku",
     }
 
     # voice_model was never set, so Retell used its default engine. The flash tier

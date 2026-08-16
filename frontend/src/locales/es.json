@@ -145,7 +145,12 @@
     "confirmDelete": "¿Eliminar \"{{name}}\"?",
     "syncErrorPrefix": "Error al sincronizar: ",
     "genericError": "Error",
-    "maxDuration": "max {{s}}s"
+    "maxDuration": "max {{s}}s",
+    "syncAll": "Sincronizar todos",
+    "syncingAll": "Sincronizando...",
+    "confirmSyncAll": "¿Re-sincronizar los {{count}} agentes con Retell? Esto aplicará cualquier cambio de configuración compartida a todos.",
+    "syncAllOk": "{{count}} agente(s) sincronizado(s) correctamente.",
+    "syncAllPartial": "{{ok}} de {{total}} agentes sincronizados. Fallaron: {{names}}"
   },
   "agentForm": {
     "editTitle": "Editar Agente",
