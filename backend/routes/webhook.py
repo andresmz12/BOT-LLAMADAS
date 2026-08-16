@@ -328,6 +328,10 @@ async def retell_webhook(request: Request, background_tasks: BackgroundTasks, se
         end_ts = call_data.get("end_timestamp")
         call_analysis = call_data.get("call_analysis") or {}
         in_voicemail = call_analysis.get("in_voicemail", False)
+        # Retell's per-call cost breakdown — not always present yet at this
+        # event (billing can settle slightly after analysis), so this is
+        # best-effort: store it when we have it, leave it null otherwise.
+        call_cost = call_data.get("call_cost") or {}
 
         logger.info(
             f"[WEBHOOK] call_analyzed: call_id={call.id} transcript_len={len(transcript)} "
@@ -347,6 +351,9 @@ async def retell_webhook(request: Request, background_tasks: BackgroundTasks, se
             call.recording_url = recording_url
         if duration_ms:
             call.duration_seconds = int(duration_ms / 1000)
+        if call_cost.get("combined_cost") is not None:
+            call.retell_cost_cents = call_cost.get("combined_cost")
+            call.retell_cost_breakdown = json.dumps(call_cost.get("product_costs") or [])
         session.add(call)
         session.commit()
 

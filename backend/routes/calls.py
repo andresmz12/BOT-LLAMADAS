@@ -146,6 +146,9 @@ def list_calls(
             d["prospect_name"] = call.prospect.name
             d["prospect_company"] = call.prospect.company
             d["prospect_phone"] = call.prospect.phone
+        if current_user.role != "superadmin":
+            d.pop("retell_cost_cents", None)
+            d.pop("retell_cost_breakdown", None)
         result.append(d)
     return result
 
@@ -197,4 +200,7 @@ def get_call(
         d["prospect_name"] = call.prospect.name
         d["prospect_company"] = call.prospect.company
         d["prospect_phone"] = call.prospect.phone
+    if current_user.role != "superadmin":
+        d.pop("retell_cost_cents", None)
+        d.pop("retell_cost_breakdown", None)
     return d

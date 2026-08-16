@@ -113,6 +113,12 @@ def run_migrations():
                 if "organization_id" not in call_cols:
                     conn.execute(text("ALTER TABLE call ADD COLUMN organization_id INTEGER"))
                     log.info("Migration: added call.organization_id")
+                if "retell_cost_cents" not in call_cols:
+                    conn.execute(text("ALTER TABLE call ADD COLUMN retell_cost_cents FLOAT"))
+                    log.info("Migration: added call.retell_cost_cents")
+                if "retell_cost_breakdown" not in call_cols:
+                    conn.execute(text("ALTER TABLE call ADD COLUMN retell_cost_breakdown TEXT"))
+                    log.info("Migration: added call.retell_cost_breakdown")
 
         if "campaign" in tables:
             camp_cols = {c["name"] for c in insp.get_columns("campaign")}
