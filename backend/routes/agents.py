@@ -383,6 +383,49 @@ async def sync_agent(
     return {"agent": agent.dict(exclude={"campaigns"}), "retell_error": retell_error}
 
 
+@router.post("/sync-all")
+async def sync_all_agents(
+    organization_id: int | None = None,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    """Re-push every agent's config to Retell. Use this to roll out a shared
+    config change (e.g. a new base_agent_settings field) to all existing
+    agents at once, instead of opening and re-saving each one by hand."""
+    from services import retell_client
+
+    query = select(AgentConfig)
+    if current_user.role != "superadmin":
+        query = query.where(AgentConfig.organization_id == current_user.organization_id)
+    elif organization_id is not None:
+        query = query.where(AgentConfig.organization_id == organization_id)
+    agents = session.exec(query).all()
+
+    results = []
+    for agent in agents:
+        org = session.get(Organization, agent.organization_id) if agent.organization_id else None
+        api_key = (org.retell_api_key if org else "") or ""
+        phone_number = (org.retell_phone_number if org else "") or ""
+        try:
+            out_agent_id, out_llm_id, in_agent_id, in_llm_id = await retell_client.sync_to_retell(
+                agent, api_key=api_key, phone_number=phone_number
+            )
+            agent.retell_agent_id = out_agent_id
+            agent.retell_llm_id = out_llm_id
+            agent.inbound_retell_agent_id = in_agent_id or None
+            agent.inbound_retell_llm_id = in_llm_id or None
+            session.add(agent)
+            session.commit()
+            results.append({"agent_id": agent.id, "name": agent.agent_name, "ok": True})
+        except Exception as e:
+            session.rollback()
+            logger.error(f"POST /agents/sync-all — agent_id={agent.id} error: {e}")
+            results.append({"agent_id": agent.id, "name": agent.agent_name, "ok": False, "error": str(e)})
+
+    log_action(session, current_user, "agent.sync_all", details=f"{len(agents)} agent(s), {sum(1 for r in results if r['ok'])} ok")
+    return {"total": len(agents), "results": results}
+
+
 @router.delete("/{agent_id}")
 def delete_agent(
     agent_id: int,

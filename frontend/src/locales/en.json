@@ -145,7 +145,12 @@
     "confirmDelete": "Delete \"{{name}}\"?",
     "syncErrorPrefix": "Sync error: ",
     "genericError": "Error",
-    "maxDuration": "max {{s}}s"
+    "maxDuration": "max {{s}}s",
+    "syncAll": "Sync all",
+    "syncingAll": "Syncing...",
+    "confirmSyncAll": "Re-sync all {{count}} agents with Retell? This will apply any shared config change to all of them.",
+    "syncAllOk": "{{count}} agent(s) synced successfully.",
+    "syncAllPartial": "{{ok}} of {{total}} agents synced. Failed: {{names}}"
   },
   "agentForm": {
     "editTitle": "Edit Agent",

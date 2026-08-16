@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { PlusIcon, PencilIcon, TrashIcon, StarIcon, ArrowPathIcon, CheckCircleIcon, ExclamationTriangleIcon, PhoneArrowDownLeftIcon, DocumentDuplicateIcon, UserGroupIcon, PhoneIcon } from '@heroicons/react/24/outline'
 import { StarIcon as StarSolid } from '@heroicons/react/24/solid'
-import { getAgents, deleteAgent, setDefaultAgent, syncAgent } from '../api/client'
+import { getAgents, deleteAgent, setDefaultAgent, syncAgent, syncAllAgents } from '../api/client'
 import AgentFormModal from '../components/AgentFormModal'
 import OrgScopeBanner from '../components/OrgScopeBanner'
 
@@ -16,6 +16,7 @@ export default function Agents() {
   const [agents, setAgents] = useState([])
   const [modal, setModal] = useState(null)
   const [syncingId, setSyncingId] = useState(null)
+  const [syncingAll, setSyncingAll] = useState(false)
 
   const load = () => getAgents(orgId ? { organization_id: orgId } : undefined).then(setAgents).catch(() => {})
   useEffect(() => { load() }, [orgId])
@@ -47,6 +48,23 @@ export default function Agents() {
     }
   }
 
+  const handleSyncAll = async () => {
+    if (syncingAll || !confirm(t('agents.confirmSyncAll', { count: agents.length }))) return
+    setSyncingAll(true)
+    try {
+      const resp = await syncAllAgents()
+      const failed = resp.results.filter(r => !r.ok)
+      alert(failed.length
+        ? t('agents.syncAllPartial', { ok: resp.total - failed.length, total: resp.total, names: failed.map(f => f.name).join(', ') })
+        : t('agents.syncAllOk', { count: resp.total }))
+      load()
+    } catch (err) {
+      alert(t('agents.syncErrorPrefix') + (err.response?.data?.detail || err.message))
+    } finally {
+      setSyncingAll(false)
+    }
+  }
+
   return (
     <div className="p-6 space-y-6">
       <OrgScopeBanner orgId={orgId} orgName={orgName} />
@@ -55,9 +73,18 @@ export default function Agents() {
           <h1 className="text-2xl font-bold text-slate-100">{t('agents.title')}</h1>
           <p className="text-sm text-slate-500 mt-0.5">{t('agents.subtitle')}</p>
         </div>
-        <button onClick={() => setModal('new')} className="z-btn-primary flex items-center gap-2 self-start sm:self-auto">
-          <PlusIcon className="w-4 h-4" /> {t('agents.new')}
-        </button>
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          {agents.length > 1 && (
+            <button onClick={handleSyncAll} disabled={syncingAll}
+              className="z-btn-ghost flex items-center gap-2 disabled:opacity-50">
+              <ArrowPathIcon className={`w-4 h-4 ${syncingAll ? 'animate-spin' : ''}`} />
+              {syncingAll ? t('agents.syncingAll') : t('agents.syncAll')}
+            </button>
+          )}
+          <button onClick={() => setModal('new')} className="z-btn-primary flex items-center gap-2">
+            <PlusIcon className="w-4 h-4" /> {t('agents.new')}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
