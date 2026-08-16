@@ -198,6 +198,11 @@ class Call(SQLModel, table=True):
     notes: Optional[str] = None
     is_demo: bool = Field(default=False)
     organization_id: Optional[int] = Field(default=None, foreign_key="organization.id")
+    # Retell's own per-call cost breakdown (cents), from the call_analyzed
+    # webhook's call_cost object. Superadmin-only in the API — regular org
+    # users pay a flat subscription and shouldn't see our underlying infra cost.
+    retell_cost_cents: Optional[float] = None
+    retell_cost_breakdown: Optional[str] = None  # JSON: [{product, cost, unit_price}, ...]
 
     prospect: Optional[Prospect] = Relationship(back_populates="calls")
     campaign: Optional[Campaign] = Relationship(back_populates="calls")

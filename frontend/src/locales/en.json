@@ -456,7 +456,10 @@
     "noData": "No data",
     "hideTranscript": "Hide",
     "viewTranscript": "View",
-    "transcriptFull": "full transcript"
+    "transcriptFull": "full transcript",
+    "retellCost": "Retell cost: ${{amount}}",
+    "costProduct": "Product",
+    "costAmount": "Cost"
   },
   "settings": {
     "title": "Settings",
