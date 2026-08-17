@@ -38,6 +38,8 @@ class Organization(SQLModel, table=True):
     email_templates: Optional[str] = None
     email_attachment: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary))
     email_attachment_name: Optional[str] = None
+    email_attachment_2: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary))
+    email_attachment_2_name: Optional[str] = None
     email_send_delay_ms: int = Field(default=0)
     # AI Marketing
     marketing_enabled: bool = Field(default=False)

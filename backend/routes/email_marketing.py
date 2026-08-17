@@ -105,19 +105,26 @@ def delete_email_template(
 @router.post("/email/attachment")
 async def upload_email_attachment(
     file: UploadFile = File(...),
+    slot: int = Form(default=1),
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
     if not current_user.organization_id:
         raise HTTPException(status_code=400, detail="Sin organización")
+    if slot not in (1, 2):
+        raise HTTPException(status_code=400, detail="Slot inválido")
     org = session.get(Organization, current_user.organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
     contents = await file.read()
     if len(contents) > 5 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="El archivo supera el límite de 5 MB")
-    org.email_attachment = contents
-    org.email_attachment_name = file.filename
+    if slot == 1:
+        org.email_attachment = contents
+        org.email_attachment_name = file.filename
+    else:
+        org.email_attachment_2 = contents
+        org.email_attachment_2_name = file.filename
     session.add(org)
     session.commit()
     return {"ok": True, "filename": file.filename}
@@ -125,18 +132,26 @@ async def upload_email_attachment(
 
 @router.delete("/email/attachment")
 def delete_email_attachment(
+    slot: int = 1,
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
-    """Removes the organization's global fallback attachment — every send that
-    doesn't have its own per-template attachment stops attaching anything."""
+    """Removes the organization's global fallback attachment (slot 1 or 2) —
+    every send that doesn't have its own per-template attachment in that slot
+    stops attaching anything there."""
     if not current_user.organization_id:
         raise HTTPException(status_code=400, detail="Sin organización")
+    if slot not in (1, 2):
+        raise HTTPException(status_code=400, detail="Slot inválido")
     org = session.get(Organization, current_user.organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
-    org.email_attachment = None
-    org.email_attachment_name = None
+    if slot == 1:
+        org.email_attachment = None
+        org.email_attachment_name = None
+    else:
+        org.email_attachment_2 = None
+        org.email_attachment_2_name = None
     session.add(org)
     session.commit()
     return {"ok": True}
@@ -175,17 +190,26 @@ async def test_email(
     import json as _json
     from datetime import datetime as _dt
 
-    # Use inline template from frontend if provided, otherwise fall back to saved DB template
+    templates = {}
+    if org.email_templates:
+        try:
+            templates = _json.loads(org.email_templates)
+        except Exception:
+            pass
+    saved_tmpl = templates.get(data.outcome, {})
+
+    # Use inline template from frontend if provided (lets a user test unsaved
+    # edits mid-editing), otherwise fall back to the saved DB template. Either
+    # way, attachments always come from the DB: GET /settings/email never
+    # sends attachment_b64 to the frontend (it can be several MB), so a
+    # frontend-supplied template dict never carries the actual file content.
     if data.template is not None:
-        tmpl = data.template
+        tmpl = dict(data.template)
+        for field in ("attachment_b64", "attachment_name", "attachment_b64_2", "attachment_name_2"):
+            if field in saved_tmpl:
+                tmpl[field] = saved_tmpl[field]
     else:
-        templates = {}
-        if org.email_templates:
-            try:
-                templates = _json.loads(org.email_templates)
-            except Exception:
-                pass
-        tmpl = templates.get(data.outcome, {})
+        tmpl = saved_tmpl
 
     tmpl_vars = {
         "nombre": "Prospecto de Prueba",
@@ -212,29 +236,19 @@ async def test_email(
 
     try:
         from sendgrid import SendGridAPIClient
-        from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition
-        import base64 as _b64
+        from sendgrid.helpers.mail import Mail
+        from services.sendgrid_service import _build_attachments
         message = Mail(
             from_email=(from_email, from_name),
             to_emails=data.to_email,
             subject=f"[PRUEBA] {subject}",
             html_content=html_body,
         )
-        # Per-template attachment takes priority over global attachment
-        att_b64 = tmpl.get("attachment_b64") or ""
-        att_name = tmpl.get("attachment_name") or ""
-        if not att_b64 and org.email_attachment and org.email_attachment_name:
-            att_b64 = _b64.b64encode(org.email_attachment).decode()
-            att_name = org.email_attachment_name
-        if att_b64 and att_name:
-            ext = att_name.rsplit(".", 1)[-1].lower()
-            mime = "application/pdf" if ext == "pdf" else f"image/{ext}"
-            message.attachment = Attachment(
-                FileContent(att_b64),
-                FileName(att_name),
-                FileType(mime),
-                Disposition("attachment"),
-            )
+        # Per-template attachments (slot 1 and 2) take priority over the org's
+        # global fallback attachments, slot by slot.
+        attachments = _build_attachments(tmpl, org)
+        if attachments:
+            message.attachment = attachments
         sg = SendGridAPIClient(api_key)
         resp = sg.send(message)
         return {"ok": True, "status_code": resp.status_code}
@@ -389,7 +403,7 @@ async def _run_bulk_send_job(job_id: str, api_key: str):
 
 async def _run_bulk_send_job_inner(job_id: str, api_key: str):
     from sendgrid import SendGridAPIClient
-    from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition, CustomArg
+    from sendgrid.helpers.mail import Mail, CustomArg
     from services.sendgrid_service import _fill, _build_html, DEFAULT_SUBJECT
     from database import engine as _engine
 
@@ -416,8 +430,9 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
 
     sg = SendGridAPIClient(api_key)
 
-    def _load_template_and_attachment() -> tuple[dict, str, str]:
-        """Fetch org template + attachment once; called at job start and after resume."""
+    def _load_template_and_attachment() -> tuple[dict, list]:
+        """Fetch org template + attachments once; called at job start and after resume."""
+        from services.sendgrid_service import _build_attachments
         with Session(_engine) as s_tmpl:
             org_fresh = s_tmpl.get(Organization, org_id)
             templates_fresh: dict = {}
@@ -427,14 +442,10 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
                 except Exception:
                     pass
             t = templates_fresh.get(template_key, {})
-            a_b64 = t.get("attachment_b64") or ""
-            a_name = t.get("attachment_name") or ""
-            if not a_b64 and org_fresh and org_fresh.email_attachment and org_fresh.email_attachment_name:
-                a_b64 = _b64.b64encode(org_fresh.email_attachment).decode()
-                a_name = org_fresh.email_attachment_name
-        return t, a_b64, a_name
+            atts = _build_attachments(t, org_fresh) if org_fresh else []
+        return t, atts
 
-    tmpl, att_b64, att_name = _load_template_and_attachment()
+    tmpl, attachments = _load_template_and_attachment()
 
     # Resolve campaign name once (used both for the per-recipient CRM webhooks
     # fired during the loop below and for the final EmailSendLog entry)
@@ -460,9 +471,9 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
                 was_paused = True
             await asyncio.sleep(1)
 
-        # Reload template/attachment once after a pause (settings may have changed)
+        # Reload template/attachments once after a pause (settings may have changed)
         if was_paused:
-            tmpl, att_b64, att_name = _load_template_and_attachment()
+            tmpl, attachments = _load_template_and_attachment()
 
         pdata = prospects_data[0]
         try:
@@ -498,12 +509,8 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
                 CustomArg(key="org_id", value=str(org_id)),
                 CustomArg(key="template_key", value=template_key),
             ]
-            if att_b64 and att_name:
-                ext = att_name.rsplit(".", 1)[-1].lower()
-                mime = "application/pdf" if ext == "pdf" else f"image/{ext}"
-                message.attachment = Attachment(
-                    FileContent(att_b64), FileName(att_name), FileType(mime), Disposition("attachment"),
-                )
+            if attachments:
+                message.attachment = attachments
 
             # Run sync SDK call in thread pool so event loop stays unblocked
             await asyncio.to_thread(sg.send, message)
@@ -951,11 +958,14 @@ h1{{color:#111827;font-size:22px;margin-bottom:8px}}p{{color:#6b7280;font-size:1
 async def upload_template_attachment(
     template_key: str = Form(...),
     file: UploadFile = File(...),
+    slot: int = Form(default=1),
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
     if not current_user.organization_id:
         raise HTTPException(status_code=400, detail="Sin organización")
+    if slot not in (1, 2):
+        raise HTTPException(status_code=400, detail="Slot inválido")
     org = session.get(Organization, current_user.organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
@@ -970,8 +980,9 @@ async def upload_template_attachment(
         except Exception:
             pass
     tmpl = templates.get(template_key, {})
-    tmpl["attachment_b64"] = _b64.b64encode(contents).decode()
-    tmpl["attachment_name"] = file.filename
+    b64_field, name_field = ("attachment_b64", "attachment_name") if slot == 1 else ("attachment_b64_2", "attachment_name_2")
+    tmpl[b64_field] = _b64.b64encode(contents).decode()
+    tmpl[name_field] = file.filename
     templates[template_key] = tmpl
     org.email_templates = json.dumps(templates)
     session.add(org)
@@ -982,13 +993,16 @@ async def upload_template_attachment(
 @router.delete("/email/template-attachment/{template_key}")
 async def delete_template_attachment(
     template_key: str,
+    slot: int = 1,
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
 ):
-    """Removes this template's own attachment so sends fall back to the
-    organization's global attachment (configured in Configuración automática)."""
+    """Removes this template's own attachment (slot 1 or 2) so sends fall back
+    to the organization's global attachment (configured in Configuración automática)."""
     if not current_user.organization_id:
         raise HTTPException(status_code=400, detail="Sin organización")
+    if slot not in (1, 2):
+        raise HTTPException(status_code=400, detail="Slot inválido")
     org = session.get(Organization, current_user.organization_id)
     if not org:
         raise HTTPException(status_code=404, detail="Organización no encontrada")
@@ -999,8 +1013,9 @@ async def delete_template_attachment(
         except Exception:
             pass
     tmpl = templates.get(template_key, {})
-    tmpl.pop("attachment_b64", None)
-    tmpl.pop("attachment_name", None)
+    b64_field, name_field = ("attachment_b64", "attachment_name") if slot == 1 else ("attachment_b64_2", "attachment_name_2")
+    tmpl.pop(b64_field, None)
+    tmpl.pop(name_field, None)
     templates[template_key] = tmpl
     org.email_templates = json.dumps(templates)
     session.add(org)

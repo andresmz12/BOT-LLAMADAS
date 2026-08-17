@@ -84,9 +84,7 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
         from_name  = (org.email_from_name or "").strip() or agent_name or "Bot Llamadas"
 
         from sendgrid import SendGridAPIClient
-        from sendgrid.helpers.mail import (
-            Mail, Attachment, FileContent, FileName, FileType, Disposition, CustomArg
-        )
+        from sendgrid.helpers.mail import Mail, CustomArg
 
         message = Mail(
             from_email=(from_email, from_name),
@@ -99,18 +97,11 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
             CustomArg(key="template_key", value=outcome),
         ]
 
-        # Per-template attachment takes priority over global attachment
-        att_b64 = tmpl.get("attachment_b64") or ""
-        att_name = tmpl.get("attachment_name") or ""
-        if not att_b64 and org.email_attachment and org.email_attachment_name:
-            att_b64 = base64.b64encode(org.email_attachment).decode()
-            att_name = org.email_attachment_name
-        if att_b64 and att_name:
-            ext = att_name.rsplit(".", 1)[-1].lower()
-            mime = "application/pdf" if ext == "pdf" else f"image/{ext}"
-            message.attachment = Attachment(
-                FileContent(att_b64), FileName(att_name), FileType(mime), Disposition("attachment"),
-            )
+        # Per-template attachments (slot 1 and 2) take priority over the org's
+        # global fallback attachments, slot by slot.
+        attachments = _build_attachments(tmpl, org)
+        if attachments:
+            message.attachment = attachments
 
         sg = SendGridAPIClient(api_key)
         resp = sg.send(message)
@@ -118,6 +109,33 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
 
     except Exception as e:
         log.error(f"[EMAIL] failed for outcome={outcome}: {e}", exc_info=True)
+
+
+def _build_attachments(tmpl: dict, org) -> list:
+    """Build up to two SendGrid Attachment objects: slot 1 (attachment_b64/
+    attachment_name) and slot 2 (attachment_b64_2/attachment_name_2), each
+    falling back to the org-wide default when the template has none of its
+    own in that slot."""
+    from sendgrid.helpers.mail import Attachment, FileContent, FileName, FileType, Disposition
+
+    attachments = []
+    slots = [
+        (tmpl.get("attachment_b64") or "", tmpl.get("attachment_name") or "",
+         org.email_attachment, org.email_attachment_name),
+        (tmpl.get("attachment_b64_2") or "", tmpl.get("attachment_name_2") or "",
+         org.email_attachment_2, org.email_attachment_2_name),
+    ]
+    for att_b64, att_name, org_bytes, org_name in slots:
+        if not att_b64 and org_bytes and org_name:
+            att_b64 = base64.b64encode(org_bytes).decode()
+            att_name = org_name
+        if att_b64 and att_name:
+            ext = att_name.rsplit(".", 1)[-1].lower()
+            mime = "application/pdf" if ext == "pdf" else f"image/{ext}"
+            attachments.append(Attachment(
+                FileContent(att_b64), FileName(att_name), FileType(mime), Disposition("attachment"),
+            ))
+    return attachments
 
 
 def _fill(text: str, variables: dict, escape: bool = True) -> str:

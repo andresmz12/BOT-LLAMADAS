@@ -241,7 +241,7 @@ export default function EmailMarketing() {
     sendgrid_configured: false,
     email_send_on_interested: false, email_send_on_callback: false,
     email_send_on_voicemail: false, email_send_on_not_interested: false,
-    email_templates: {}, email_attachment_name: null,
+    email_templates: {}, email_attachment_name: null, email_attachment_2_name: null,
     email_send_delay_ms: 0,
   })
   const [campaigns, setCampaigns] = useState([])
@@ -337,7 +337,9 @@ export default function EmailMarketing() {
   const [scheduleAt, setScheduleAt] = useState('')
   const fileRef = useRef(null)
   const attachRef = useRef(null)
+  const attach2Ref = useRef(null)
   const tmplAttachRef = useRef(null)
+  const tmplAttach2Ref = useRef(null)
   const emailImportRef = useRef(null)
   const editorRef = useRef(null)
 
@@ -385,6 +387,7 @@ export default function EmailMarketing() {
       email_send_on_voicemail: d.email_send_on_voicemail ?? false,
       email_send_on_not_interested: d.email_send_on_not_interested ?? false,
       email_templates: d.email_templates || {}, email_attachment_name: d.email_attachment_name || null,
+      email_attachment_2_name: d.email_attachment_2_name || null,
       email_send_delay_ms: d.email_send_delay_ms ?? 0,
     })).catch(() => {})
     getCampaigns().then(setCampaigns).catch(() => {})
@@ -716,24 +719,26 @@ export default function EmailMarketing() {
     finally { setImportLoading(false); e.target.value = '' }
   }
 
-  const uploadTmplAttach = async (e) => {
+  const uploadTmplAttach = async (e, slot = 1) => {
     const f = e.target.files?.[0]; if (!f || !editingTmpl) return
     if (f.size > 5 * 1024 * 1024) { setTmplAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.attachmentTooBig') }); return }
     setTmplAttachLoading(true); setTmplAttachMsg(null)
+    const nameField = slot === 1 ? 'attachment_name' : 'attachment_name_2'
     try {
-      const r = await uploadTemplateAttachment(editingTmpl, f)
-      setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [editingTmpl]: { ...(p.email_templates[editingTmpl] || {}), attachment_name: r.filename } } }))
+      const r = await uploadTemplateAttachment(editingTmpl, f, slot)
+      setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [editingTmpl]: { ...(p.email_templates[editingTmpl] || {}), [nameField]: r.filename } } }))
       setTmplAttachMsg({ ok: true, text: r.filename })
     } catch (e) { setTmplAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.errorUploadAttachment') }) }
     finally { setTmplAttachLoading(false) }
   }
 
-  const removeTmplAttach = async () => {
+  const removeTmplAttach = async (slot = 1) => {
     if (!editingTmpl) return
     setTmplAttachLoading(true); setTmplAttachMsg(null)
+    const nameField = slot === 1 ? 'attachment_name' : 'attachment_name_2'
     try {
-      await deleteTemplateAttachment(editingTmpl)
-      setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [editingTmpl]: { ...(p.email_templates[editingTmpl] || {}), attachment_name: null } } }))
+      await deleteTemplateAttachment(editingTmpl, slot)
+      setCfg(p => ({ ...p, email_templates: { ...p.email_templates, [editingTmpl]: { ...(p.email_templates[editingTmpl] || {}), [nameField]: null } } }))
       setTmplAttachMsg({ ok: true, text: t('emailMarketing.myTemplates.attachmentRemoved') })
     } catch (e) { setTmplAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.errorDeleteAttachment') }) }
     finally { setTmplAttachLoading(false) }
@@ -749,23 +754,25 @@ export default function EmailMarketing() {
     finally { setTestLoading(false) }
   }
 
-  const uploadAttach = async (e) => {
+  const uploadAttach = async (e, slot = 1) => {
     const f = e.target.files?.[0]; if (!f) return
     if (f.size > 5 * 1024 * 1024) { setAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.attachmentTooBig') }); return }
     setAttachLoading(true); setAttachMsg(null)
+    const field = slot === 1 ? 'email_attachment_name' : 'email_attachment_2_name'
     try {
-      const r = await uploadEmailAttachment(f)
-      setCfg(p => ({ ...p, email_attachment_name: r.filename }))
+      const r = await uploadEmailAttachment(f, slot)
+      setCfg(p => ({ ...p, [field]: r.filename }))
       setAttachMsg({ ok: true, text: r.filename })
     } catch (e) { setAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.errorUploadAttachment') }) }
     finally { setAttachLoading(false) }
   }
 
-  const removeAttach = async () => {
+  const removeAttach = async (slot = 1) => {
     setAttachLoading(true); setAttachMsg(null)
+    const field = slot === 1 ? 'email_attachment_name' : 'email_attachment_2_name'
     try {
-      await deleteEmailAttachment()
-      setCfg(p => ({ ...p, email_attachment_name: null }))
+      await deleteEmailAttachment(slot)
+      setCfg(p => ({ ...p, [field]: null }))
       setAttachMsg({ ok: true, text: t('emailMarketing.config.globalAttachmentRemoved') })
     } catch (e) { setAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.errorDeleteAttachment') }) }
     finally { setAttachLoading(false) }
@@ -1607,35 +1614,65 @@ export default function EmailMarketing() {
                     onChange={e => setTmplField(editingTmpl, 'signature', e.target.value)}
                     placeholder={`${t('emailMarketing.myTemplates.signaturePlaceholderPrefix')}{{agente}}`} className="z-input-light text-sm resize-none" />
                 </div>
-                <div>
-                  <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
-                    <PaperClipIcon className="w-3.5 h-3.5" /> {t('emailMarketing.myTemplates.attachmentLabel')}
-                  </label>
-                  <div className="flex items-center gap-3">
-                    <input ref={tmplAttachRef} type="file" accept=".pdf,image/*" className="hidden" onChange={uploadTmplAttach} />
-                    <button onClick={() => tmplAttachRef.current?.click()} disabled={tmplAttachLoading}
-                      className="z-btn-ghost border border-z-border text-xs disabled:opacity-50">
-                      {tmplAttachLoading ? t('emailMarketing.myTemplates.uploading') : cfg.email_templates[editingTmpl]?.attachment_name ? t('emailMarketing.myTemplates.replaceAttachment') : t('emailMarketing.myTemplates.uploadAttachment')}
-                    </button>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
+                      <PaperClipIcon className="w-3.5 h-3.5" /> {t('emailMarketing.myTemplates.attachmentLabel')}
+                    </label>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <input ref={tmplAttachRef} type="file" accept=".pdf,image/*" className="hidden" onChange={e => uploadTmplAttach(e, 1)} />
+                      <button onClick={() => tmplAttachRef.current?.click()} disabled={tmplAttachLoading}
+                        className="z-btn-ghost border border-z-border text-xs disabled:opacity-50">
+                        {tmplAttachLoading ? t('emailMarketing.myTemplates.uploading') : cfg.email_templates[editingTmpl]?.attachment_name ? t('emailMarketing.myTemplates.replaceAttachment') : t('emailMarketing.myTemplates.uploadAttachment')}
+                      </button>
+                      {cfg.email_templates[editingTmpl]?.attachment_name && (
+                        <>
+                          <span className="text-xs font-mono text-slate-400 truncate max-w-[140px]">
+                            ✓ {cfg.email_templates[editingTmpl].attachment_name}
+                          </span>
+                          <button onClick={() => removeTmplAttach(1)} disabled={tmplAttachLoading}
+                            className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
+                            {t('emailMarketing.myTemplates.remove')}
+                          </button>
+                        </>
+                      )}
+                    </div>
                     {cfg.email_templates[editingTmpl]?.attachment_name && (
-                      <>
-                        <span className="text-xs font-mono text-slate-400 truncate max-w-[180px]">
-                          ✓ {cfg.email_templates[editingTmpl].attachment_name}
-                        </span>
-                        <button onClick={removeTmplAttach} disabled={tmplAttachLoading}
-                          className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
-                          {t('emailMarketing.myTemplates.remove')}
-                        </button>
-                      </>
+                      <p className="text-xs text-amber-400/80 mt-1">
+                        {t('emailMarketing.myTemplates.attachmentOverrideWarning')}
+                      </p>
                     )}
                   </div>
-                  {cfg.email_templates[editingTmpl]?.attachment_name && (
-                    <p className="text-xs text-amber-400/80 mt-1">
-                      {t('emailMarketing.myTemplates.attachmentOverrideWarning')}
-                    </p>
-                  )}
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
+                      <PaperClipIcon className="w-3.5 h-3.5" /> {t('emailMarketing.myTemplates.attachmentLabel2')}
+                    </label>
+                    <div className="flex items-center gap-3 flex-wrap">
+                      <input ref={tmplAttach2Ref} type="file" accept=".pdf,image/*" className="hidden" onChange={e => uploadTmplAttach(e, 2)} />
+                      <button onClick={() => tmplAttach2Ref.current?.click()} disabled={tmplAttachLoading}
+                        className="z-btn-ghost border border-z-border text-xs disabled:opacity-50">
+                        {tmplAttachLoading ? t('emailMarketing.myTemplates.uploading') : cfg.email_templates[editingTmpl]?.attachment_name_2 ? t('emailMarketing.myTemplates.replaceAttachment') : t('emailMarketing.myTemplates.uploadAttachment')}
+                      </button>
+                      {cfg.email_templates[editingTmpl]?.attachment_name_2 && (
+                        <>
+                          <span className="text-xs font-mono text-slate-400 truncate max-w-[140px]">
+                            ✓ {cfg.email_templates[editingTmpl].attachment_name_2}
+                          </span>
+                          <button onClick={() => removeTmplAttach(2)} disabled={tmplAttachLoading}
+                            className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
+                            {t('emailMarketing.myTemplates.remove')}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    {cfg.email_templates[editingTmpl]?.attachment_name_2 && (
+                      <p className="text-xs text-amber-400/80 mt-1">
+                        {t('emailMarketing.myTemplates.attachmentOverrideWarning')}
+                      </p>
+                    )}
+                  </div>
                   {tmplAttachMsg && (
-                    <p className={`text-xs mt-1 ${tmplAttachMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
+                    <p className={`text-xs sm:col-span-2 ${tmplAttachMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
                       {tmplAttachMsg.ok ? `✓ ${tmplAttachMsg.text}` : tmplAttachMsg.text}
                     </p>
                   )}
@@ -1671,29 +1708,56 @@ export default function EmailMarketing() {
             </div>
           </div>
           <div className="border-t border-z-border pt-4">
-            <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
-              <PaperClipIcon className="w-3.5 h-3.5" /> {t('emailMarketing.config.globalAttachmentLabel')}
-            </label>
-            <div className="flex items-center gap-3">
-              <input ref={attachRef} type="file" accept=".pdf,image/*" className="hidden" onChange={uploadAttach} />
-              <button onClick={() => attachRef.current?.click()} disabled={attachLoading}
-                className="z-btn-ghost border border-z-border text-xs disabled:opacity-50">
-                {attachLoading ? t('emailMarketing.myTemplates.uploading') : cfg.email_attachment_name ? t('emailMarketing.myTemplates.replaceAttachment') : t('emailMarketing.myTemplates.uploadAttachment')}
-              </button>
-              {cfg.email_attachment_name && (
-                <>
-                  <span className="text-xs font-mono text-slate-400 truncate max-w-[180px]">
-                    ✓ {cfg.email_attachment_name}
-                  </span>
-                  <button onClick={removeAttach} disabled={attachLoading}
-                    className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
-                    {t('emailMarketing.myTemplates.remove')}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
+                  <PaperClipIcon className="w-3.5 h-3.5" /> {t('emailMarketing.config.globalAttachmentLabel')}
+                </label>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <input ref={attachRef} type="file" accept=".pdf,image/*" className="hidden" onChange={e => uploadAttach(e, 1)} />
+                  <button onClick={() => attachRef.current?.click()} disabled={attachLoading}
+                    className="z-btn-ghost border border-z-border text-xs disabled:opacity-50">
+                    {attachLoading ? t('emailMarketing.myTemplates.uploading') : cfg.email_attachment_name ? t('emailMarketing.myTemplates.replaceAttachment') : t('emailMarketing.myTemplates.uploadAttachment')}
                   </button>
-                </>
-              )}
+                  {cfg.email_attachment_name && (
+                    <>
+                      <span className="text-xs font-mono text-slate-400 truncate max-w-[140px]">
+                        ✓ {cfg.email_attachment_name}
+                      </span>
+                      <button onClick={() => removeAttach(1)} disabled={attachLoading}
+                        className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
+                        {t('emailMarketing.myTemplates.remove')}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
+                  <PaperClipIcon className="w-3.5 h-3.5" /> {t('emailMarketing.config.globalAttachmentLabel2')}
+                </label>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <input ref={attach2Ref} type="file" accept=".pdf,image/*" className="hidden" onChange={e => uploadAttach(e, 2)} />
+                  <button onClick={() => attach2Ref.current?.click()} disabled={attachLoading}
+                    className="z-btn-ghost border border-z-border text-xs disabled:opacity-50">
+                    {attachLoading ? t('emailMarketing.myTemplates.uploading') : cfg.email_attachment_2_name ? t('emailMarketing.myTemplates.replaceAttachment') : t('emailMarketing.myTemplates.uploadAttachment')}
+                  </button>
+                  {cfg.email_attachment_2_name && (
+                    <>
+                      <span className="text-xs font-mono text-slate-400 truncate max-w-[140px]">
+                        ✓ {cfg.email_attachment_2_name}
+                      </span>
+                      <button onClick={() => removeAttach(2)} disabled={attachLoading}
+                        className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
+                        {t('emailMarketing.myTemplates.remove')}
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
-            {cfg.email_attachment_name && (
-              <p className="text-xs text-slate-500 mt-1">
+            {(cfg.email_attachment_name || cfg.email_attachment_2_name) && (
+              <p className="text-xs text-slate-500 mt-2">
                 {t('emailMarketing.config.globalAttachmentHint')}
               </p>
             )}

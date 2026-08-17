@@ -134,12 +134,13 @@ export const saveSettings = (data) => api.post('/settings', data).then(r => r.da
 // Email marketing settings
 export const getEmailSettings = () => api.get('/settings/email').then(r => r.data)
 export const saveEmailSettings = (data) => api.post('/settings/email', data).then(r => r.data)
-export const uploadEmailAttachment = (file) => {
+export const uploadEmailAttachment = (file, slot = 1) => {
   const form = new FormData()
   form.append('file', file)
+  form.append('slot', String(slot))
   return api.post('/settings/email/attachment', form).then(r => r.data)
 }
-export const deleteEmailAttachment = () => api.delete('/settings/email/attachment').then(r => r.data)
+export const deleteEmailAttachment = (slot = 1) => api.delete('/settings/email/attachment', { params: { slot } }).then(r => r.data)
 export const deleteEmailTemplate = (key) => api.delete(`/settings/email/template/${key}`).then(r => r.data)
 export const sendTestEmail = (data) => api.post('/settings/email/test', data).then(r => r.data)
 export const bulkSendEmail = (data) => api.post('/settings/email/bulk-send', data).then(r => r.data)
@@ -169,13 +170,14 @@ export const importEmailContactsToList = (listId, file) => {
   if (listId) form.append('email_list_id', String(listId))
   return api.post('/settings/email/import-contacts', form).then(r => r.data)
 }
-export const uploadTemplateAttachment = (templateKey, file) => {
+export const uploadTemplateAttachment = (templateKey, file, slot = 1) => {
   const form = new FormData()
   form.append('template_key', templateKey)
   form.append('file', file)
+  form.append('slot', String(slot))
   return api.post('/settings/email/template-attachment', form).then(r => r.data)
 }
-export const deleteTemplateAttachment = (templateKey) => api.delete(`/settings/email/template-attachment/${templateKey}`).then(r => r.data)
+export const deleteTemplateAttachment = (templateKey, slot = 1) => api.delete(`/settings/email/template-attachment/${templateKey}`, { params: { slot } }).then(r => r.data)
 
 export const toggleContactUnsubscribe = (prospectId) =>
   api.patch(`/settings/email/contacts/${prospectId}/unsubscribe`).then(r => r.data)
