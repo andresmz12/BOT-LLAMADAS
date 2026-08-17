@@ -89,6 +89,12 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
       : [...baseItems, { to: '/demo', labelKey: 'sidebar.demoCall', Icon: PhoneIcon }]
     : baseItems
   const initials = (user.full_name || 'U').split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+  // Some accounts (e.g. a shared org login) have full_name set to the
+  // company's own name, which then nearly duplicates organization_name right
+  // below it — showing both stacked just repeats the same truncated text
+  // twice. Only show the org line when it actually adds information.
+  const orgName = user.organization_name || ''
+  const showOrgName = orgName && !orgName.toLowerCase().startsWith((user.full_name || '').toLowerCase())
 
   return (
     <>
@@ -159,8 +165,10 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
               <span className="text-z-blue-light font-bold text-xs">{initials}</span>
             </div>
             <div className="flex-1 min-w-0">
-              <div className="text-slate-200 text-xs font-medium truncate">{user.full_name || 'Usuario'}</div>
-              <div className="text-slate-500 text-xs truncate">{user.organization_name || ''}</div>
+              <div className="text-slate-200 text-xs font-medium truncate" title={user.full_name || ''}>{user.full_name || 'Usuario'}</div>
+              {showOrgName && (
+                <div className="text-slate-500 text-xs truncate" title={orgName}>{orgName}</div>
+              )}
             </div>
           </div>
         )}
