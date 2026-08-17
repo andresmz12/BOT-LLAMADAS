@@ -88,7 +88,7 @@ REGLAS PARA sentiment (evalúa la actitud del cliente, no la del agente):
   y cortés sin comprometerse, o la llamada fue puramente informativa.
   No uses "neutral" como valor por defecto cuando sí hubo una señal clara."""
 
-MODEL = "claude-sonnet-5"
+MODEL = "claude-haiku-4-5-20251001"
 
 _OUTCOMES = [
     "appointment_scheduled", "interested", "callback_requested",
