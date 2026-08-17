@@ -233,7 +233,7 @@ def checker(leads: list, session=None) -> list:
 
 async def craft_messages(lead: LeadHunt, org: Organization, session=None) -> LeadHunt:
     """
-    Use Claude Sonnet to generate pain_point + personalized outreach messages.
+    Use Claude Haiku to generate pain_point + personalized outreach messages.
     Uses org.lh_offer_description and org.lh_language to tailor the message.
     """
     api_key = (org.anthropic_api_key or "").strip() or os.getenv("ANTHROPIC_API_KEY", "").strip()
@@ -276,7 +276,7 @@ async def craft_messages(lead: LeadHunt, org: Organization, session=None) -> Lea
 
     client = AsyncAnthropic(api_key=api_key)
     resp = await client.messages.create(
-        model="claude-sonnet-5",
+        model="claude-haiku-4-5-20251001",
         max_tokens=600,
         messages=[{"role": "user", "content": prompt}],
     )
