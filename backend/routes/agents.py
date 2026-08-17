@@ -136,8 +136,9 @@ def create_agent(
             greeting=f"Hola {current_user.full_name},",
             body=f"Creaste el agente \"{agent.agent_name}\" para {agent.company_name}. Sincronízalo con Retell para empezar a usarlo.",
         )
+    result = agent.dict(exclude={"campaigns"})
     log_action(session, current_user, "agent.create", details=f"{agent.agent_name} (id={agent.id})")
-    return agent.dict(exclude={"campaigns"})
+    return result
 
 
 @router.get("")
@@ -332,8 +333,9 @@ def update_agent(
     session.add(agent)
     session.commit()
     session.refresh(agent)
+    result = agent.dict(exclude={"campaigns"})
     log_action(session, current_user, "agent.update", details=f"{agent.agent_name} (id={agent.id})")
-    return agent.dict(exclude={"campaigns"})
+    return result
 
 
 @router.post("/{agent_id}/sync")
@@ -378,12 +380,14 @@ async def sync_agent(
                 greeting=f"Hola {current_user.full_name},",
                 body=f"El agente \"{agent.agent_name}\" quedó sincronizado con Retell y ya puede recibir/hacer llamadas.",
             )
-        log_action(session, current_user, "agent.sync", details=f"{agent.agent_name} (id={agent.id})")
     except Exception as e:
         retell_error = str(e)
         logger.error(f"POST /agents/{agent_id}/sync — error: {retell_error}")
 
-    return {"agent": agent.dict(exclude={"campaigns"}), "retell_error": retell_error}
+    result = {"agent": agent.dict(exclude={"campaigns"}), "retell_error": retell_error}
+    if retell_error is None:
+        log_action(session, current_user, "agent.sync", details=f"{agent.agent_name} (id={agent.id})")
+    return result
 
 
 @router.post("/sync-all")
