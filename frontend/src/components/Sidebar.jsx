@@ -11,7 +11,6 @@ import {
   SparklesIcon,
 } from '@heroicons/react/24/outline'
 import { logout } from '../api/client'
-import LanguageSwitcher from './LanguageSwitcher'
 
 const NAV_BY_ROLE = {
   superadmin: [
@@ -170,11 +169,6 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
                 <div className="text-slate-500 text-xs truncate" title={orgName}>{orgName}</div>
               )}
             </div>
-          </div>
-        )}
-        {!collapsed && (
-          <div className="px-1">
-            <LanguageSwitcher className="w-full justify-center" />
           </div>
         )}
         <button
