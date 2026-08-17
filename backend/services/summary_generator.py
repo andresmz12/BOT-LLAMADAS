@@ -169,7 +169,7 @@ async def analyze_transcript(
             messages=messages,
             output_config={"format": {"type": "json_schema", "schema": RESPONSE_SCHEMA}},
         )
-        return _extract_json(message.content[0].text)
+        return _extract_json("".join(b.text for b in message.content if getattr(b, "type", "") == "text"))
     except Exception as e:
         # Structured outputs is the preferred path, but never let an unsupported
         # schema/SDK/model combination cost us the analysis entirely — retry plain.
@@ -182,7 +182,7 @@ async def analyze_transcript(
             system=SYSTEM_PROMPT + "\n\nResponde SOLO con el JSON válido, sin markdown ni backticks.",
             messages=messages,
         )
-        return _extract_json(message.content[0].text)
+        return _extract_json("".join(b.text for b in message.content if getattr(b, "type", "") == "text"))
     except Exception as e:
         logger.error(f"Error analyzing transcript: {e}", exc_info=True)
         return _empty_result(error=f"{type(e).__name__}: {e}")

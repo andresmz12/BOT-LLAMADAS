@@ -59,4 +59,4 @@ async def generate_reply(org, conversation_history: list[dict], new_message: str
         system=system_prompt,
         messages=messages,
     )
-    return response.content[0].text
+    return "".join(b.text for b in response.content if getattr(b, "type", "") == "text").strip()
