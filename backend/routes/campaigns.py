@@ -68,8 +68,9 @@ def create_campaign(
         greeting=f"Hola {current_user.full_name},",
         body=f"Creaste la campaña \"{campaign.name}\" ({campaign.calls_per_minute} llamadas/min). Estado actual: {campaign.status}.",
     )
+    result = campaign.dict()
     log_action(session, current_user, "campaign.create", details=f"{campaign.name} (id={campaign.id})")
-    return campaign
+    return result
 
 
 @router.get("")
@@ -174,8 +175,9 @@ def update_campaign(
     session.add(campaign)
     session.commit()
     session.refresh(campaign)
+    result = campaign.dict()
     log_action(session, current_user, "campaign.update", details=f"{campaign.name} (id={campaign.id})")
-    return campaign
+    return result
 
 
 @router.post("/{campaign_id}/start")

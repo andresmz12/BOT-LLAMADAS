@@ -84,6 +84,19 @@ function scoreLabel(score, t) {
   return t('agentForm.scoreIncomplete')
 }
 
+// FastAPI validation errors put an array of {type, loc, msg, input} objects in
+// `detail` instead of a string — rendering that directly as JSX crashes the
+// whole app (React can't render plain objects as children). Always coerce to
+// a display string first.
+function errText(detail, fallback) {
+  if (typeof detail === 'string' && detail) return detail
+  if (Array.isArray(detail) && detail.length) {
+    return detail.map(d => (typeof d === 'string' ? d : d?.msg || JSON.stringify(d))).join('; ')
+  }
+  if (detail && typeof detail === 'object') return detail.msg || JSON.stringify(detail)
+  return fallback
+}
+
 function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -125,7 +138,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
       const data = await generateAgentFromDescription(description.trim())
       setForm(f => ({ ...f, ...data }))
     } catch (err) {
-      setGenerateError(err.response?.data?.detail || err.message || t('agentForm.generateError'))
+      setGenerateError(errText(err.response?.data?.detail, err.message || t('agentForm.generateError')))
     } finally {
       setGenerating(false)
     }
@@ -251,7 +264,7 @@ export default function AgentFormModal({ agent, onClose, onSaved }) {
           syncSucceeded = true
         } catch (syncErr) {
           setSyncStatus('error')
-          setSyncError(syncErr.response?.data?.detail || syncErr.message)
+          setSyncError(errText(syncErr.response?.data?.detail, syncErr.message))
           setLoading(false)
           return
         }

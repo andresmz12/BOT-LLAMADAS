@@ -96,8 +96,9 @@ def create_org(
     session.add(org)
     session.commit()
     session.refresh(org)
+    result = _safe_org(org)
     log_action(session, current_user, "org.create", details=f"{org.name} (id={org.id})")
-    return _safe_org(org)
+    return result
 
 
 @router.get("/organizations")
@@ -128,10 +129,11 @@ def update_org(
     session.add(org)
     session.commit()
     session.refresh(org)
+    result = _safe_org(org)
     # Never log actual secret values — only which fields changed.
     logged_fields = [f for f in changed_fields if f not in _SENSITIVE] + [f"{f}(secret)" for f in changed_fields if f in _SENSITIVE]
     log_action(session, current_user, "org.update", details=f"{org.name} (id={org.id}) fields: {', '.join(logged_fields)}")
-    return _safe_org(org)
+    return result
 
 
 
@@ -283,10 +285,10 @@ def create_user(
     session.add(user)
     session.commit()
     session.refresh(user)
-    log_action(session, current_user, "user.create", details=f"{user.full_name} <{user.email}> role={user.role} org_id={user.organization_id}")
     result = user.dict(exclude={"password_hash"})
     org = session.get(Organization, user.organization_id) if user.organization_id else None
     result["organization_name"] = org.name if org else ""
+    log_action(session, current_user, "user.create", details=f"{user.full_name} <{user.email}> role={user.role} org_id={user.organization_id}")
     return result
 
 
@@ -321,8 +323,9 @@ def update_user(
     session.add(user)
     session.commit()
     session.refresh(user)
+    result = user.dict(exclude={"password_hash"})
     log_action(session, current_user, "user.update", details=f"{user.full_name} <{user.email}> fields: {', '.join(changed)}")
-    return user.dict(exclude={"password_hash"})
+    return result
 
 
 @router.put("/users/{user_id}/password")
