@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Outlet, Navigate, useNavigate } from 'react-router-dom'
 import { Bars3Icon } from '@heroicons/react/24/outline'
 import Sidebar from './components/Sidebar'
+import LanguageSwitcher from './components/LanguageSwitcher'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
 import Register from './pages/Register'
@@ -65,6 +66,8 @@ function ProtectedLayout() {
         </span>
       </div>
       <div className="md:hidden h-14 w-full fixed top-0 pointer-events-none" />
+
+      <LanguageSwitcher variant="flag" className="fixed top-3 right-3 md:top-4 md:right-4 z-50" />
 
       <Sidebar mobileOpen={mobileOpen} onClose={() => setMobileOpen(false)} />
       <main className="flex-1 overflow-auto pt-14 md:pt-0">
