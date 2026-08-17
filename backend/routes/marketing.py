@@ -37,10 +37,6 @@ def _get_google_key(org: Optional[Organization]) -> str:
     return ((org.google_api_key if org else "") or "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
 
 
-def _get_anthropic_key(org: Optional[Organization]) -> str:
-    return ((org.anthropic_api_key if org else "") or "").strip() or os.getenv("ANTHROPIC_API_KEY", "").strip()
-
-
 # ── 1. Imágenes IA — DALL-E 3 ────────────────────────────────────────────────
 
 @router.post("/generate-image")
@@ -254,9 +250,6 @@ async def generate_copy(
 ):
     org = _load_org(current_user, session)
     _require_marketing(current_user, org)
-    api_key = _get_anthropic_key(org)
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Anthropic API key no configurada.")
 
     instructions = CONTENT_TYPE_INSTRUCTIONS.get(data.content_type, f"contenido de tipo '{data.content_type}'")
     lang_hint = {
@@ -275,17 +268,24 @@ async def generate_copy(
         f"Genera el contenido directamente, sin explicaciones previas."
     )
 
-    try:
-        from anthropic import AsyncAnthropic
-        client = AsyncAnthropic(api_key=api_key)
-        msg = await client.messages.create(
+    from anthropic import AsyncAnthropic
+    from services.anthropic_errors import call_with_anthropic_fallback, friendly_anthropic_error
+
+    async def _generate(api_key: str):
+        msg = await AsyncAnthropic(api_key=api_key).messages.create(
             model="claude-sonnet-5",
             max_tokens=2048,
             messages=[{"role": "user", "content": prompt}],
         )
         return {"text": msg.content[0].text.strip()}
+
+    try:
+        return await call_with_anthropic_fallback(org, _generate)
+    except ValueError as e:
+        if str(e) == "NO_ANTHROPIC_KEY":
+            raise HTTPException(status_code=503, detail="Anthropic API key no configurada.")
+        raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
     except Exception as e:
-        from services.anthropic_errors import friendly_anthropic_error
         raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
 
 
@@ -306,9 +306,6 @@ async def generate_calendar(
 ):
     org = _load_org(current_user, session)
     _require_marketing(current_user, org)
-    api_key = _get_anthropic_key(org)
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Anthropic API key no configurada.")
 
     platforms_str = ", ".join(data.platforms[:5]) or "Instagram"
 
@@ -325,10 +322,11 @@ async def generate_calendar(
         f"Genera todos los posts para {data.period} con frecuencia {data.frequency}."
     )
 
-    try:
-        from anthropic import AsyncAnthropic
-        client = AsyncAnthropic(api_key=api_key)
-        msg = await client.messages.create(
+    from anthropic import AsyncAnthropic
+    from services.anthropic_errors import call_with_anthropic_fallback, friendly_anthropic_error
+
+    async def _generate(api_key: str):
+        msg = await AsyncAnthropic(api_key=api_key).messages.create(
             model="claude-sonnet-5",
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
@@ -339,10 +337,15 @@ async def generate_calendar(
             raw = parts[1] if len(parts) > 1 else raw
             if raw.startswith("json"):
                 raw = raw[4:]
-        data_json = json.loads(raw.strip())
-        return data_json
+        return json.loads(raw.strip())
+
+    try:
+        return await call_with_anthropic_fallback(org, _generate)
     except json.JSONDecodeError:
         raise HTTPException(status_code=502, detail="Claude no devolvió JSON válido. Intenta de nuevo.")
+    except ValueError as e:
+        if str(e) == "NO_ANTHROPIC_KEY":
+            raise HTTPException(status_code=503, detail="Anthropic API key no configurada.")
+        raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
     except Exception as e:
-        from services.anthropic_errors import friendly_anthropic_error
         raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))

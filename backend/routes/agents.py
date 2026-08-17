@@ -1,4 +1,3 @@
-import os
 import json
 import logging
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
@@ -217,19 +216,16 @@ async def generate_agent_from_description(
         raise HTTPException(status_code=400, detail="Describe el negocio primero")
 
     org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
-    api_key = ((org.anthropic_api_key if org else "") or "").strip() or os.getenv("ANTHROPIC_API_KEY", "").strip()
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Anthropic API key no configurada.")
 
     from anthropic import AsyncAnthropic
-    client = AsyncAnthropic(api_key=api_key)
+    from services.anthropic_errors import call_with_anthropic_fallback, friendly_anthropic_error
     messages = [{"role": "user", "content": data.description.strip()}]
 
-    async def _call(use_schema: bool):
+    async def _call(use_schema: bool, api_key: str):
         kwargs = {}
         if use_schema:
             kwargs["output_config"] = {"format": {"type": "json_schema", "schema": _GENERATE_SCHEMA}}
-        message = await client.messages.create(
+        message = await AsyncAnthropic(api_key=api_key).messages.create(
             model="claude-sonnet-5",
             max_tokens=1536,
             system=_GENERATE_PROMPT,
@@ -243,15 +239,22 @@ async def generate_agent_from_description(
                 text = text.lstrip()[4:]
         return json.loads(text.strip())
 
-    try:
+    async def _generate(api_key: str):
         try:
-            return await _call(use_schema=True)
+            return await _call(use_schema=True, api_key=api_key)
         except Exception as e:
             logger.warning(f"[Agents] generate: structured output failed ({type(e).__name__}: {e}); retrying plain")
-            return await _call(use_schema=False)
+            return await _call(use_schema=False, api_key=api_key)
+
+    try:
+        return await call_with_anthropic_fallback(org, _generate)
+    except ValueError as e:
+        if str(e) == "NO_ANTHROPIC_KEY":
+            raise HTTPException(status_code=503, detail="Anthropic API key no configurada.")
+        logger.error(f"[Agents] generate failed: {e}", exc_info=True)
+        raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
     except Exception as e:
         logger.error(f"[Agents] generate failed: {e}", exc_info=True)
-        from services.anthropic_errors import friendly_anthropic_error
         raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
 
 

@@ -1372,9 +1372,6 @@ async def generate_email_sequence(
     if not current_user.organization_id:
         raise HTTPException(status_code=400, detail="Sin organización")
     org = session.get(Organization, current_user.organization_id)
-    api_key = ((org.anthropic_api_key if org else "") or "").strip() or os.getenv("ANTHROPIC_API_KEY", "").strip()
-    if not api_key:
-        raise HTTPException(status_code=503, detail="Anthropic API key no configurada.")
     if not data.dates:
         raise HTTPException(status_code=400, detail="Debes indicar al menos una fecha")
 
@@ -1407,10 +1404,11 @@ async def generate_email_sequence(
         f"El campo body debe ser texto plano con saltos de línea (no HTML)."
     )
 
-    try:
-        from anthropic import AsyncAnthropic
-        client = AsyncAnthropic(api_key=api_key)
-        msg = await client.messages.create(
+    from anthropic import AsyncAnthropic
+    from services.anthropic_errors import call_with_anthropic_fallback, friendly_anthropic_error
+
+    async def _generate(api_key: str):
+        msg = await AsyncAnthropic(api_key=api_key).messages.create(
             model="claude-sonnet-5",
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
@@ -1427,8 +1425,15 @@ async def generate_email_sequence(
         emails = json.loads(raw)
         if not isinstance(emails, list):
             raise ValueError("Respuesta no es una lista")
+        return emails
+
+    try:
+        emails = await call_with_anthropic_fallback(org, _generate)
+    except ValueError as e:
+        if str(e) == "NO_ANTHROPIC_KEY":
+            raise HTTPException(status_code=503, detail="Anthropic API key no configurada.")
+        raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
     except Exception as e:
-        from services.anthropic_errors import friendly_anthropic_error
         raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
 
     result = []
