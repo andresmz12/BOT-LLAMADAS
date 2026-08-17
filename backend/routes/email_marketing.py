@@ -1413,7 +1413,7 @@ async def generate_email_sequence(
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = msg.content[0].text.strip()
+        raw = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
         if raw.startswith("```"):
             raw = raw.strip("`")
             if raw.startswith("json"):

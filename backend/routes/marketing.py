@@ -277,7 +277,8 @@ async def generate_copy(
             max_tokens=2048,
             messages=[{"role": "user", "content": prompt}],
         )
-        return {"text": msg.content[0].text.strip()}
+        text = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
+        return {"text": text}
 
     try:
         return await call_with_anthropic_fallback(org, _generate)
@@ -331,7 +332,7 @@ async def generate_calendar(
             max_tokens=4096,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw = msg.content[0].text.strip()
+        raw = "".join(b.text for b in msg.content if getattr(b, "type", "") == "text").strip()
         if raw.startswith("```"):
             parts = raw.split("```")
             raw = parts[1] if len(parts) > 1 else raw

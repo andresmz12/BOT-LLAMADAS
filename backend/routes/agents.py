@@ -232,7 +232,7 @@ async def generate_agent_from_description(
             messages=messages,
             **kwargs,
         )
-        text = message.content[0].text.strip()
+        text = "".join(b.text for b in message.content if getattr(b, "type", "") == "text").strip()
         if text.startswith("```"):
             text = text.split("```")[1]
             if text.lstrip().lower().startswith("json"):
