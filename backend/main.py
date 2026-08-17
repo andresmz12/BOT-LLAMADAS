@@ -156,12 +156,12 @@ async def _run_scheduled_email(job_id: int):
                 job.status = "failed"; job.error = "Sin API key"
                 s.add(job); _maybe_complete_sequence(s, job.sequence_id); s.commit(); return
 
-            import json, base64 as _b64
+            import json
             from datetime import datetime as _dt
-            from services.sendgrid_service import _fill, _build_html, DEFAULT_SUBJECT
+            from services.sendgrid_service import _fill, _build_html, _build_attachments, DEFAULT_SUBJECT
             from routes.email_marketing import _unsub_url
             from sendgrid import SendGridAPIClient
-            from sendgrid.helpers.mail import Mail, Attachment, FileContent, FileName, FileType, Disposition, CustomArg
+            from sendgrid.helpers.mail import Mail, CustomArg
 
             query = _sel(_Prospect).where(
                 _Prospect.organization_id == job.organization_id,
@@ -192,11 +192,7 @@ async def _run_scheduled_email(job_id: int):
                 try: templates = json.loads(org.email_templates)
                 except Exception: pass
             tmpl = templates.get(job.template_key, {})
-            att_b64 = tmpl.get("attachment_b64") or ""
-            att_name = tmpl.get("attachment_name") or ""
-            if not att_b64 and org.email_attachment and org.email_attachment_name:
-                att_b64 = _b64.b64encode(org.email_attachment).decode()
-                att_name = org.email_attachment_name
+            attachments = _build_attachments(tmpl, org)
 
             from_email = (org.email_from or "").strip() or __import__("os").getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
             from_name = (org.email_from_name or "").strip() or "ZyraVoice"
@@ -222,10 +218,8 @@ async def _run_scheduled_email(job_id: int):
                                              cta_text_2=tmpl.get("cta_text_2") or "", cta_url_2=tmpl.get("cta_url_2") or "")
                     message = Mail(from_email=(from_email, from_name), to_emails=prospect.email, subject=subject, html_content=html_body)
                     message.custom_arg = [CustomArg(key="org_id", value=str(org.id)), CustomArg(key="template_key", value=job.template_key)]
-                    if att_b64 and att_name:
-                        ext = att_name.rsplit(".", 1)[-1].lower()
-                        mime = "application/pdf" if ext == "pdf" else f"image/{ext}"
-                        message.attachment = Attachment(FileContent(att_b64), FileName(att_name), FileType(mime), Disposition("attachment"))
+                    if attachments:
+                        message.attachment = attachments
                     sg.send(message)
                     prospect.last_email_sent_at = _dt.utcnow()
                     prospect.email_send_count = (prospect.email_send_count or 0) + 1

@@ -212,12 +212,21 @@ def get_email_settings(
             "email_send_on_not_interested": False,
             "email_templates": {},
             "email_attachment_name": None,
+            "email_attachment_2_name": None,
         }
     sg_configured = bool((org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", ""))
     try:
         templates = json.loads(org.email_templates) if org.email_templates else {}
     except Exception:
         templates = {}
+    # The frontend only ever displays attachment_name(_2) — never send the raw
+    # base64 file content, which can be several MB and was previously leaking
+    # into this response on every settings load despite the save-side comment
+    # claiming otherwise.
+    templates = {
+        key: {k: v for k, v in tmpl.items() if k not in ("attachment_b64", "attachment_b64_2")}
+        for key, tmpl in templates.items()
+    }
     return {
         "email_enabled": org.email_enabled,
         "email_from": org.email_from,
@@ -229,6 +238,7 @@ def get_email_settings(
         "email_send_on_not_interested": org.email_send_on_not_interested,
         "email_templates": templates,
         "email_attachment_name": org.email_attachment_name,
+        "email_attachment_2_name": org.email_attachment_2_name,
         "email_send_delay_ms": org.email_send_delay_ms or 0,
     }
 
@@ -269,7 +279,7 @@ def save_email_settings(
         for key, tmpl in data.email_templates.items():
             merged[key] = dict(tmpl)
             if key in existing_tmpls:
-                for field in ("attachment_b64", "attachment_name"):
+                for field in ("attachment_b64", "attachment_name", "attachment_b64_2", "attachment_name_2"):
                     if field not in merged[key] and field in existing_tmpls[key]:
                         merged[key][field] = existing_tmpls[key][field]
         org.email_templates = json.dumps(merged)

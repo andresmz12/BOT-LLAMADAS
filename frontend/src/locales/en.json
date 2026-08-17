@@ -1506,7 +1506,7 @@
       "cta2UrlLabel": "Button 2 URL (optional)",
       "signatureLabel": "Signature",
       "signaturePlaceholderPrefix": "Sincerely,\n",
-      "attachmentLabel": "Attachment for this template (PDF or image, max 5 MB)",
+      "attachmentLabel": "Attachment 1 for this template (PDF or image, max 5 MB)",
       "uploading": "Uploading...",
       "replaceAttachment": "Replace attachment",
       "uploadAttachment": "Upload attachment",
@@ -1517,14 +1517,15 @@
       "attachmentRemoved": "Attachment removed — this template will use the global attachment if there is one",
       "attachmentTooBig": "Maximum 5 MB",
       "hidePreview": "Hide preview",
-      "showPreview": "View email preview"
+      "showPreview": "View email preview",
+      "attachmentLabel2": "Attachment 2 for this template (PDF or image, max 5 MB)"
     },
     "config": {
       "title": "Automatic settings",
       "senderEmail": "Sender email",
       "senderName": "Sender name",
       "senderNamePlaceholder": "Isabella - My Company",
-      "globalAttachmentLabel": "Global attachment (PDF or image, max 5 MB)",
+      "globalAttachmentLabel": "Global attachment 1 (PDF or image, max 5 MB)",
       "globalAttachmentHint": "Attached to all sends that don't have their own per-template attachment.",
       "globalAttachmentRemoved": "Global attachment removed",
       "delayLabel": "Delay between sends",
@@ -1545,7 +1546,8 @@
       "saving": "Saving...",
       "save": "Save changes",
       "saved": "Saved",
-      "errorSave": "Error"
+      "errorSave": "Error",
+      "globalAttachmentLabel2": "Global attachment 2 (PDF or image, max 5 MB)"
     },
     "test": {
       "title": "Test send",

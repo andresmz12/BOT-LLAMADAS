@@ -1506,7 +1506,7 @@
       "cta2UrlLabel": "URL del botón 2 (opcional)",
       "signatureLabel": "Firma",
       "signaturePlaceholderPrefix": "Atentamente,\n",
-      "attachmentLabel": "Adjunto para esta plantilla (PDF o imagen, máx. 5 MB)",
+      "attachmentLabel": "Adjunto 1 para esta plantilla (PDF o imagen, máx. 5 MB)",
       "uploading": "Subiendo...",
       "replaceAttachment": "Reemplazar adjunto",
       "uploadAttachment": "Subir adjunto",
@@ -1517,14 +1517,15 @@
       "attachmentRemoved": "Adjunto eliminado — esta plantilla usará el adjunto global si hay uno",
       "attachmentTooBig": "Máximo 5 MB",
       "hidePreview": "Ocultar vista previa",
-      "showPreview": "Ver vista previa del email"
+      "showPreview": "Ver vista previa del email",
+      "attachmentLabel2": "Adjunto 2 para esta plantilla (PDF o imagen, máx. 5 MB)"
     },
     "config": {
       "title": "Configuración automática",
       "senderEmail": "Email remitente",
       "senderName": "Nombre remitente",
       "senderNamePlaceholder": "Isabella - Mi Empresa",
-      "globalAttachmentLabel": "Adjunto global (PDF o imagen, máx. 5 MB)",
+      "globalAttachmentLabel": "Adjunto global 1 (PDF o imagen, máx. 5 MB)",
       "globalAttachmentHint": "Se adjunta a todos los envíos que no tengan su propio adjunto por plantilla.",
       "globalAttachmentRemoved": "Adjunto global eliminado",
       "delayLabel": "Delay entre envíos",
@@ -1545,7 +1546,8 @@
       "saving": "Guardando...",
       "save": "Guardar cambios",
       "saved": "Guardado",
-      "errorSave": "Error"
+      "errorSave": "Error",
+      "globalAttachmentLabel2": "Adjunto global 2 (PDF o imagen, máx. 5 MB)"
     },
     "test": {
       "title": "Envío de prueba",
