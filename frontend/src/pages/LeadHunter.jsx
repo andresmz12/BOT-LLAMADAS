@@ -391,6 +391,18 @@ export default function LeadHunter() {
                 </div>
               </div>
             )}
+            {/* Algorithmic guesses shown alongside a real scraped email, so
+                there's always more than one address to try. */}
+            {emailSearchResult.source === 'scraped' && emailSearchResult.guessed_candidates?.length > 0 && (
+              <div>
+                <p className="text-amber-400/80 uppercase font-medium mt-2 mb-1">{t('leadHunter.findEmailAlgoSuggestions')}</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {emailSearchResult.guessed_candidates.map(c => (
+                    <span key={c} className="font-mono text-amber-300/80 bg-amber-500/10 rounded px-1.5 py-0.5">{c}</span>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>

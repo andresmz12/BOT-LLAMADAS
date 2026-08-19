@@ -132,10 +132,12 @@ async def find_company_email(
     org: Organization,
     website_url: str | None = None,
 ) -> dict:
-    """Resolve a company name (or an already-known website) down to a best-
-    guess email: try to scrape a real, published address first; only fall
-    back to a generic guessed address (and only if the domain actually
-    receives mail) when scraping finds nothing."""
+    """Resolve a company name (or an already-known website) down to a best
+    email plus a full spread of extra options: the real address wins as the
+    primary pick when the site publishes one, but algorithmic role-address
+    guesses (info@, contacto@, ventas@...) are always generated alongside it
+    (whenever the domain can receive mail) so there's more than one address
+    to try, not just a single result."""
     matched_name = None
     phone = None
     website = (website_url or "").strip() or None
@@ -155,6 +157,7 @@ async def find_company_email(
         "email": None,
         "source": None,   # scraped | guessed
         "candidates": [],
+        "guessed_candidates": [],
     }
     if not website:
         return result
@@ -165,14 +168,14 @@ async def find_company_email(
         return result
 
     scraped = await scrape_site_emails(website)
+    has_mx = await asyncio.to_thread(domain_has_mx, domain)
+    guessed = guess_role_emails(domain, org.lh_language or "es") if has_mx else []
+    # Never suggest a guess that duplicates a real address already found.
+    guessed = [g for g in guessed if g not in scraped]
+    result["guessed_candidates"] = guessed
+
     if scraped:
         result.update(email=scraped[0], source="scraped", candidates=scraped)
-        return result
-
-    has_mx = await asyncio.to_thread(domain_has_mx, domain)
-    if not has_mx:
-        return result
-
-    guesses = guess_role_emails(domain, org.lh_language or "es")
-    result.update(email=guesses[0], source="guessed", candidates=guesses)
+    elif guessed:
+        result.update(email=guessed[0], source="guessed", candidates=guessed)
     return result
