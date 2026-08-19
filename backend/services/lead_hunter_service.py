@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 
 from anthropic import Anthropic, AsyncAnthropic
-from outscraper import ApiClient
 from sqlmodel import Session, select
 
 from models import LeadHunt, Organization
@@ -31,38 +30,20 @@ MIN_REVIEWS = 5
 MAX_REVIEWS = 80
 
 
-def _fetch_query(
-    client: ApiClient, query: str, city: str, fetch_limit: int,
-    provider: str = "outscraper", google_api_key: str = "",
-) -> list:
-    """Run a single search query against the configured provider and return
-    raw items shaped like Outscraper's google_maps_search results."""
-    if provider == "google":
-        from services.google_places_service import search_businesses, GooglePlacesError
-        try:
-            return search_businesses(
-                f"{query} en {city}", api_key=google_api_key, limit=fetch_limit,
-                min_rating=MIN_RATING, max_rating=MAX_RATING,
-                min_reviews=MIN_REVIEWS, max_reviews=MAX_REVIEWS,
-            )
-        except GooglePlacesError:
-            # A bad key / disabled API rejects every query identically — let
-            # it propagate instead of silently returning zero leads with no
-            # explanation, unlike a single query's transient failure below.
-            raise
-        except Exception as exc:
-            logger.warning(f"[LeadHunter] query '{query}' in '{city}' failed: {exc}")
-            return []
-
+def _fetch_query(query: str, city: str, fetch_limit: int, google_api_key: str) -> list:
+    """Run a single Google Places search and return raw items list."""
+    from services.google_places_service import search_businesses, GooglePlacesError
     try:
-        results = client.google_maps_search(
-            f"{query} en {city}",
-            limit=fetch_limit,
-            language="es",
-            region="us",
+        return search_businesses(
+            f"{query} en {city}", api_key=google_api_key, limit=fetch_limit,
+            min_rating=MIN_RATING, max_rating=MAX_RATING,
+            min_reviews=MIN_REVIEWS, max_reviews=MAX_REVIEWS,
         )
-        items = results[0] if results and isinstance(results[0], list) else results
-        return items or []
+    except GooglePlacesError:
+        # A bad key / disabled API rejects every query identically — let it
+        # propagate instead of silently returning zero leads with no
+        # explanation, unlike a single query's transient failure below.
+        raise
     except Exception as exc:
         logger.warning(f"[LeadHunter] query '{query}' in '{city}' failed: {exc}")
         return []
@@ -107,28 +88,22 @@ def _generate_queries_sync(org: Organization, api_key: str) -> list[str]:
 
 def scout(limit: int = 17, org_id: int = None, session: Session = None) -> list:
     """
-    Search Google Maps (via Outscraper, or Google Places as a fallback) using
-    the org's Lead Hunter config. Requires lh_active=True and
-    lh_target_description to be set. Uses Claude to generate search queries
-    dynamically. Runs all (query, city) pairs in parallel via ThreadPoolExecutor.
+    Search Google Maps (via Google Places) using the org's Lead Hunter
+    config. Requires lh_active=True and lh_target_description to be set.
+    Uses Claude to generate search queries dynamically. Runs all
+    (query, city) pairs in parallel via ThreadPoolExecutor.
     """
     # Load org config
     org = session.get(Organization, org_id) if (session and org_id) else None
     if not org:
         raise ValueError("Organización no encontrada")
 
-    # Outscraper is the default when configured (org already paying for it);
-    # otherwise fall back to Google Places using the org's own Google API key
-    # (the same key slot used for Veo/Gemini) or the platform-wide env var —
-    # Google gives ~$200/month of free usage before it starts billing.
-    outscraper_key = os.getenv("OUTSCRAPER_API_KEY", "").strip()
+    # Google Places using the org's own Google API key (the same slot used
+    # for Veo/Gemini) or the platform-wide env var — Google gives ~$200/month
+    # of free usage before it starts billing.
     google_key = (org.google_api_key or "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
-    if outscraper_key:
-        provider, api_key = "outscraper", outscraper_key
-    elif google_key:
-        provider, api_key = "google", google_key
-    else:
-        raise ValueError("Configura OUTSCRAPER_API_KEY o una Google API key (Configuración) para poder buscar negocios.")
+    if not google_key:
+        raise ValueError("Configura una Google API key (Configuración) para poder buscar negocios.")
 
     if not org.lh_active:
         raise ValueError("Lead Hunter no está activado para esta organización. Actívalo en Configuración → Lead Hunter.")
@@ -161,7 +136,6 @@ def scout(limit: int = 17, org_id: int = None, session: Session = None) -> list:
             if name:
                 existing_names.add(name.lower().strip())
 
-    client = ApiClient(api_key=api_key) if provider == "outscraper" else None
     fetch_limit = max(limit * 2, 10)
 
     # Build (query, city) task list and run in parallel
@@ -169,7 +143,7 @@ def scout(limit: int = 17, org_id: int = None, session: Session = None) -> list:
     raw_results: dict = {}
     with ThreadPoolExecutor(max_workers=min(len(task_pairs), 8)) as pool:
         futures = {
-            pool.submit(_fetch_query, client, q, city, fetch_limit, provider, api_key): (q, city)
+            pool.submit(_fetch_query, q, city, fetch_limit, google_key): (q, city)
             for q, city in task_pairs
         }
         for future in as_completed(futures):
@@ -232,7 +206,7 @@ def scout(limit: int = 17, org_id: int = None, session: Session = None) -> list:
             session.refresh(lead)
 
     logger.info(
-        f"[LeadHunter] scout org={org_id} provider={provider} cities={cities} "
+        f"[LeadHunter] scout org={org_id} cities={cities} "
         f"queries={len(queries)} collected={len(leads)}"
     )
     return leads

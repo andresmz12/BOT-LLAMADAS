@@ -38,9 +38,7 @@ def search_businesses(
 ) -> list[dict]:
     """Search Google Places (Text Search) and enrich only the results that
     already pass the rating/review filter with phone + website via Place
-    Details. Shaped to match Outscraper's google_maps_search output (name,
-    phone, site, rating, reviews_count) so callers don't need to know which
-    provider actually ran the search.
+    Details. Returns dicts with name, phone, site, rating, reviews_count.
 
     Place Details is a separately-billed call per place, so it's only spent
     on candidates the quality filter wouldn't reject anyway — no point
