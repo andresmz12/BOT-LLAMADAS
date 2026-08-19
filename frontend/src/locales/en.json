@@ -1398,6 +1398,7 @@
       "loadingContacts": "Loading contacts...",
       "noContacts": "No contacts. Import a CSV to get started.",
       "searchPlaceholder": "Search by name, email, or company...",
+      "showingCapped": "Showing {{shown}} of {{total}} results — refine your search to see more",
       "filterAll": "All",
       "filterTitle": "Filter by classification",
       "headers": {
