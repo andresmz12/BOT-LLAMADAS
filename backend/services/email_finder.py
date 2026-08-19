@@ -23,8 +23,8 @@ _IGNORED_SUBSTRINGS = [
 
 _SCRAPE_PATHS = ["", "/contact", "/contacto", "/about", "/nosotros", "/about-us", "/quienes-somos"]
 
-ES_ROLE_PREFIXES = ["info", "contacto", "ventas", "hola", "administracion", "atencion"]
-EN_ROLE_PREFIXES = ["info", "contact", "sales", "hello", "admin", "support"]
+ES_ROLE_PREFIXES = ["info", "contacto", "ventas", "hola", "administracion", "atencion", "retail"]
+EN_ROLE_PREFIXES = ["info", "contact", "sales", "hello", "admin", "support", "retail"]
 
 
 def _extract_domain(url: str) -> str | None:
