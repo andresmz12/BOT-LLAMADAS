@@ -126,6 +126,31 @@ def guess_role_emails(domain: str, lang: str = "es") -> list[str]:
     return [f"{p}@{domain}" for p in prefixes]
 
 
+async def _best_guessable_domain(website_domain: str, scraped: list[str]) -> tuple[str, bool]:
+    """Pick the domain to generate role-address guesses against. A company's
+    website is often hosted on a subdomain (e.g. corporate.example.com) that
+    has no MX record of its own even though the company's real mail domain
+    does — so prefer the domain of an email we already found (proof it
+    accepts mail), then the website's own domain, then its apex domain as a
+    last resort before giving up."""
+    candidates = []
+    if scraped:
+        candidates.append(scraped[0].split("@")[-1])
+    candidates.append(website_domain)
+    parts = website_domain.split(".")
+    if len(parts) > 2:
+        candidates.append(".".join(parts[-2:]))
+
+    seen = set()
+    for d in candidates:
+        if not d or d in seen:
+            continue
+        seen.add(d)
+        if await asyncio.to_thread(domain_has_mx, d):
+            return d, True
+    return website_domain, False
+
+
 async def find_company_email(
     name: str,
     city: str,
@@ -168,8 +193,8 @@ async def find_company_email(
         return result
 
     scraped = await scrape_site_emails(website)
-    has_mx = await asyncio.to_thread(domain_has_mx, domain)
-    guessed = guess_role_emails(domain, org.lh_language or "es") if has_mx else []
+    guess_domain, has_mx = await _best_guessable_domain(domain, scraped)
+    guessed = guess_role_emails(guess_domain, org.lh_language or "es") if has_mx else []
     # Never suggest a guess that duplicates a real address already found.
     guessed = [g for g in guessed if g not in scraped]
     result["guessed_candidates"] = guessed
