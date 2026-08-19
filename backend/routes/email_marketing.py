@@ -477,6 +477,16 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
 
         pdata = prospects_data[0]
         try:
+            # Re-check right before sending — this job's recipient list was
+            # snapshotted at creation time, but a bulk send can run/pause for
+            # a long time, and the prospect may have been deleted or
+            # unsubscribed since then. Never send to someone no longer here.
+            with Session(_engine) as s_check:
+                p_check = s_check.get(Prospect, pdata["id"])
+                if not p_check:
+                    raise ValueError("Prospecto eliminado durante el envío")
+                if p_check.email_unsubscribed:
+                    raise ValueError("El contacto se dio de baja durante el envío")
 
             unsub = _unsub_url(pdata["id"], org_id, base=base_url)
             tmpl_vars = {
