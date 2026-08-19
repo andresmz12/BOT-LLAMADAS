@@ -1398,6 +1398,7 @@
       "loadingContacts": "Cargando contactos...",
       "noContacts": "Sin contactos. Importa un CSV para comenzar.",
       "searchPlaceholder": "Buscar por nombre, email o empresa...",
+      "showingCapped": "Mostrando {{shown}} de {{total}} resultados — refina la búsqueda para ver más",
       "filterAll": "Todos",
       "filterTitle": "Filtrar por clasificación",
       "headers": {

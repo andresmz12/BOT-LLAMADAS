@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useDeferredValue } from 'react'
 import { useTranslation } from 'react-i18next'
 
 // All times are stored/sent as UTC. The system operates at UTC-5.
@@ -276,6 +276,28 @@ export default function EmailMarketing() {
   const [contactLabelFilter, setContactLabelFilter] = useState('all')
   const [addContactForm, setAddContactForm] = useState({ listId: null, name: '', email: '', company: '', saving: false, error: '' })
   const listImportRefs = useRef({})
+
+  // Filtering + rendering thousands of contact rows on every keystroke froze
+  // the page for large lists. useDeferredValue lets the input stay
+  // responsive while the (expensive) filtering catches up, and capping the
+  // rendered rows keeps the DOM from ballooning to thousands of <tr>s when
+  // the search is broad or empty.
+  const deferredContactSearch = useDeferredValue(contactSearch)
+  const VISIBLE_CONTACTS_CAP = 300
+  const { visibleContacts, matchedContactsCount } = useMemo(() => {
+    const q = deferredContactSearch.trim().toLowerCase()
+    const matched = listContacts.contacts.filter(c => {
+      if (contactLabelFilter !== 'all') {
+        const labelKey = c.email_label || 'none'
+        if (labelKey !== contactLabelFilter) return false
+      }
+      if (!q) return true
+      return (c.name || '').toLowerCase().includes(q) ||
+        (c.email || '').toLowerCase().includes(q) ||
+        (c.company || '').toLowerCase().includes(q)
+    })
+    return { visibleContacts: matched.slice(0, VISIBLE_CONTACTS_CAP), matchedContactsCount: matched.length }
+  }, [listContacts.contacts, contactLabelFilter, deferredContactSearch])
 
   // Bulk send
   const [bulkCampaign, setBulkCampaign] = useState('')  // '' | campaign_id | 'email_only' | 'list:id'
@@ -1152,17 +1174,7 @@ export default function EmailMarketing() {
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-z-border">
-                              {listContacts.contacts.filter(c => {
-                                if (contactLabelFilter !== 'all') {
-                                  const labelKey = c.email_label || 'none'
-                                  if (labelKey !== contactLabelFilter) return false
-                                }
-                                if (!contactSearch.trim()) return true
-                                const q = contactSearch.toLowerCase()
-                                return (c.name || '').toLowerCase().includes(q) ||
-                                  (c.email || '').toLowerCase().includes(q) ||
-                                  (c.company || '').toLowerCase().includes(q)
-                              }).map(c => (
+                              {visibleContacts.map(c => (
                                 <tr key={c.id} className="hover:bg-white/[0.02]">
                                   {editingContactId === c.id ? (
                                     <>
@@ -1247,19 +1259,17 @@ export default function EmailMarketing() {
                                           </button>
                                           <button
                                             onClick={() => handleDeleteContact(list.id, c.id, c.email)}
-                                            className="flex items-center gap-1 px-2 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 rounded transition-colors"
+                                            className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-white/5 rounded transition-colors"
                                             title={t('emailMarketing.lists.removeTitle')}
                                           >
                                             <TrashIcon className="w-3.5 h-3.5" />
-                                            {t('emailMarketing.lists.removeBtn')}
                                           </button>
                                           <button
                                             onClick={() => handleUnsubscribeAndDelete(list.id, c.id)}
-                                            className="flex items-center gap-1 px-2 py-1 text-xs text-amber-500 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors"
+                                            className="p-1.5 text-amber-500 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors"
                                             title={t('emailMarketing.lists.blockTitle')}
                                           >
                                             <UserMinusIcon className="w-3.5 h-3.5" />
-                                            {t('emailMarketing.lists.blockBtn')}
                                           </button>
                                         </div>
                                       </td>
@@ -1270,6 +1280,11 @@ export default function EmailMarketing() {
                             </tbody>
                           </table>
                         </div>
+                        {matchedContactsCount > VISIBLE_CONTACTS_CAP && (
+                          <p className="text-center text-xs text-slate-500 py-2 border-t border-z-border">
+                            {t('emailMarketing.lists.showingCapped', { shown: VISIBLE_CONTACTS_CAP, total: matchedContactsCount })}
+                          </p>
+                        )}
                         </div>
                       )}
                     </div>
