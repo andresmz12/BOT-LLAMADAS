@@ -1376,6 +1376,8 @@
       "confirmDeleteList": "Delete the list \"{{name}}\" and all {{total}} of its contacts?",
       "errorDeleteList": "Error deleting list",
       "errorCreateList": "Error creating list",
+      "renameBtn": "Rename list",
+      "errorRenameList": "Error renaming list",
       "addManualTitle": "Add contact manually",
       "namePh": "Name",
       "emailPh": "Email *",

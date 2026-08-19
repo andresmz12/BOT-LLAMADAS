@@ -27,14 +27,14 @@ import {
   CheckCircleIcon, EnvelopeIcon, PaperClipIcon, ChevronDownIcon,
   PencilSquareIcon, SparklesIcon, PlusIcon, TrashIcon, EyeIcon,
   ClockIcon, UserMinusIcon, ListBulletIcon, Cog6ToothIcon, PaperAirplaneIcon,
-  ArrowDownTrayIcon, ChartBarIcon,
+  ArrowDownTrayIcon, ChartBarIcon, CheckIcon, XMarkIcon,
 } from '@heroicons/react/24/outline'
 import {
   getEmailSettings, saveEmailSettings, uploadEmailAttachment, deleteEmailAttachment, deleteEmailTemplate,
   sendTestEmail, bulkSendEmail, getBulkSendStatus, getActiveBulkSend, pauseBulkSend, resumeBulkSend, cancelBulkSend, getCampaigns,
   getEmailHistory, validateEmailRecipients, uploadTemplateAttachment,
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
-  getEmailLists, createEmailList, deleteEmailList,
+  getEmailLists, createEmailList, renameEmailList, deleteEmailList,
   getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList, deleteTemplateAttachment,
   getScheduledEmails, cancelScheduledEmail, rescheduleEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents, labelContact,
   generateEmailSequence, createEmailSequence, getEmailSequences, updateSequenceStep, deleteEmailSequence,
@@ -262,6 +262,9 @@ export default function EmailMarketing() {
   const [newListName, setNewListName] = useState('')
   const [showNewListInput, setShowNewListInput] = useState(false)
   const [creatingList, setCreatingList] = useState(false)
+  const [renamingListId, setRenamingListId] = useState(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [savingRename, setSavingRename] = useState(false)
   const [listContacts, setListContacts] = useState({ id: null, contacts: [], loading: false })
   const [contactSearch, setContactSearch] = useState('')
   const [contactLabelFilter, setContactLabelFilter] = useState('all')
@@ -527,6 +530,28 @@ export default function EmailMarketing() {
       setNewListName(''); setShowNewListInput(false)
     } catch (e) { alert(e.response?.data?.detail || t('emailMarketing.lists.errorCreateList')) }
     finally { setCreatingList(false) }
+  }
+
+  const startRenameList = (list) => {
+    setRenamingListId(list.id)
+    setRenameValue(list.name)
+  }
+
+  const cancelRenameList = () => {
+    setRenamingListId(null)
+    setRenameValue('')
+  }
+
+  const handleSaveRenameList = async (id) => {
+    const name = renameValue.trim()
+    if (!name) return
+    setSavingRename(true)
+    try {
+      const updated = await renameEmailList(id, name)
+      setEmailLists(prev => prev.map(l => l.id === id ? { ...l, name: updated.name } : l))
+      setRenamingListId(null); setRenameValue('')
+    } catch (e) { alert(e.response?.data?.detail || t('emailMarketing.lists.errorRenameList')) }
+    finally { setSavingRename(false) }
   }
 
   const handleDeleteList = async (id) => {
@@ -916,7 +941,40 @@ export default function EmailMarketing() {
                     <div className="flex items-center gap-3 min-w-0">
                       <ListBulletIcon className="w-4 h-4 text-blue-400 flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-200 truncate">{list.name}</p>
+                        {renamingListId === list.id ? (
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="text" autoFocus value={renameValue}
+                              onChange={e => setRenameValue(e.target.value)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') handleSaveRenameList(list.id)
+                                if (e.key === 'Escape') cancelRenameList()
+                              }}
+                              className="z-input text-sm py-1 px-2 h-7 w-48"
+                            />
+                            <button
+                              onClick={() => handleSaveRenameList(list.id)}
+                              disabled={savingRename || !renameValue.trim()}
+                              className="p-1 text-green-400 hover:text-green-300 disabled:opacity-40 transition-colors">
+                              <CheckIcon className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={cancelRenameList}
+                              className="p-1 text-slate-500 hover:text-slate-300 transition-colors">
+                              <XMarkIcon className="w-4 h-4" />
+                            </button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5 group">
+                            <p className="text-sm font-semibold text-slate-200 truncate">{list.name}</p>
+                            <button
+                              onClick={() => startRenameList(list)}
+                              className="p-0.5 text-slate-600 hover:text-slate-300 transition-colors flex-shrink-0"
+                              title={t('emailMarketing.lists.renameBtn')}>
+                              <PencilSquareIcon className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        )}
                         <p className="text-xs text-slate-500">
                           {t('emailMarketing.lists.totalWithEmail', { total: list.total, withEmail: list.with_email })}
                         </p>
