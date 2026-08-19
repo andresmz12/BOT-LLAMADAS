@@ -1410,6 +1410,8 @@
       "noEmail": "sin email",
       "classifyTitle": "Clasificar contacto",
       "removeBtn": "Quitar",
+      "editContactTitle": "Editar nombre, correo o empresa",
+      "errorEditContact": "Error al guardar los cambios del contacto",
       "removeTitle": "Quitar de esta lista (puede volver a agregarse)",
       "blockBtn": "Bloquear",
       "blockTitle": "Bloquear permanentemente: nunca recibirá correos aunque sea reimportado",

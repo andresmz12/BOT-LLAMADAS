@@ -37,8 +37,10 @@ import {
   getEmailLists, createEmailList, renameEmailList, deleteEmailList,
   getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList, deleteTemplateAttachment,
   getScheduledEmails, cancelScheduledEmail, rescheduleEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents, labelContact,
+  updateProspect,
   generateEmailSequence, createEmailSequence, getEmailSequences, updateSequenceStep, deleteEmailSequence,
 } from '../api/client'
+import { errText } from '../utils/errText'
 
 const FIXED_KEYS_LIST = ['general', 'interested', 'callback_requested', 'voicemail', 'not_interested']
 const FIXED_KEYS = new Set(FIXED_KEYS_LIST)
@@ -266,6 +268,9 @@ export default function EmailMarketing() {
   const [renameValue, setRenameValue] = useState('')
   const [savingRename, setSavingRename] = useState(false)
   const [downloadingListId, setDownloadingListId] = useState(null)
+  const [editingContactId, setEditingContactId] = useState(null)
+  const [editContactForm, setEditContactForm] = useState({ name: '', email: '', company: '' })
+  const [savingEditContact, setSavingEditContact] = useState(false)
   const [listContacts, setListContacts] = useState({ id: null, contacts: [], loading: false })
   const [contactSearch, setContactSearch] = useState('')
   const [contactLabelFilter, setContactLabelFilter] = useState('all')
@@ -597,6 +602,35 @@ export default function EmailMarketing() {
       XLSX.writeFile(wb, `${list.name}.xlsx`)
     } catch (e) { alert(e.response?.data?.detail || t('emailMarketing.lists.errorDownloadList')) }
     finally { setDownloadingListId(null) }
+  }
+
+  const startEditContact = (c) => {
+    setEditingContactId(c.id)
+    setEditContactForm({ name: c.name || '', email: c.email || '', company: c.company || '' })
+  }
+
+  const cancelEditContact = () => {
+    setEditingContactId(null)
+    setEditContactForm({ name: '', email: '', company: '' })
+  }
+
+  const handleSaveEditContact = async (listId, contactId) => {
+    setSavingEditContact(true)
+    try {
+      const updated = await updateProspect(contactId, {
+        name: editContactForm.name.trim(),
+        email: editContactForm.email.trim(),
+        company: editContactForm.company.trim(),
+      })
+      setListContacts(prev => ({
+        ...prev,
+        contacts: prev.contacts.map(c => c.id === contactId
+          ? { ...c, name: updated.name, email: updated.email, company: updated.company }
+          : c),
+      }))
+      setEditingContactId(null)
+    } catch (e) { alert(errText(e.response?.data?.detail, t('emailMarketing.lists.errorEditContact'))) }
+    finally { setSavingEditContact(false) }
   }
 
   const handleDeleteContact = async (listId, contactId, email) => {
@@ -1130,46 +1164,107 @@ export default function EmailMarketing() {
                                   (c.company || '').toLowerCase().includes(q)
                               }).map(c => (
                                 <tr key={c.id} className="hover:bg-white/[0.02]">
-                                  <td className="px-3 py-2 text-slate-200 font-medium max-w-[120px] truncate">{c.name || '—'}</td>
-                                  <td className="px-3 py-2 font-mono text-slate-300 max-w-[160px] truncate">
-                                    {c.unsubscribed
-                                      ? <span className="text-red-400">{c.email} <span className="text-xs">{t('emailMarketing.lists.unsubscribedTag')}</span></span>
-                                      : c.email || <span className="text-slate-600 italic">{t('emailMarketing.lists.noEmail')}</span>}
-                                  </td>
-                                  <td className="px-3 py-2">
-                                    {/* Classification dropdown */}
-                                    <select
-                                      value={c.email_label || ''}
-                                      onChange={e => handleLabelContact(c.id, e.target.value || null)}
-                                      className={`text-xs rounded px-2 py-1 border-0 outline-none cursor-pointer ${getLabelMeta(c.email_label || null).bg} ${getLabelMeta(c.email_label || null).color}`}
-                                      title={t('emailMarketing.lists.classifyTitle')}
-                                    >
-                                      {LABEL_OPTIONS.map(o => (
-                                        <option key={o.value || ''} value={o.value || ''}>{o.label}</option>
-                                      ))}
-                                    </select>
-                                  </td>
-                                  <td className="px-3 py-2 text-slate-500 max-w-[100px] truncate">{c.company || '—'}</td>
-                                  <td className="px-3 py-2 text-right">
-                                    <div className="flex items-center justify-end gap-1">
-                                      <button
-                                        onClick={() => handleDeleteContact(list.id, c.id, c.email)}
-                                        className="flex items-center gap-1 px-2 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 rounded transition-colors"
-                                        title={t('emailMarketing.lists.removeTitle')}
-                                      >
-                                        <TrashIcon className="w-3.5 h-3.5" />
-                                        {t('emailMarketing.lists.removeBtn')}
-                                      </button>
-                                      <button
-                                        onClick={() => handleUnsubscribeAndDelete(list.id, c.id)}
-                                        className="flex items-center gap-1 px-2 py-1 text-xs text-amber-500 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors"
-                                        title={t('emailMarketing.lists.blockTitle')}
-                                      >
-                                        <UserMinusIcon className="w-3.5 h-3.5" />
-                                        {t('emailMarketing.lists.blockBtn')}
-                                      </button>
-                                    </div>
-                                  </td>
+                                  {editingContactId === c.id ? (
+                                    <>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="text" value={editContactForm.name} autoFocus
+                                          onChange={e => setEditContactForm(p => ({ ...p, name: e.target.value }))}
+                                          className="w-full bg-black/30 border border-z-blue rounded px-1.5 py-1 text-xs text-slate-200 focus:outline-none"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="email" value={editContactForm.email}
+                                          onChange={e => setEditContactForm(p => ({ ...p, email: e.target.value }))}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter') handleSaveEditContact(list.id, c.id)
+                                            if (e.key === 'Escape') cancelEditContact()
+                                          }}
+                                          className="w-full bg-black/30 border border-z-blue rounded px-1.5 py-1 text-xs font-mono text-slate-200 focus:outline-none"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2 text-slate-600">—</td>
+                                      <td className="px-3 py-2">
+                                        <input
+                                          type="text" value={editContactForm.company}
+                                          onChange={e => setEditContactForm(p => ({ ...p, company: e.target.value }))}
+                                          onKeyDown={e => {
+                                            if (e.key === 'Enter') handleSaveEditContact(list.id, c.id)
+                                            if (e.key === 'Escape') cancelEditContact()
+                                          }}
+                                          className="w-full bg-black/30 border border-z-blue rounded px-1.5 py-1 text-xs text-slate-200 focus:outline-none"
+                                        />
+                                      </td>
+                                      <td className="px-3 py-2 text-right">
+                                        <div className="flex items-center justify-end gap-1">
+                                          <button
+                                            onClick={() => handleSaveEditContact(list.id, c.id)}
+                                            disabled={savingEditContact}
+                                            className="p-1 text-green-400 hover:text-green-300 disabled:opacity-40 transition-colors"
+                                          >
+                                            <CheckIcon className="w-4 h-4" />
+                                          </button>
+                                          <button
+                                            onClick={cancelEditContact}
+                                            className="p-1 text-slate-500 hover:text-slate-300 transition-colors"
+                                          >
+                                            <XMarkIcon className="w-4 h-4" />
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <td className="px-3 py-2 text-slate-200 font-medium max-w-[120px] truncate">{c.name || '—'}</td>
+                                      <td className="px-3 py-2 font-mono text-slate-300 max-w-[160px] truncate">
+                                        {c.unsubscribed
+                                          ? <span className="text-red-400">{c.email} <span className="text-xs">{t('emailMarketing.lists.unsubscribedTag')}</span></span>
+                                          : c.email || <span className="text-slate-600 italic">{t('emailMarketing.lists.noEmail')}</span>}
+                                      </td>
+                                      <td className="px-3 py-2">
+                                        {/* Classification dropdown */}
+                                        <select
+                                          value={c.email_label || ''}
+                                          onChange={e => handleLabelContact(c.id, e.target.value || null)}
+                                          className={`text-xs rounded px-2 py-1 border-0 outline-none cursor-pointer ${getLabelMeta(c.email_label || null).bg} ${getLabelMeta(c.email_label || null).color}`}
+                                          title={t('emailMarketing.lists.classifyTitle')}
+                                        >
+                                          {LABEL_OPTIONS.map(o => (
+                                            <option key={o.value || ''} value={o.value || ''}>{o.label}</option>
+                                          ))}
+                                        </select>
+                                      </td>
+                                      <td className="px-3 py-2 text-slate-500 max-w-[100px] truncate">{c.company || '—'}</td>
+                                      <td className="px-3 py-2 text-right">
+                                        <div className="flex items-center justify-end gap-1">
+                                          <button
+                                            onClick={() => startEditContact(c)}
+                                            className="p-1.5 text-slate-500 hover:text-slate-300 hover:bg-white/5 rounded transition-colors"
+                                            title={t('emailMarketing.lists.editContactTitle')}
+                                          >
+                                            <PencilSquareIcon className="w-3.5 h-3.5" />
+                                          </button>
+                                          <button
+                                            onClick={() => handleDeleteContact(list.id, c.id, c.email)}
+                                            className="flex items-center gap-1 px-2 py-1 text-xs text-slate-400 hover:text-slate-200 hover:bg-white/5 rounded transition-colors"
+                                            title={t('emailMarketing.lists.removeTitle')}
+                                          >
+                                            <TrashIcon className="w-3.5 h-3.5" />
+                                            {t('emailMarketing.lists.removeBtn')}
+                                          </button>
+                                          <button
+                                            onClick={() => handleUnsubscribeAndDelete(list.id, c.id)}
+                                            className="flex items-center gap-1 px-2 py-1 text-xs text-amber-500 hover:text-amber-300 hover:bg-amber-500/10 rounded transition-colors"
+                                            title={t('emailMarketing.lists.blockTitle')}
+                                          >
+                                            <UserMinusIcon className="w-3.5 h-3.5" />
+                                            {t('emailMarketing.lists.blockBtn')}
+                                          </button>
+                                        </div>
+                                      </td>
+                                    </>
+                                  )}
                                 </tr>
                               ))}
                             </tbody>

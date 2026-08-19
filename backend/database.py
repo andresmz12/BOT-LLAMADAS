@@ -217,6 +217,9 @@ def run_migrations():
                 if "skip_labeled" not in sched_cols:
                     conn.execute(text("ALTER TABLE scheduledemailsend ADD COLUMN skip_labeled BOOLEAN DEFAULT TRUE"))
                     log.info("Migration: added scheduledemailsend.skip_labeled")
+                if "updated_at" not in sched_cols:
+                    conn.execute(text("ALTER TABLE scheduledemailsend ADD COLUMN updated_at TIMESTAMP"))
+                    log.info("Migration: added scheduledemailsend.updated_at")
 
         if "emailsendlog" in tables:
             log_cols = {c["name"] for c in insp.get_columns("emailsendlog")}

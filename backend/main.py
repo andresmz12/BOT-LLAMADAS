@@ -128,6 +128,7 @@ async def _run_scheduled_email(job_id: int):
     from sqlmodel import Session as _S
     from models import ScheduledEmailSend as _EmailJob, Organization as _Org, Prospect as _Prospect, EmailSendLog as _Log, Campaign as _Campaign
     from sqlmodel import select as _sel
+    from sqlalchemy import update as _upd
     import asyncio as _asyncio
     try:
         with _S(engine) as s:
@@ -231,6 +232,14 @@ async def _run_scheduled_email(job_id: int):
                     errors.append({"email": prospect.email, "error": str(ex)[:80]})
                     skipped += 1
 
+                # Heartbeat so a restart mid-send can tell this job is still
+                # genuinely in progress (see the startup recovery block below,
+                # which only resets a "running" job if this hasn't moved in a
+                # while — otherwise a rolling deploy could re-fire the same
+                # job on the new instance while the old one is still sending).
+                s.execute(_upd(_EmailJob).where(_EmailJob.id == job_id).values(updated_at=_dt.utcnow()))
+                s.commit()
+
             s.commit()
             campaign_name = None
             if job.campaign_id:
@@ -318,7 +327,7 @@ async def _campaign_scheduler():
                     result = s.execute(
                         _upd(_EmailJob)
                         .where(_EmailJob.id == job.id, _EmailJob.status == "pending")
-                        .values(status="running")
+                        .values(status="running", updated_at=now_utc)
                     )
                     s.commit()
                     if result.rowcount == 0:
@@ -461,21 +470,47 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"[Startup] Failed to resume bulk email jobs: {e}")
 
-    # Recover scheduled-email jobs left in "running" by a crash/restart mid-send —
-    # reset to "pending" so the next scheduler poll re-claims and re-runs them.
+    # Recover scheduled-email jobs left in "running" by a crash/restart mid-send
+    # — reset to "pending" so the next scheduler poll re-claims and re-runs
+    # them. Same rolling-deploy hazard as the bulk-email recovery above: the
+    # old instance can still be genuinely mid-send for this exact job while
+    # the new instance runs this startup block. A naive unconditional reset
+    # would let the new instance re-fire it via the next scheduler poll while
+    # the old one is still sending — double-emailing every recipient. Use the
+    # same heartbeat (updated_at, touched per-prospect in _run_scheduled_email)
+    # plus an atomic re-claim to only reset jobs that are actually stuck.
     try:
         from sqlmodel import Session as _S3, select as _sel3
+        from sqlalchemy import update as _sched_upd, or_ as _or
         from models import ScheduledEmailSend as _EmailJob3
+        from datetime import timedelta as _timedelta3
+        STALE_AFTER_SCHED = _timedelta3(seconds=120)
         with _S3(engine) as s:
+            cutoff = datetime.utcnow() - STALE_AFTER_SCHED
             orphaned = s.exec(
                 _sel3(_EmailJob3).where(_EmailJob3.status == "running")
             ).all()
+            reset_count = 0
             for j in orphaned:
-                j.status = "pending"
-                s.add(j)
-            if orphaned:
+                if j.updated_at and j.updated_at > cutoff:
+                    logger.info(f"[Startup] Scheduled email job {j.id} updated recently ({j.updated_at}); assuming a live process still owns it, not resetting")
+                    continue
+                claim = s.execute(
+                    _sched_upd(_EmailJob3)
+                    .where(
+                        _EmailJob3.id == j.id,
+                        _EmailJob3.status == "running",
+                        _or(_EmailJob3.updated_at.is_(None), _EmailJob3.updated_at <= cutoff),
+                    )
+                    .values(status="pending")
+                )
                 s.commit()
-                logger.info(f"[Startup] Reset {len(orphaned)} orphaned scheduled email job(s) 'running' → 'pending'")
+                if claim.rowcount:
+                    reset_count += 1
+                else:
+                    logger.info(f"[Startup] Scheduled email job {j.id} claimed/touched by another process, skipping reset")
+            if reset_count:
+                logger.info(f"[Startup] Reset {reset_count} orphaned scheduled email job(s) 'running' → 'pending'")
     except Exception as e:
         logger.error(f"[Startup] Failed to recover orphaned scheduled email jobs: {e}")
 

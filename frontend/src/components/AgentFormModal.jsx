@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { XMarkIcon, CheckCircleIcon, ExclamationCircleIcon, DocumentArrowUpIcon, ExclamationTriangleIcon, EyeIcon, ChevronDownIcon, ChevronUpIcon, SparklesIcon, PhoneIcon } from '@heroicons/react/24/outline'
 import { createAgent, updateAgent, syncAgent, uploadKnowledgeBase, getAgentPromptPreview, listVoices, generateAgentFromDescription } from '../api/client'
+import { errText } from '../utils/errText'
 
 const VOICES = [
   { value: 'retell-Andrea',    label: 'Andrea (Mexicana · Adulta)' },
@@ -82,19 +83,6 @@ function scoreLabel(score, t) {
   if (score >= 80) return t('agentForm.scoreWell')
   if (score >= 50) return t('agentForm.scoreBasic')
   return t('agentForm.scoreIncomplete')
-}
-
-// FastAPI validation errors put an array of {type, loc, msg, input} objects in
-// `detail` instead of a string — rendering that directly as JSX crashes the
-// whole app (React can't render plain objects as children). Always coerce to
-// a display string first.
-function errText(detail, fallback) {
-  if (typeof detail === 'string' && detail) return detail
-  if (Array.isArray(detail) && detail.length) {
-    return detail.map(d => (typeof d === 'string' ? d : d?.msg || JSON.stringify(d))).join('; ')
-  }
-  if (detail && typeof detail === 'object') return detail.msg || JSON.stringify(detail)
-  return fallback
 }
 
 function formatBytes(bytes) {

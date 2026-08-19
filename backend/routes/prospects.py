@@ -89,6 +89,7 @@ class ProspectCreate(BaseModel):
 class ProspectUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+    email: Optional[str] = None
     company: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
@@ -100,6 +101,16 @@ class ProspectUpdate(BaseModel):
         if v is None:
             return v
         return _validate_phone(v)
+
+    @field_validator("email")
+    @classmethod
+    def email_valid(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        v = v.strip()
+        if v and not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", v):
+            raise ValueError("Correo electrónico inválido")
+        return v or None
 
     @field_validator("status")
     @classmethod
