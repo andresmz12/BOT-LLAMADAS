@@ -1386,6 +1386,8 @@
       "colCompany": "Company",
       "colLabel": "Label",
       "colUnsubscribed": "Unsubscribed",
+      "yes": "Yes",
+      "no": "No",
       "addManualTitle": "Add contact manually",
       "namePh": "Name",
       "emailPh": "Email *",

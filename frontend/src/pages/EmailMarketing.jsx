@@ -39,7 +39,6 @@ import {
   getScheduledEmails, cancelScheduledEmail, rescheduleEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents, labelContact,
   generateEmailSequence, createEmailSequence, getEmailSequences, updateSequenceStep, deleteEmailSequence,
 } from '../api/client'
-import { exportToCsv } from '../utils/exportCsv'
 
 const FIXED_KEYS_LIST = ['general', 'interested', 'callback_requested', 'voicemail', 'not_interested']
 const FIXED_KEYS = new Set(FIXED_KEYS_LIST)
@@ -583,13 +582,19 @@ export default function EmailMarketing() {
     try {
       const contacts = listContacts.id === list.id ? listContacts.contacts : await getEmailListContacts(list.id)
       if (!contacts.length) { alert(t('emailMarketing.lists.emptyListDownload')); return }
-      exportToCsv(`${list.name}.csv`, contacts, [
-        { key: 'name', label: t('emailMarketing.lists.colName') },
-        { key: 'email', label: t('emailMarketing.lists.colEmail') },
-        { key: 'company', label: t('emailMarketing.lists.colCompany') },
-        { key: 'email_label', label: t('emailMarketing.lists.colLabel') },
-        { key: 'unsubscribed', label: t('emailMarketing.lists.colUnsubscribed') },
-      ])
+      const XLSX = await import('xlsx')
+      const rows = contacts.map(c => ({
+        [t('emailMarketing.lists.colName')]: c.name || '',
+        [t('emailMarketing.lists.colEmail')]: c.email || '',
+        [t('emailMarketing.lists.colCompany')]: c.company || '',
+        [t('emailMarketing.lists.colLabel')]: c.email_label || '',
+        [t('emailMarketing.lists.colUnsubscribed')]: c.unsubscribed ? t('emailMarketing.lists.yes') : t('emailMarketing.lists.no'),
+      }))
+      const ws = XLSX.utils.json_to_sheet(rows)
+      const wb = XLSX.utils.book_new()
+      const sheetName = (list.name.replace(/[\\/?*[\]:]/g, ' ').trim() || 'Lista').slice(0, 31)
+      XLSX.utils.book_append_sheet(wb, ws, sheetName)
+      XLSX.writeFile(wb, `${list.name}.xlsx`)
     } catch (e) { alert(e.response?.data?.detail || t('emailMarketing.lists.errorDownloadList')) }
     finally { setDownloadingListId(null) }
   }
