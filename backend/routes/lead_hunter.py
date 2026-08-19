@@ -252,10 +252,13 @@ async def find_email_by_name(
         raise HTTPException(status_code=400, detail="Falta el nombre de la empresa")
     org = _get_org(current_user, session)
     from services.email_finder import find_company_email
+    from services.google_places_service import GooglePlacesError
     try:
         result = await find_company_email(data.name.strip(), (data.city or "").strip(), org)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except GooglePlacesError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         logger.error(f"[LeadHunter] find-email failed for '{data.name}': {e}", exc_info=True)
         raise HTTPException(status_code=502, detail="No se pudo buscar el correo. Intenta de nuevo.")
@@ -274,10 +277,13 @@ async def find_email_for_lead(
     lead = _get_lead(lead_id, current_user, session)
     org = _get_org(current_user, session)
     from services.email_finder import find_company_email
+    from services.google_places_service import GooglePlacesError
     try:
         result = await find_company_email(lead.name, lead.city, org, website_url=lead.website_url)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except GooglePlacesError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         logger.error(f"[LeadHunter] find-email failed for lead={lead_id}: {e}", exc_info=True)
         raise HTTPException(status_code=502, detail="No se pudo buscar el correo. Intenta de nuevo.")

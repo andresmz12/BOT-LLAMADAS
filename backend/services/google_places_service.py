@@ -1,0 +1,80 @@
+import logging
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+TEXT_SEARCH_URL = "https://maps.googleapis.com/maps/api/place/textsearch/json"
+DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json"
+
+
+class GooglePlacesError(Exception):
+    """Raised when Google Places rejects the request (bad key, API not
+    enabled, billing not set up, etc.) — distinct from a plain "no results"."""
+
+
+def _place_details(client: httpx.Client, place_id: str, api_key: str) -> dict:
+    try:
+        resp = client.get(DETAILS_URL, params={
+            "place_id": place_id,
+            "fields": "formatted_phone_number,international_phone_number,website",
+            "key": api_key,
+        })
+        data = resp.json()
+        return data.get("result", {}) if data.get("status") == "OK" else {}
+    except Exception as e:
+        logger.warning(f"[GooglePlaces] details failed for place_id={place_id}: {e}")
+        return {}
+
+
+def search_businesses(
+    query: str,
+    api_key: str,
+    limit: int = 20,
+    min_rating: float = 0.0,
+    max_rating: float = 5.0,
+    min_reviews: int = 0,
+    max_reviews: int = 10 ** 9,
+) -> list[dict]:
+    """Search Google Places (Text Search) and enrich only the results that
+    already pass the rating/review filter with phone + website via Place
+    Details. Shaped to match Outscraper's google_maps_search output (name,
+    phone, site, rating, reviews_count) so callers don't need to know which
+    provider actually ran the search.
+
+    Place Details is a separately-billed call per place, so it's only spent
+    on candidates the quality filter wouldn't reject anyway — no point
+    paying for contact data on a business that's getting discarded.
+    """
+    with httpx.Client(timeout=10.0) as client:
+        resp = client.get(TEXT_SEARCH_URL, params={"query": query, "key": api_key, "region": "us"})
+        data = resp.json()
+        status = data.get("status")
+        if status == "REQUEST_DENIED":
+            raise GooglePlacesError(
+                "Google Places rechazó la solicitud "
+                f"({data.get('error_message') or 'clave inválida o Places API no habilitada en el proyecto de Google Cloud'})"
+            )
+        if status == "OVER_QUERY_LIMIT":
+            raise GooglePlacesError("Se alcanzó el límite de uso de Google Places (revisa la facturación en Google Cloud).")
+        if status not in ("OK", "ZERO_RESULTS"):
+            raise GooglePlacesError(f"Error de Google Places: {status}")
+
+        items = []
+        for r in (data.get("results") or [])[:limit]:
+            rating = r.get("rating") or 0
+            reviews = r.get("user_ratings_total") or 0
+            item = {
+                "name": r.get("name", ""),
+                "rating": rating,
+                "reviews_count": reviews,
+                "phone": "",
+                "site": "",
+            }
+            place_id = r.get("place_id")
+            if place_id and (min_rating <= rating <= max_rating) and (min_reviews <= reviews <= max_reviews):
+                details = _place_details(client, place_id, api_key)
+                item["phone"] = details.get("formatted_phone_number") or details.get("international_phone_number") or ""
+                item["site"] = details.get("website") or ""
+            items.append(item)
+        return items
