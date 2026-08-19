@@ -1112,6 +1112,7 @@
     "findEmailScraped": "Encontrado en su sitio web",
     "findEmailGuessed": "Sugerido — sin verificar",
     "findEmailOtherCandidates": "Otras opciones",
+    "findEmailAlgoSuggestions": "Sugerencias algorítmicas (sin verificar)",
     "findEmailForLead": "Buscar correo",
     "findEmailNotFound": "No se encontró un correo para este lead.",
     "emailSourceScraped": "Del sitio web",
