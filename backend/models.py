@@ -306,6 +306,7 @@ class ScheduledEmailSend(SQLModel, table=True):
     subject_override: Optional[str] = None
     body_override: Optional[str] = None
     skip_labeled: bool = Field(default=True)  # skip contacts already classified (interested/not_interested/converted/do_not_contact)
+    updated_at: Optional[datetime] = None  # heartbeat touched during the send loop; used to tell a genuinely-still-running job apart from a crashed one on restart
 
 
 class EmailSequence(SQLModel, table=True):
