@@ -331,6 +331,8 @@ class LeadHunt(SQLModel, table=True):
     reviews_count: int = Field(default=0)
     has_website: bool = Field(default=False)
     website_url: Optional[str] = None
+    email: Optional[str] = None
+    email_source: Optional[str] = None      # scraped | guessed
     rating: float = Field(default=0.0)
     pain_point: Optional[str] = None
     message_es: Optional[str] = None
