@@ -120,6 +120,16 @@ def run_migrations():
                     conn.execute(text("ALTER TABLE call ADD COLUMN retell_cost_breakdown TEXT"))
                     log.info("Migration: added call.retell_cost_breakdown")
 
+        if "leadhunt" in tables:
+            lh_cols = {c["name"] for c in insp.get_columns("leadhunt")}
+            with engine.begin() as conn:
+                if "email" not in lh_cols:
+                    conn.execute(text("ALTER TABLE leadhunt ADD COLUMN email VARCHAR(255)"))
+                    log.info("Migration: added leadhunt.email")
+                if "email_source" not in lh_cols:
+                    conn.execute(text("ALTER TABLE leadhunt ADD COLUMN email_source VARCHAR(20)"))
+                    log.info("Migration: added leadhunt.email_source")
+
         if "campaign" in tables:
             camp_cols = {c["name"] for c in insp.get_columns("campaign")}
             with engine.begin() as conn:

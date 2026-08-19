@@ -41,6 +41,11 @@ class SendRequest(BaseModel):
     channel: str = "whatsapp"
 
 
+class FindEmailRequest(BaseModel):
+    name: str
+    city: Optional[str] = None
+
+
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _lead_dict(lead: LeadHunt) -> dict:
@@ -53,6 +58,8 @@ def _lead_dict(lead: LeadHunt) -> dict:
         "reviews_count": lead.reviews_count,
         "has_website": lead.has_website,
         "website_url": lead.website_url,
+        "email": lead.email,
+        "email_source": lead.email_source,
         "rating": lead.rating,
         "pain_point": lead.pain_point,
         "message_es": lead.message_es,
@@ -229,6 +236,63 @@ async def craft_lead_message(
         from services.anthropic_errors import friendly_anthropic_error
         raise HTTPException(status_code=502, detail=friendly_anthropic_error(e))
     return _lead_dict(lead)
+
+
+@router.post("/find-email")
+async def find_email_by_name(
+    data: FindEmailRequest,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    """Look up a business by name (+ optional city) and try to find its
+    email: a real address published on its own site first, or — if the
+    domain can receive mail but publishes nothing — a generic guessed
+    address clearly marked as unverified. Not tied to an existing lead."""
+    if not data.name.strip():
+        raise HTTPException(status_code=400, detail="Falta el nombre de la empresa")
+    org = _get_org(current_user, session)
+    from services.email_finder import find_company_email
+    try:
+        result = await find_company_email(data.name.strip(), (data.city or "").strip(), org)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"[LeadHunter] find-email failed for '{data.name}': {e}", exc_info=True)
+        raise HTTPException(status_code=502, detail="No se pudo buscar el correo. Intenta de nuevo.")
+    return result
+
+
+@router.post("/leads/{lead_id}/find-email")
+async def find_email_for_lead(
+    lead_id: int,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    """Same lookup as /find-email, but reuses the lead's own name/city/
+    website (skipping the Outscraper search if we already have its site)
+    and saves the result onto the lead."""
+    lead = _get_lead(lead_id, current_user, session)
+    org = _get_org(current_user, session)
+    from services.email_finder import find_company_email
+    try:
+        result = await find_company_email(lead.name, lead.city, org, website_url=lead.website_url)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"[LeadHunter] find-email failed for lead={lead_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=502, detail="No se pudo buscar el correo. Intenta de nuevo.")
+
+    if result.get("email"):
+        lead.email = result["email"]
+        lead.email_source = result["source"]
+        if not lead.website_url and result.get("website"):
+            lead.website_url = result["website"]
+            lead.has_website = True
+        session.add(lead)
+        session.commit()
+        session.refresh(lead)
+
+    return {**result, "lead": _lead_dict(lead)}
 
 
 @router.post("/craft-all")

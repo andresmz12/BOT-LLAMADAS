@@ -204,6 +204,8 @@ export const deleteLeadHunt = (id) => api.delete(`/lead-hunter/leads/${id}`).the
 export const deleteAllLeadHunts = () => api.delete('/lead-hunter/leads').then(r => r.data)
 export const getLeadHunterConfig = () => api.get('/lead-hunter/config').then(r => r.data)
 export const saveLeadHunterConfig = (data) => api.post('/lead-hunter/config', data).then(r => r.data)
+export const findEmailByName = (name, city) => api.post('/lead-hunter/find-email', { name, city }).then(r => r.data)
+export const findEmailForLead = (id) => api.post(`/lead-hunter/leads/${id}/find-email`).then(r => r.data)
 
 export const getEmailStats = () => api.get('/stats/email').then(r => r.data)
 export const getEmailEvents = (eventType) =>
