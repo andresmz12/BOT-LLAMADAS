@@ -5,7 +5,6 @@ import re
 from urllib.parse import urlparse
 
 import httpx
-from outscraper import ApiClient
 
 from models import Organization
 from services.crm_webhook import UnsafeWebhookUrlError, _assert_safe_webhook_url
@@ -39,27 +38,16 @@ def _extract_domain(url: str) -> str | None:
 
 
 async def resolve_company_domain(name: str, city: str, org: Organization) -> dict | None:
-    """Look up a business by name (+ optional city) via Outscraper (or Google
-    Places if Outscraper isn't configured) and return its listed website/
-    phone, so a bare company name can be turned into a domain to search for
-    emails against."""
+    """Look up a business by name (+ optional city) via Google Places and
+    return its listed website/phone, so a bare company name can be turned
+    into a domain to search for emails against."""
     query = f"{name} en {city}" if city else name
-    outscraper_key = os.getenv("OUTSCRAPER_API_KEY", "").strip()
     google_key = (org.google_api_key or "").strip() or os.getenv("GOOGLE_API_KEY", "").strip()
+    if not google_key:
+        raise ValueError("Configura una Google API key (Configuración) para poder buscar negocios.")
 
-    if outscraper_key:
-        def _search():
-            client = ApiClient(api_key=outscraper_key)
-            results = client.google_maps_search(query, limit=1, language=org.lh_language or "es", region="us")
-            items = results[0] if results and isinstance(results[0], list) else results
-            return items[0] if items else None
-
-        item = await asyncio.to_thread(_search)
-    elif google_key:
-        from services.google_places_service import search_businesses
-        item = await asyncio.to_thread(lambda: next(iter(search_businesses(query, api_key=google_key, limit=1)), None))
-    else:
-        raise ValueError("Configura OUTSCRAPER_API_KEY o una Google API key (Configuración) para poder buscar negocios.")
+    from services.google_places_service import search_businesses
+    item = await asyncio.to_thread(lambda: next(iter(search_businesses(query, api_key=google_key, limit=1)), None))
 
     if not item:
         return None

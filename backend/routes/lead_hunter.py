@@ -143,7 +143,7 @@ def scout_leads(
     current_user: User = Depends(require_pro_plan),
     session: Session = Depends(get_session),
 ):
-    """Search Google Maps via Outscraper and store matching businesses as LeadHunt records."""
+    """Search Google Maps via Google Places and store matching businesses as LeadHunt records."""
     if not (1 <= data.limit <= 50):
         raise HTTPException(status_code=400, detail="El límite debe estar entre 1 y 50")
 
@@ -272,7 +272,7 @@ async def find_email_for_lead(
     session: Session = Depends(get_session),
 ):
     """Same lookup as /find-email, but reuses the lead's own name/city/
-    website (skipping the Outscraper search if we already have its site)
+    website (skipping the Google Places search if we already have its site)
     and saves the result onto the lead."""
     lead = _get_lead(lead_id, current_user, session)
     org = _get_org(current_user, session)
