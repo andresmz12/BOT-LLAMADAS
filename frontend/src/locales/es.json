@@ -1376,6 +1376,8 @@
       "confirmDeleteList": "¿Eliminar la lista \"{{name}}\" y todos sus {{total}} contactos?",
       "errorDeleteList": "Error al eliminar lista",
       "errorCreateList": "Error al crear lista",
+      "renameBtn": "Renombrar lista",
+      "errorRenameList": "Error al renombrar la lista",
       "addManualTitle": "Agregar contacto manualmente",
       "namePh": "Nombre",
       "emailPh": "Email *",

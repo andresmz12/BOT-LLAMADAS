@@ -160,6 +160,7 @@ export const validateEmailRecipients = (params) => api.get('/settings/email/vali
 export const getEmailRecipientsDetail = (params) => api.get('/settings/email/recipients-detail', { params }).then(r => r.data)
 export const getEmailLists = () => api.get('/settings/email/lists').then(r => r.data)
 export const createEmailList = (data) => api.post('/settings/email/lists', data).then(r => r.data)
+export const renameEmailList = (id, name) => api.patch(`/settings/email/lists/${id}`, { name }).then(r => r.data)
 export const deleteEmailList = (id) => api.delete(`/settings/email/lists/${id}`).then(r => r.data)
 export const getEmailListContacts = (id) => api.get(`/settings/email/lists/${id}/contacts`).then(r => r.data)
 export const deleteEmailListContact = (listId, contactId) => api.delete(`/settings/email/lists/${listId}/contacts/${contactId}`).then(r => r.data)

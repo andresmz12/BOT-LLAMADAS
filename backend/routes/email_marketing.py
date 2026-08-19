@@ -1261,6 +1261,35 @@ def create_email_list(
     return {"id": el.id, "name": el.name, "total": 0, "with_email": 0, "created_at": el.created_at.isoformat() if el.created_at else None}
 
 
+@router.patch("/email/lists/{list_id}")
+def rename_email_list(
+    list_id: int,
+    data: EmailListCreate,
+    current_user: User = Depends(require_write_access),
+    session: Session = Depends(get_session),
+):
+    el = session.get(EmailList, list_id)
+    if not el or el.organization_id != current_user.organization_id:
+        raise HTTPException(status_code=404)
+    name = data.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="El nombre no puede estar vacío")
+    el.name = name
+    session.add(el)
+    session.commit()
+    session.refresh(el)
+    total = session.exec(select(func.count(Prospect.id)).where(Prospect.email_list_id == el.id)).one()
+    with_email = session.exec(
+        select(func.count(Prospect.id)).where(
+            Prospect.email_list_id == el.id,
+            Prospect.email.is_not(None),
+            Prospect.email != "",
+            Prospect.email_unsubscribed == False,  # noqa: E712
+        )
+    ).one()
+    return {"id": el.id, "name": el.name, "total": total, "with_email": with_email, "created_at": el.created_at.isoformat() if el.created_at else None}
+
+
 @router.delete("/email/lists/{list_id}")
 def delete_email_list(
     list_id: int,
