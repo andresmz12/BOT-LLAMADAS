@@ -1386,6 +1386,8 @@
       "colCompany": "Empresa",
       "colLabel": "Etiqueta",
       "colUnsubscribed": "Desuscrito",
+      "yes": "Sí",
+      "no": "No",
       "addManualTitle": "Agregar contacto manualmente",
       "namePh": "Nombre",
       "emailPh": "Email *",
