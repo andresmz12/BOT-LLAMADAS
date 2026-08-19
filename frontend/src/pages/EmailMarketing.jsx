@@ -39,6 +39,7 @@ import {
   getScheduledEmails, cancelScheduledEmail, rescheduleEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents, labelContact,
   generateEmailSequence, createEmailSequence, getEmailSequences, updateSequenceStep, deleteEmailSequence,
 } from '../api/client'
+import { exportToCsv } from '../utils/exportCsv'
 
 const FIXED_KEYS_LIST = ['general', 'interested', 'callback_requested', 'voicemail', 'not_interested']
 const FIXED_KEYS = new Set(FIXED_KEYS_LIST)
@@ -265,6 +266,7 @@ export default function EmailMarketing() {
   const [renamingListId, setRenamingListId] = useState(null)
   const [renameValue, setRenameValue] = useState('')
   const [savingRename, setSavingRename] = useState(false)
+  const [downloadingListId, setDownloadingListId] = useState(null)
   const [listContacts, setListContacts] = useState({ id: null, contacts: [], loading: false })
   const [contactSearch, setContactSearch] = useState('')
   const [contactLabelFilter, setContactLabelFilter] = useState('all')
@@ -574,6 +576,22 @@ export default function EmailMarketing() {
       const contacts = await getEmailListContacts(listId)
       setListContacts({ id: listId, contacts, loading: false })
     } catch (e) { setListContacts({ id: null, contacts: [], loading: false }) }
+  }
+
+  const handleDownloadList = async (list) => {
+    setDownloadingListId(list.id)
+    try {
+      const contacts = listContacts.id === list.id ? listContacts.contacts : await getEmailListContacts(list.id)
+      if (!contacts.length) { alert(t('emailMarketing.lists.emptyListDownload')); return }
+      exportToCsv(`${list.name}.csv`, contacts, [
+        { key: 'name', label: t('emailMarketing.lists.colName') },
+        { key: 'email', label: t('emailMarketing.lists.colEmail') },
+        { key: 'company', label: t('emailMarketing.lists.colCompany') },
+        { key: 'email_label', label: t('emailMarketing.lists.colLabel') },
+        { key: 'unsubscribed', label: t('emailMarketing.lists.colUnsubscribed') },
+      ])
+    } catch (e) { alert(e.response?.data?.detail || t('emailMarketing.lists.errorDownloadList')) }
+    finally { setDownloadingListId(null) }
   }
 
   const handleDeleteContact = async (listId, contactId, email) => {
@@ -1009,6 +1027,13 @@ export default function EmailMarketing() {
                         className={`flex items-center gap-1 px-2.5 py-1.5 text-xs border rounded-lg transition-colors ${listContacts.id === list.id ? 'text-slate-200 border-slate-400/40 bg-white/10' : 'text-slate-400 border-z-border hover:bg-white/5'}`}>
                         <EyeIcon className="w-3 h-3" />
                         {listContacts.id === list.id ? t('emailMarketing.lists.hide') : t('emailMarketing.lists.view')}
+                      </button>
+                      <button
+                        onClick={() => handleDownloadList(list)}
+                        disabled={downloadingListId === list.id || !list.total}
+                        title={t('emailMarketing.lists.downloadBtn')}
+                        className="flex items-center gap-1 px-2.5 py-1.5 text-xs text-slate-400 border border-z-border rounded-lg hover:bg-white/5 transition-colors disabled:opacity-40">
+                        <ArrowDownTrayIcon className="w-3 h-3" /> {t('emailMarketing.lists.downloadBtn')}
                       </button>
                       <button
                         onClick={() => handleDeleteList(list.id)}
