@@ -59,6 +59,28 @@ async def resolve_company_domain(name: str, city: str, org: Organization) -> dic
     }
 
 
+async def _safe_get(client: httpx.AsyncClient, url: str, max_redirects: int = 3) -> httpx.Response | None:
+    """GET a URL, following redirects manually so every hop is re-validated
+    against _assert_safe_webhook_url. A plain follow_redirects=True would let
+    a scraped site's response redirect straight past the initial SSRF check
+    into an internal/metadata address."""
+    for _ in range(max_redirects + 1):
+        try:
+            _assert_safe_webhook_url(url)
+        except UnsafeWebhookUrlError as e:
+            logger.warning(f"[EmailFinder] refusing to follow redirect to unsafe URL {url}: {e}")
+            return None
+        resp = await client.get(url)
+        if resp.is_redirect:
+            location = resp.headers.get("location")
+            if not location:
+                return resp
+            url = str(httpx.URL(url).join(location))
+            continue
+        return resp
+    return None
+
+
 async def scrape_site_emails(website_url: str) -> list[str]:
     """Fetch the business's own site (home + a few common contact/about
     paths) and pull out any email addresses it publishes — real, already-
@@ -83,15 +105,15 @@ async def scrape_site_emails(website_url: str) -> list[str]:
     seen: set[str] = set()
 
     async with httpx.AsyncClient(
-        timeout=6.0, follow_redirects=True,
+        timeout=6.0, follow_redirects=False,
         headers={"User-Agent": "Mozilla/5.0 (compatible; ZyraVoiceBot/1.0)"},
     ) as client:
         for path in _SCRAPE_PATHS:
             try:
-                resp = await client.get(base + path)
+                resp = await _safe_get(client, base + path)
             except Exception:
                 continue
-            if resp.status_code >= 400:
+            if resp is None or resp.status_code >= 400:
                 continue
             candidates = MAILTO_RE.findall(resp.text) + EMAIL_RE.findall(resp.text)
             for raw in candidates:
@@ -99,7 +121,9 @@ async def scrape_site_emails(website_url: str) -> list[str]:
                 if e in seen or any(s in e for s in _IGNORED_SUBSTRINGS):
                     continue
                 seen.add(e)
-                (same_domain if e.split("@")[-1].endswith(domain) else other).append(e)
+                e_domain = e.split("@")[-1]
+                is_same_domain = e_domain == domain or e_domain.endswith(f".{domain}")
+                (same_domain if is_same_domain else other).append(e)
             if same_domain:
                 break
 
