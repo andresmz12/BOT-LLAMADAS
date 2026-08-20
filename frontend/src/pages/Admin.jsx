@@ -9,6 +9,7 @@ import {
 } from '../api/client'
 import SecretInput from '../components/SecretInput'
 import { fmtDate } from '../utils/date'
+import { errText } from '../utils/errText'
 
 const AUDIT_ACTION_COLOR = (action) => {
   if (action.endsWith('.delete') || action === 'user.delete') return 'bg-red-500/15 text-red-400'
@@ -809,7 +810,7 @@ function UserModal({ user, orgs, onClose, onSaved }) {
       setNewPassword('')
       alert(t('admin.userModal.passwordResetOk'))
     } catch (err) {
-      alert(err.response?.data?.detail || t('admin.errorGeneric'))
+      alert(errText(err.response?.data?.detail, t('admin.errorGeneric')))
     } finally {
       setResetting(false)
     }
