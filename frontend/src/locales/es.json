@@ -19,6 +19,13 @@
   },
   "dashboard": {
     "title": "Dashboard",
+    "greetingMorning": "Buenos días, {{name}}",
+    "greetingAfternoon": "Buenas tardes, {{name}}",
+    "greetingEvening": "Buenas noches, {{name}}",
+    "subtitle": "Así va tu operación hoy",
+    "live": "En vivo",
+    "appointmentsSub": "Este mes",
+    "newInterested": "{{count}} nuevos",
     "allOrgs": "Todas las organizaciones",
     "totalCalls": "Total llamadas",
     "contacted": "Contactados",
