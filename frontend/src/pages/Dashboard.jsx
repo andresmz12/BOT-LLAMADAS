@@ -314,30 +314,47 @@ function EmailDashboard({ selectedOrg }) {
           </Panel>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            {es?.by_template?.length > 0 && (
-              <Panel title={t('dashboard.email.byTemplate')} noPad>
-                <table className="w-full text-sm">
-                  <thead className="bg-black/20">
-                    <tr>
-                      {[t('dashboard.email.templateHeaders.template'), t('dashboard.email.templateHeaders.sent'), t('dashboard.email.templateHeaders.delivered'), t('dashboard.email.templateHeaders.openRate'), t('dashboard.email.templateHeaders.clickRate')].map(h => (
-                        <th key={h} className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-z-border">
-                    {es.by_template.map(tpl => (
-                      <tr key={tpl.key} className="hover:bg-white/[0.02]">
-                        <td className="px-4 py-3 font-medium text-slate-200 capitalize">{TEMPLATE_LABELS[tpl.key] || tpl.key}</td>
-                        <td className="px-4 py-3 font-mono tabular-nums text-slate-300">{tpl.sent}</td>
-                        <td className="px-4 py-3 font-mono tabular-nums text-green-400">{tpl.delivered}</td>
-                        <td className="px-4 py-3 font-mono tabular-nums text-blue-400">{tpl.open_rate}%</td>
-                        <td className="px-4 py-3 font-mono tabular-nums text-purple-400">{tpl.click_rate}%</td>
+            {es?.by_template?.length > 0 && (() => {
+              // Busy orgs can accumulate dozens of one-off/custom template
+              // keys (each resend, test send, etc. can mint its own) — an
+              // unbounded table turns into a page-breaking wall of rows, so
+              // show the most-sent templates first and cap what's rendered.
+              const TEMPLATE_ROWS_CAP = 8
+              const sorted = [...es.by_template].sort((a, b) => b.sent - a.sent)
+              const visible = sorted.slice(0, TEMPLATE_ROWS_CAP)
+              const hiddenCount = sorted.length - visible.length
+              return (
+                <Panel title={t('dashboard.email.byTemplate')} noPad>
+                  <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[420px]">
+                    <thead className="bg-black/20">
+                      <tr>
+                        {[t('dashboard.email.templateHeaders.template'), t('dashboard.email.templateHeaders.sent'), t('dashboard.email.templateHeaders.delivered'), t('dashboard.email.templateHeaders.openRate'), t('dashboard.email.templateHeaders.clickRate')].map(h => (
+                          <th key={h} className="px-4 py-2 text-left text-xs font-medium text-slate-500 uppercase whitespace-nowrap">{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </Panel>
-            )}
+                    </thead>
+                    <tbody className="divide-y divide-z-border">
+                      {visible.map(tpl => (
+                        <tr key={tpl.key} className="hover:bg-white/[0.02]">
+                          <td className="px-4 py-3 font-medium text-slate-200 truncate max-w-[220px]">{tpl.label || TEMPLATE_LABELS[tpl.key] || tpl.key}</td>
+                          <td className="px-4 py-3 font-mono tabular-nums text-slate-300">{tpl.sent}</td>
+                          <td className="px-4 py-3 font-mono tabular-nums text-green-400">{tpl.delivered}</td>
+                          <td className="px-4 py-3 font-mono tabular-nums text-blue-400">{tpl.open_rate}%</td>
+                          <td className="px-4 py-3 font-mono tabular-nums text-purple-400">{tpl.click_rate}%</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  </div>
+                  {hiddenCount > 0 && (
+                    <p className="px-4 py-2.5 text-xs text-slate-600 border-t border-white/[0.04]">
+                      {t('dashboard.email.moreTemplates', { count: hiddenCount })}
+                    </p>
+                  )}
+                </Panel>
+              )
+            })()}
 
             {es?.recent_sends?.length > 0 && (
               <Panel title={t('dashboard.email.recentSends')} noPad>
@@ -346,7 +363,7 @@ function EmailDashboard({ selectedOrg }) {
                     <div key={i} className="px-4 py-3 flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <p className="text-sm text-slate-200 font-medium truncate">
-                          {TEMPLATE_LABELS[s.template_key] || s.template_key}
+                          {s.template_label || TEMPLATE_LABELS[s.template_key] || s.template_key}
                           {s.campaign_name && <span className="text-slate-500 font-normal"> · {s.campaign_name}</span>}
                         </p>
                         <p className="text-xs text-slate-500">{fmtDate(s.sent_at)}</p>
