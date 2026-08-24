@@ -85,6 +85,7 @@
       "chartOpens": "Opens",
       "chartClicks": "Clicks",
       "byTemplate": "By template",
+      "moreTemplates": "+{{count}} more templates with fewer sends",
       "templateHeaders": {
         "template": "Template",
         "sent": "Sent",

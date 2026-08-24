@@ -12,6 +12,24 @@ router = APIRouter(prefix="/stats", tags=["stats"])
 
 _CONTACTED_OUTCOMES = ("interested", "not_interested", "callback_requested", "appointment_scheduled", "wrong_number")
 
+# The 5 built-in template keys ship their display label via the frontend's
+# own i18n strings (emailMarketing.fixedTemplates.<key>.label) — anything
+# else is an org-created custom template, whose only human-readable name is
+# the _label the user typed when creating it (stored in
+# Organization.email_templates as {key: {_label, subject, body, ...}}).
+_FIXED_TEMPLATE_KEYS = {"general", "interested", "callback_requested", "voicemail", "not_interested"}
+
+
+def _custom_template_labels(org: Optional[Organization]) -> dict:
+    if not org or not org.email_templates:
+        return {}
+    try:
+        import json
+        templates = json.loads(org.email_templates)
+        return {k: v.get("_label") for k, v in templates.items() if isinstance(v, dict) and v.get("_label")}
+    except Exception:
+        return {}
+
 
 def _minutes_usage(user: User, session: Session) -> dict:
     if not user.organization_id:
@@ -196,6 +214,9 @@ def email_stats(
     if not org_id:
         return _empty_email_stats()
 
+    org = session.get(Organization, org_id)
+    custom_labels = _custom_template_labels(org)
+
     # Aggregate from EmailSendLog (bulk sends) — SQL SUM, no Python loop
     log_agg = session.exec(
         select(
@@ -205,7 +226,7 @@ def email_stats(
     ).one()
     total_sent = int(log_agg[0])
     total_errors = int(log_agg[1])
-    # Rows for per-day/per-template breakdown — last 90 days only
+    # Rows for the "recent sends" list — last 90 days is plenty for that.
     cutoff_logs = datetime.utcnow() - timedelta(days=90)
     logs = session.exec(
         select(EmailSendLog)
@@ -213,6 +234,11 @@ def email_stats(
         .order_by(EmailSendLog.sent_at.desc())
         .limit(500)
     ).all()
+
+    # Shared window for the by_template / by_day breakdowns below — computed
+    # up front (not inside the try block) so it's always defined even if the
+    # event-aggregation queries below raise.
+    cutoff_30d = datetime.utcnow() - timedelta(days=30)
 
     # Aggregate EmailEvent counts via GROUP BY — avoids loading all rows into Python
     delivered = opens = unique_opens = clicks = unique_clicks = bounces = unsubscribes = 0
@@ -237,8 +263,7 @@ def email_stats(
             select(func.count(func.distinct(EmailEvent.prospect_email)))
             .where(EmailEvent.organization_id == org_id, EmailEvent.event_type == "click")
         ).one() or 0
-        # Keep events list for per-day/per-template breakdown but limit to last 30 days
-        cutoff_30d = datetime.utcnow() - timedelta(days=30)
+        # Keep events list for the by_day breakdown, limited to last 30 days
         events = session.exec(
             select(EmailEvent)
             .where(EmailEvent.organization_id == org_id, EmailEvent.timestamp >= cutoff_30d)
@@ -268,17 +293,54 @@ def email_stats(
             "clicks": sum(1 for e in day_events if e.event_type == "click"),
         })
 
-    tmpl_keys = {l.template_key for l in logs if l.template_key}
+    # Per-template breakdown — real SQL GROUP BY over the SAME 30-day window
+    # used for `events` above (not a Python loop over the 90-day/500-row
+    # `logs` list from the "recent sends" query): mixing two differently
+    # capped/windowed lists let a template's delivered count come out higher
+    # than its sent count whenever an older, larger batch fell outside the
+    # logs window/cap while its (still-recent) delivery events didn't.
+    tmpl_sent_rows = session.exec(
+        select(EmailSendLog.template_key, func.coalesce(func.sum(EmailSendLog.total_sent), 0))
+        .where(EmailSendLog.organization_id == org_id, EmailSendLog.sent_at >= cutoff_30d, EmailSendLog.template_key != "")
+        .group_by(EmailSendLog.template_key)
+    ).all()
+    tmpl_sent = {row[0]: int(row[1]) for row in tmpl_sent_rows}
+
+    tmpl_delivered_rows = session.exec(
+        select(EmailEvent.template_key, func.count(EmailEvent.id))
+        .where(EmailEvent.organization_id == org_id, EmailEvent.timestamp >= cutoff_30d,
+               EmailEvent.event_type == "delivered", EmailEvent.template_key.is_not(None))
+        .group_by(EmailEvent.template_key)
+    ).all()
+    tmpl_delivered = {row[0]: row[1] for row in tmpl_delivered_rows}
+
+    tmpl_opens_rows = session.exec(
+        select(EmailEvent.template_key, func.count(func.distinct(EmailEvent.prospect_email)))
+        .where(EmailEvent.organization_id == org_id, EmailEvent.timestamp >= cutoff_30d,
+               EmailEvent.event_type == "open", EmailEvent.template_key.is_not(None))
+        .group_by(EmailEvent.template_key)
+    ).all()
+    tmpl_opens = {row[0]: row[1] for row in tmpl_opens_rows}
+
+    tmpl_clicks_rows = session.exec(
+        select(EmailEvent.template_key, func.count(func.distinct(EmailEvent.prospect_email)))
+        .where(EmailEvent.organization_id == org_id, EmailEvent.timestamp >= cutoff_30d,
+               EmailEvent.event_type == "click", EmailEvent.template_key.is_not(None))
+        .group_by(EmailEvent.template_key)
+    ).all()
+    tmpl_clicks = {row[0]: row[1] for row in tmpl_clicks_rows}
+
     by_template = []
-    for key in sorted(tmpl_keys):
-        key_logs = [l for l in logs if l.template_key == key]
-        key_events = [e for e in events if e.template_key == key]
-        s = sum(l.total_sent for l in key_logs)
-        d = sum(1 for e in key_events if e.event_type == "delivered")
-        o = len({e.prospect_email for e in key_events if e.event_type == "open"})
-        c = len({e.prospect_email for e in key_events if e.event_type == "click"})
+    for key in sorted(set(tmpl_sent) | set(tmpl_delivered) | set(tmpl_opens) | set(tmpl_clicks)):
+        s = tmpl_sent.get(key, 0)
+        d = tmpl_delivered.get(key, 0)
+        o = tmpl_opens.get(key, 0)
+        c = tmpl_clicks.get(key, 0)
         by_template.append({
             "key": key,
+            # Custom templates get their user-given name; the 5 built-in
+            # keys are left for the frontend to label via its own i18n strings.
+            "label": None if key in _FIXED_TEMPLATE_KEYS else (custom_labels.get(key) or key),
             "sent": s,
             "delivered": d,
             "open_rate": round(o / d * 100, 1) if d else 0,
@@ -307,6 +369,7 @@ def email_stats(
             {
                 "sent_at": l.sent_at.isoformat(),
                 "template_key": l.template_key,
+                "template_label": None if l.template_key in _FIXED_TEMPLATE_KEYS else (custom_labels.get(l.template_key) or l.template_key),
                 "campaign_name": l.campaign_name,
                 "total_sent": l.total_sent,
                 "total_errors": l.total_errors,

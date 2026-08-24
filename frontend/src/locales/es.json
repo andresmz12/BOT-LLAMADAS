@@ -85,6 +85,7 @@
       "chartOpens": "Abiertos",
       "chartClicks": "Clicks",
       "byTemplate": "Por plantilla",
+      "moreTemplates": "+{{count}} plantillas más con menos envíos",
       "templateHeaders": {
         "template": "Plantilla",
         "sent": "Enviados",
