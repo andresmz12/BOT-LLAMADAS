@@ -366,7 +366,29 @@ async def _run_campaign_loop(campaign_id: int):
                         logger.info(f"[Campaign {campaign_id}] Call {call_info['call_id']} ended after {elapsed}s")
                         break
             else:
-                logger.warning(f"[Campaign {campaign_id}] Call {call_info['call_id']} exceeded max wait — continuing anyway")
+                # The Retell webhook never arrived within the wait window (lost
+                # delivery, Retell outage, etc.) — without this, the call and its
+                # prospect are left in "in-progress"/"calling" forever, which both
+                # looks like a live call that never ends and blocks this prospect
+                # from ever being retried. Close it out conservatively as
+                # no_answer (the same "no confirmed outcome" convention already
+                # used when a webhook fires with no outcome at all). If the
+                # webhook does eventually show up late, it overwrites these
+                # fields unconditionally, so this is safe to get "wrong".
+                logger.warning(f"[Campaign {campaign_id}] Call {call_info['call_id']} exceeded max wait — marking as no_answer and moving on")
+                with Session(engine) as s:
+                    stuck_call = s.get(Call, call_info["call_id"])
+                    if stuck_call and stuck_call.status != "ended":
+                        stuck_call.status = "ended"
+                        stuck_call.outcome = stuck_call.outcome or "no_answer"
+                        stuck_call.ended_at = datetime.utcnow()
+                        stuck_call.notes = (stuck_call.notes or "") + " [Tiempo de espera agotado — no se recibió confirmación de Retell]"
+                        s.add(stuck_call)
+                    stuck_prospect = s.get(Prospect, call_info["prospect_id"])
+                    if stuck_prospect and stuck_prospect.status == "calling":
+                        stuck_prospect.status = "no_answer"
+                        s.add(stuck_prospect)
+                    s.commit()
         else:
             sleep_seconds = 60.0 / call_info["calls_per_minute"]
             logger.info(f"[Campaign {campaign_id}] Sleeping {sleep_seconds:.1f}s ({call_info['calls_per_minute']} calls/min)")

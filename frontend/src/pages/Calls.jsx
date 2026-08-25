@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { TrashIcon, PhoneArrowUpRightIcon, ChevronRightIcon, XMarkIcon, ForwardIcon, PhoneIcon } from '@heroicons/react/24/outline'
+import { TrashIcon, PhoneArrowUpRightIcon, ChevronRightIcon, XMarkIcon, ForwardIcon, PhoneIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import StatusBadge from '../components/StatusBadge'
 import CallDetailModal from '../components/CallDetailModal'
 import OrgScopeBanner from '../components/OrgScopeBanner'
 import { getCalls, getCallDetail, getCampaigns, deleteCalls, callProspect } from '../api/client'
 import { fmtDate } from '../utils/date'
 
-const OUTCOMES = ['', 'interested', 'not_interested', 'callback_requested', 'appointment_scheduled', 'voicemail', 'no_answer', 'wrong_number']
+const OUTCOMES = ['', 'interested', 'not_interested', 'callback_requested', 'appointment_scheduled', 'voicemail', 'no_answer', 'wrong_number', 'failed']
 const SENTIMENT_EMOJI = { positive: '😊', neutral: '😐', negative: '😞' }
+const PAGE_SIZE = 200
 
 export default function Calls() {
   const { t } = useTranslation()
@@ -20,21 +21,56 @@ export default function Calls() {
   const [campaigns, setCampaigns] = useState([])
   const [filterCampaign, setFilterCampaign] = useState('')
   const [filterOutcome, setFilterOutcome] = useState('')
+  const [searchInput, setSearchInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [selectedCall, setSelectedCall] = useState(null)
   const [selected, setSelected] = useState(new Set())
   const [callingId, setCallingId] = useState(null)
   const [queue, setQueue] = useState(null) // { items: [...], index: 0, calling: false }
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [hasMore, setHasMore] = useState(false)
 
-  const load = () => {
+  // Debounce the search box so every keystroke doesn't fire a request —
+  // only once typing pauses for a moment.
+  useEffect(() => {
+    const id = setTimeout(() => setSearch(searchInput.trim()), 400)
+    return () => clearTimeout(id)
+  }, [searchInput])
+
+  const buildParams = () => {
     const params = {}
     if (filterCampaign) params.campaign_id = filterCampaign
     if (filterOutcome) params.outcome = filterOutcome
+    if (search) params.search = search
+    if (dateFrom) params.date_from = dateFrom
+    if (dateTo) params.date_to = dateTo
     if (orgId) params.organization_id = orgId
-    getCalls(params).then(data => { setCalls(data); setSelected(new Set()) }).catch(() => {})
+    return params
+  }
+
+  const load = () => {
+    const params = { ...buildParams(), limit: PAGE_SIZE, offset: 0 }
+    getCalls(params).then(data => {
+      setCalls(data)
+      setSelected(new Set())
+      setHasMore(data.length === PAGE_SIZE)
+    }).catch(() => {})
+  }
+
+  const loadMore = () => {
+    if (loadingMore) return
+    setLoadingMore(true)
+    const params = { ...buildParams(), limit: PAGE_SIZE, offset: calls.length }
+    getCalls(params).then(data => {
+      setCalls(prev => [...prev, ...data])
+      setHasMore(data.length === PAGE_SIZE)
+    }).catch(() => {}).finally(() => setLoadingMore(false))
   }
 
   useEffect(() => { getCampaigns(orgId ? { organization_id: orgId } : undefined).then(setCampaigns).catch(() => {}) }, [orgId])
-  useEffect(() => { load() }, [filterCampaign, filterOutcome, orgId])
+  useEffect(() => { load() }, [filterCampaign, filterOutcome, search, dateFrom, dateTo, orgId])
 
   const toggleAll = (e) => {
     setSelected(e.target.checked ? new Set(calls.map(c => c.id)) : new Set())
@@ -98,15 +134,16 @@ export default function Calls() {
   }
 
   const handleDeleteAll = async () => {
-    const scope = filterCampaign || filterOutcome
-      ? t('calls.scopeFiltered', { count: calls.length })
-      : t('calls.scopeAll', { count: calls.length })
+    const isFiltered = filterCampaign || filterOutcome || search || dateFrom || dateTo
+    // hasMore means the server has more matching rows than we've loaded —
+    // showing calls.length as "the total" would understate what's actually
+    // about to be deleted, so say "all" without a (wrong) count instead.
+    const scope = isFiltered
+      ? (hasMore ? t('calls.scopeFilteredMany', { count: calls.length }) : t('calls.scopeFiltered', { count: calls.length }))
+      : (hasMore ? t('calls.scopeAllMany', { count: calls.length }) : t('calls.scopeAll', { count: calls.length }))
     if (!confirm(t('calls.deleteAllConfirm', { scope }))) return
     try {
-      const params = {}
-      if (filterCampaign) params.campaign_id = filterCampaign
-      if (filterOutcome) params.outcome = filterOutcome
-      const res = await deleteCalls(params)
+      const res = await deleteCalls(buildParams())
       alert(t('calls.callDeleted', { count: res.deleted }))
       load()
     } catch (err) { alert(err.response?.data?.detail || t('calls.genericError')) }
@@ -114,6 +151,7 @@ export default function Calls() {
 
   const allChecked = calls.length > 0 && selected.size === calls.length
   const someChecked = selected.size > 0 && selected.size < calls.length
+  const isFiltered = filterCampaign || filterOutcome || search || dateFrom || dateTo
 
   return (
     <div className="p-6 space-y-6">
@@ -142,13 +180,23 @@ export default function Calls() {
             <button onClick={handleDeleteAll}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-red-400 border border-red-500/30 hover:bg-red-500/10 rounded-lg transition-colors">
               <TrashIcon className="w-3.5 h-3.5" />
-              {filterCampaign || filterOutcome ? t('calls.deleteFiltered') : t('calls.deleteAll')}
+              {isFiltered ? t('calls.deleteFiltered') : t('calls.deleteAll')}
             </button>
           </div>
         )}
       </div>
 
       <div className="flex gap-3 flex-wrap items-center">
+        <div className="relative w-full sm:w-64">
+          <MagnifyingGlassIcon className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          <input
+            type="text"
+            value={searchInput}
+            onChange={e => setSearchInput(e.target.value)}
+            placeholder={t('calls.searchPlaceholder')}
+            className="z-input w-full pl-9"
+          />
+        </div>
         <select value={filterCampaign} onChange={e => setFilterCampaign(e.target.value)} className="z-input w-full sm:w-auto">
           <option value="">{t('calls.allCampaigns')}</option>
           {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -156,7 +204,15 @@ export default function Calls() {
         <select value={filterOutcome} onChange={e => setFilterOutcome(e.target.value)} className="z-input w-full sm:w-auto">
           {OUTCOMES.map(o => <option key={o} value={o}>{o ? t(`status.${o}`) : t('calls.allOutcomes')}</option>)}
         </select>
-        <span className="text-sm text-slate-500">{t('calls.callsCount', { count: calls.length })}</span>
+        <div className="flex items-center gap-1.5">
+          <label className="text-xs text-slate-500">{t('calls.dateFrom')}</label>
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="z-input w-auto text-sm" />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <label className="text-xs text-slate-500">{t('calls.dateTo')}</label>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="z-input w-auto text-sm" />
+        </div>
+        <span className="text-sm text-slate-500">{t('calls.callsCount', { count: calls.length })}{hasMore ? '+' : ''}</span>
       </div>
 
       <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
@@ -217,6 +273,14 @@ export default function Calls() {
         </table>
         </div>
       </div>
+      {hasMore && (
+        <div className="flex justify-center">
+          <button onClick={loadMore} disabled={loadingMore}
+            className="px-4 py-2 text-sm font-medium text-slate-300 bg-white/5 hover:bg-white/10 border border-z-border rounded-lg transition-colors disabled:opacity-50">
+            {loadingMore ? t('common.loading') : t('calls.loadMore')}
+          </button>
+        </div>
+      )}
       {selectedCall && <CallDetailModal call={selectedCall} onClose={() => setSelectedCall(null)} />}
 
       {/* Cola secuencial */}

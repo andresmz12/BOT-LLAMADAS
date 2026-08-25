@@ -424,7 +424,13 @@
     "subtitle": "History and results of all calls made",
     "deleteAllConfirm": "Delete {{scope}}? This action cannot be undone.",
     "scopeFiltered": "the {{count}} calls in the current filter",
+    "scopeFilteredMany": "ALL calls in the current filter (there are more than the {{count}} shown)",
     "scopeAll": "ALL {{count}} calls",
+    "scopeAllMany": "ALL calls (there are more than the {{count}} shown)",
+    "loadMore": "Load more",
+    "searchPlaceholder": "Search by name, company, or phone...",
+    "dateFrom": "From",
+    "dateTo": "To",
     "genericError": "Error"
   },
   "leads": {
@@ -810,7 +816,7 @@
     "answered": "Answered",
     "voicemail": "Voicemail",
     "no_answer": "Finished",
-    "failed": "Finished",
+    "failed": "Failed (system error)",
     "do_not_call": "Do not call",
     "interested": "Interested",
     "not_interested": "Not interested",
