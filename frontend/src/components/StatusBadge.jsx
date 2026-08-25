@@ -11,7 +11,7 @@ const COLORS = {
   answered:             'bg-green-500/20 text-green-400',
   voicemail:            'bg-purple-500/20 text-purple-400',
   no_answer:            'bg-slate-600/40 text-slate-400',
-  failed:               'bg-slate-600/40 text-slate-400',
+  failed:               'bg-orange-600/30 text-orange-300',
   do_not_call:          'bg-red-600/30 text-red-300',
   interested:           'bg-green-500/20 text-green-400',
   not_interested:       'bg-red-500/20 text-red-400',

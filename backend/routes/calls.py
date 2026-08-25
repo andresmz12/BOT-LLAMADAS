@@ -1,5 +1,6 @@
 import logging
 import json
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 
@@ -120,6 +121,9 @@ def list_calls(
     outcome: str | None = None,
     prospect_id: int | None = None,
     organization_id: int | None = None,
+    search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     limit: int = 200,
     offset: int = 0,
     current_user: User = Depends(get_current_user),
@@ -136,6 +140,21 @@ def list_calls(
         query = query.where(Call.outcome == outcome)
     if prospect_id:
         query = query.where(Call.prospect_id == prospect_id)
+    if search and search.strip():
+        pattern = f"%{search.strip()}%"
+        query = query.join(Prospect, Call.prospect_id == Prospect.id).where(
+            Prospect.name.ilike(pattern) | Prospect.company.ilike(pattern) | Prospect.phone.ilike(pattern)
+        )
+    if date_from:
+        try:
+            query = query.where(Call.started_at >= datetime.fromisoformat(date_from))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="date_from inválido — usa formato YYYY-MM-DD")
+    if date_to:
+        try:
+            query = query.where(Call.started_at < datetime.fromisoformat(date_to) + timedelta(days=1))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="date_to inválido — usa formato YYYY-MM-DD")
     calls = session.exec(
         query.order_by(Call.started_at.desc()).offset(offset).limit(min(limit, 500))
     ).all()
@@ -157,6 +176,9 @@ def list_calls(
 def delete_calls(
     campaign_id: int | None = None,
     outcome: str | None = None,
+    search: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
     ids: str | None = None,  # comma-separated call IDs
     current_user: User = Depends(require_write_access),
     session: Session = Depends(get_session),
@@ -171,10 +193,28 @@ def delete_calls(
         parsed_ids = [int(i) for i in ids.split(",") if i.strip().isdigit()]
         id_query = id_query.where(Call.id.in_(parsed_ids))
     else:
+        # "Delete filtered" from the UI must match whatever filters are
+        # currently applied to the list — otherwise it deletes more (or
+        # less) than what's actually shown on screen.
         if campaign_id:
             id_query = id_query.where(Call.campaign_id == campaign_id)
         if outcome:
             id_query = id_query.where(Call.outcome == outcome)
+        if search and search.strip():
+            pattern = f"%{search.strip()}%"
+            id_query = id_query.join(Prospect, Call.prospect_id == Prospect.id).where(
+                Prospect.name.ilike(pattern) | Prospect.company.ilike(pattern) | Prospect.phone.ilike(pattern)
+            )
+        if date_from:
+            try:
+                id_query = id_query.where(Call.started_at >= datetime.fromisoformat(date_from))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="date_from inválido — usa formato YYYY-MM-DD")
+        if date_to:
+            try:
+                id_query = id_query.where(Call.started_at < datetime.fromisoformat(date_to) + timedelta(days=1))
+            except ValueError:
+                raise HTTPException(status_code=400, detail="date_to inválido — usa formato YYYY-MM-DD")
 
     ids_to_delete = session.exec(id_query).all()
     if ids_to_delete:

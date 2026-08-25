@@ -424,7 +424,13 @@
     "subtitle": "Historial y resultados de todas las llamadas realizadas",
     "deleteAllConfirm": "¿Eliminar {{scope}}? Esta acción no se puede deshacer.",
     "scopeFiltered": "las {{count}} llamadas del filtro actual",
+    "scopeFilteredMany": "TODAS las llamadas del filtro actual (hay más de las {{count}} mostradas)",
     "scopeAll": "TODAS las {{count}} llamadas",
+    "scopeAllMany": "TODAS las llamadas (hay más de las {{count}} mostradas)",
+    "loadMore": "Cargar más",
+    "searchPlaceholder": "Buscar por nombre, empresa o teléfono...",
+    "dateFrom": "Desde",
+    "dateTo": "Hasta",
     "genericError": "Error"
   },
   "leads": {
@@ -809,7 +815,7 @@
     "answered": "Contestó",
     "voicemail": "Buzón",
     "no_answer": "Finalizada",
-    "failed": "Finalizada",
+    "failed": "Fallida (error de sistema)",
     "do_not_call": "No llamar",
     "interested": "Interesado",
     "not_interested": "No interesado",

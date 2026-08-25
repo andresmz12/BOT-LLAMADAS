@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { XMarkIcon, ChevronDownIcon, PlayIcon } from '@heroicons/react/24/outline'
+import { XMarkIcon, ChevronDownIcon } from '@heroicons/react/24/outline'
 import StatusBadge from './StatusBadge'
 import { fmtDate } from '../utils/date'
 
@@ -37,13 +37,14 @@ export default function CallDetailModal({ call, onClose }) {
             <span className="text-sm text-slate-400">{SENTIMENT_EMOJI[call.sentiment] || ''} {call.sentiment}</span>
             {call.duration_seconds && <span className="text-sm text-slate-400">⏱ {call.duration_seconds}s</span>}
             {call.started_at && <span className="text-sm text-slate-500">{fmtDate(call.started_at)}</span>}
-            {call.recording_url && (
-              <a href={call.recording_url} target="_blank" rel="noreferrer"
-                className="flex items-center gap-1 text-sm text-z-blue-light font-medium hover:text-z-blue">
-                <PlayIcon className="w-4 h-4" /> {t('callDetail.playRecording')}
-              </a>
-            )}
           </div>
+          {call.recording_url && (
+            <audio controls preload="none" src={call.recording_url} className="w-full h-10 rounded-lg">
+              <a href={call.recording_url} target="_blank" rel="noreferrer" className="text-z-blue-light">
+                {t('callDetail.playRecording')}
+              </a>
+            </audio>
+          )}
           {servicesMentioned.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {servicesMentioned.map((s, i) => (
