@@ -53,16 +53,16 @@ function Panel({ title, subtitle, action, children, noPad = false, className = '
 function SegmentedTabs({ tabs, active, onChange }) {
   const idx = Math.max(0, tabs.findIndex(tb => tb.key === active))
   return (
-    <div className="relative inline-flex p-1 gap-0.5 bg-z-card border border-z-border rounded-xl">
+    <div className="relative inline-flex p-1 gap-1.5 bg-z-card border border-z-border rounded-xl">
       <div
         className="absolute top-1 bottom-1 left-1 rounded-lg bg-gradient-to-br from-z-blue-light to-z-blue shadow-lg shadow-z-blue/30 transition-transform duration-200 ease-out"
-        style={{ width: `calc(50% - 4px)`, transform: `translateX(${idx * 100}%)` }}
+        style={{ width: `calc(50% - 5px)`, transform: `translateX(${idx * 100}%)` }}
       />
       {tabs.map(tb => (
         <button
           key={tb.key}
           onClick={() => onChange(tb.key)}
-          className={`relative z-10 px-5 py-2 text-sm font-semibold rounded-lg transition-colors ${active === tb.key ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
+          className={`relative z-10 px-6 py-2 text-sm font-semibold rounded-lg whitespace-nowrap transition-colors ${active === tb.key ? 'text-white' : 'text-slate-400 hover:text-slate-200'}`}
         >
           {tb.label}
         </button>
