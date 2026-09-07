@@ -255,8 +255,10 @@ function EmailDashboard({ selectedOrg }) {
       </div>
 
       {/* Hero + secondary tier */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <HeroCard label={t('dashboard.email.kpiSent')} value={es?.total_sent ?? 0} />
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <div className="col-span-2">
+          <HeroCard label={t('dashboard.email.kpiSent')} value={es?.total_sent ?? 0} />
+        </div>
         <StatCard title={t('dashboard.email.kpiDelivered')} value={es?.delivered ?? 0}
           sub={es?.delivery_rate != null ? `${es.delivery_rate}%` : undefined}
           valueColor="text-green-400" icon={ArrowTrendingUpIcon} iconBg="bg-green-500/10" iconColor="text-green-400" />
@@ -268,9 +270,12 @@ function EmailDashboard({ selectedOrg }) {
           valueColor="text-purple-400" icon={CursorArrowRaysIcon} iconBg="bg-purple-500/10" iconColor="text-purple-400" />
       </div>
 
-      <div className="grid grid-cols-2 gap-3 max-w-md">
-        <StripTile title={t('dashboard.email.kpiBounced')} value={es?.bounces ?? 0} icon={XCircleIcon} valueColor="text-red-400" />
-        <StripTile title={t('dashboard.email.kpiUnsubscribed')} value={es?.unsubscribes ?? 0} icon={NoSymbolIcon} valueColor="text-slate-400" />
+      <div>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 mb-2">{t('dashboard.otherMetrics')}</p>
+        <div className="grid grid-cols-2 gap-3 max-w-md">
+          <StripTile title={t('dashboard.email.kpiBounced')} value={es?.bounces ?? 0} icon={XCircleIcon} valueColor="text-red-400" />
+          <StripTile title={t('dashboard.email.kpiUnsubscribed')} value={es?.unsubscribes ?? 0} icon={NoSymbolIcon} valueColor="text-slate-400" />
+        </div>
       </div>
 
       {noData ? (
@@ -559,9 +564,11 @@ export default function Dashboard() {
 
       {tab === 'calls' ? (
         <div className="space-y-5">
-          {/* Hero band: primary metric + 3 secondary */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            <HeroCard label={t('dashboard.totalCalls')} value={stats?.total_calls ?? 0} live={t('dashboard.live')} />
+          {/* Hero band: primary metric (double-width) + 3 secondary */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="col-span-2">
+              <HeroCard label={t('dashboard.totalCalls')} value={stats?.total_calls ?? 0} live={t('dashboard.live')} />
+            </div>
             <StatCard title={t('dashboard.contacted')} value={stats?.contacted ?? 0} icon={UserGroupIcon}
               iconBg="bg-blue-500/10" iconColor="text-blue-400"
               sub={t('dashboard.contactRateSub', { rate: stats?.contact_rate ?? 0 })} />
@@ -573,11 +580,14 @@ export default function Dashboard() {
           </div>
 
           {/* Secondary instrument strip */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-600 mb-2">{t('dashboard.otherMetrics')}</p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
             <StripTile title={t('dashboard.notInterested')} value={stats?.not_interested ?? 0} icon={XCircleIcon} valueColor="text-red-400" />
             <StripTile title={t('dashboard.callbackPending')} value={stats?.callback_requested ?? 0} icon={ArrowPathIcon} valueColor="text-amber-400" />
             <StripTile title={t('dashboard.voicemail')} value={stats?.voicemail_count ?? 0} icon={PhoneArrowDownLeftIcon} />
             <StripTile title={t('dashboard.avgDuration')} value={fmtDur(stats?.avg_duration)} icon={ClockIcon} />
+            </div>
           </div>
 
           {/* Minutes usage widget — only shown when limit is set */}

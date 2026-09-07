@@ -62,7 +62,8 @@
     "callsTab": "Llamadas",
     "callsLabel": "Llamadas",
     "emailTab": "Email Marketing",
-    "minutesUsedMonth": "Minutos usados este mes",
+    "otherMetrics": "Otros indicadores",
+  "minutesUsedMonth": "Minutos usados este mes",
     "limitReached": "⚠ Límite alcanzado — las campañas están pausadas. Contacta soporte.",
     "email": {
       "metricsTitle": "Métricas de email marketing",
