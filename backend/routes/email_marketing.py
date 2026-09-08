@@ -983,12 +983,15 @@ def email_unsubscribe(
         prospect_id, org_id = _verify_unsub_token(token)
         prospect = session.get(Prospect, prospect_id)
         if prospect and prospect.organization_id == org_id:
+            # Mark unsubscribed and KEEP the record — deleting it here (an earlier
+            # version did, for list-based contacts) erases every trace of the
+            # unsubscribe: the contact just vanishes from recipient counts and
+            # history with no "Desuscrito" entry anywhere to explain why, and a
+            # future CSV import of the same address would silently re-add them
+            # with email_unsubscribed reset to false, re-subscribing someone who
+            # explicitly opted out.
             prospect.email_unsubscribed = True
-            # If contact belongs to an email list, remove them from it entirely
-            if prospect.email_list_id is not None:
-                session.delete(prospect)
-            else:
-                session.add(prospect)
+            session.add(prospect)
             session.commit()
             name = _html.escape(prospect.name or "Estimado/a")
             return HTMLResponse(f"""<!DOCTYPE html><html><head><meta charset="utf-8">
