@@ -613,6 +613,47 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
         s.commit()
 
 
+def _log_terminated_bulk_job(s: Session, row: "BulkEmailJob", note: str) -> None:
+    """Write an EmailSendLog for a bulk job that stopped before reaching every
+    recipient (cancelled by a user, or given up on as orphaned by the
+    watchdog in main.py). Without this, a job that doesn't finish cleanly
+    leaves no trace at all in /email/history — it just vanishes, which is
+    exactly what made "did it finish, and what happened to the rest?" impossible
+    to answer from the UI."""
+    try:
+        remaining = json.loads(row.remaining or "[]")
+    except Exception:
+        remaining = []
+    try:
+        failed_list = json.loads(row.failed_list or "[]")
+    except Exception:
+        failed_list = []
+    if remaining:
+        failed_list = failed_list + [{"email": "—", "error": f"{note}: {len(remaining)} destinatario(s) sin enviar"}]
+    if row.email_only:
+        camp_name = "Contactos de email"
+    elif row.campaign_id:
+        c = s.get(Campaign, row.campaign_id)
+        camp_name = c.name if c else None
+    else:
+        camp_name = None
+    s.add(EmailSendLog(
+        organization_id=row.organization_id,
+        template_key=row.template_key,
+        campaign_id=row.campaign_id,
+        campaign_name=camp_name,
+        total_sent=row.sent,
+        total_skipped=row.skipped + len(remaining),
+        total_errors=len(failed_list),
+        error_details=json.dumps(failed_list) if failed_list else None,
+        initiated_by=row.initiated_by,
+        source_email_only=row.email_only,
+        source_email_list_id=row.email_list_id,
+        source_batch_size=row.batch_size,
+        sent_details=row.sent_list,
+    ))
+
+
 def _job_to_dict(row: "BulkEmailJob") -> dict:
     return {
         "org_id": row.organization_id,
@@ -714,6 +755,7 @@ def cancel_bulk_send(job_id: str, current_user: User = Depends(require_write_acc
     row.status = "cancelled"
     row.updated_at = datetime.utcnow()
     session.add(row)
+    _log_terminated_bulk_job(session, row, "Envío cancelado")
     session.commit()
     return {"ok": True, "job_id": job_id, "status": "cancelled"}
 

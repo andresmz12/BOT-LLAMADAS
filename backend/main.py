@@ -276,8 +276,89 @@ async def _run_scheduled_email(job_id: int):
         except Exception: pass
 
 
+async def _recover_stuck_bulk_jobs(log_prefix: str = "Watchdog"):
+    """Resume bulk email sends whose owning process died mid-send (crash, an
+    uncaught exception outside the per-prospect try/except, or a Railway
+    restart) without ever flipping the job to a terminal status. Called once
+    at startup and then every scheduler poll, so a stuck job self-heals
+    within ~STALE_AFTER of the failure instead of sitting "running" forever
+    with nothing actually sending — this used to only be checked at startup,
+    which meant a backend that stayed up never noticed.
+
+    A claim based purely on status is NOT enough on Railway: during a rolling
+    deploy the OLD instance can still be alive with a live in-process send
+    task while another instance runs this check — the job's row legitimately
+    says status="running" because it genuinely still is. Claiming it anyway
+    launches a second sender over the same prospect list and double-sends,
+    because the old instance's task has no way to know it's been "taken over".
+
+    Instead we use updated_at as a heartbeat: the send loop touches it after
+    every single prospect (routes/email_marketing.py
+    _run_bulk_send_job_inner). A row only counts as orphaned if it hasn't
+    been touched in STALE_AFTER — long enough that a genuinely live process
+    would have updated it again by now. This also self-heals a job stuck in
+    the transient "resuming" marker below if a crash lands between its two
+    commits: it simply looks orphaned on the next check.
+    """
+    try:
+        from datetime import timedelta as _timedelta
+        from sqlmodel import Session as _S2, select as _sel2
+        from sqlalchemy import update as _bulk_upd
+        from models import BulkEmailJob as _BulkEmailJob, Organization as _Org
+        from routes.email_marketing import _run_bulk_send_job as _resume_bulk_job, _log_terminated_bulk_job
+        STALE_AFTER = _timedelta(seconds=120)
+        with _S2(engine) as s:
+            cutoff = datetime.utcnow() - STALE_AFTER
+            candidate_statuses = ["running", "paused", "resuming"]
+            stuck_jobs = s.exec(
+                _sel2(_BulkEmailJob).where(_BulkEmailJob.status.in_(candidate_statuses))
+            ).all()
+            for j in stuck_jobs:
+                if j.updated_at and j.updated_at > cutoff:
+                    continue
+                try:
+                    # Re-check staleness inside the WHERE clause itself so a job
+                    # touched between the read above and this UPDATE loses the
+                    # claim instead of being stolen from its live owner.
+                    claim = s.execute(
+                        _bulk_upd(_BulkEmailJob)
+                        .where(
+                            _BulkEmailJob.id == j.id,
+                            _BulkEmailJob.status.in_(candidate_statuses),
+                            _BulkEmailJob.updated_at <= cutoff,
+                        )
+                        .values(status="resuming", updated_at=datetime.utcnow())
+                    )
+                    s.commit()
+                    if claim.rowcount == 0:
+                        continue
+                    org = s.get(_Org, j.organization_id)
+                    api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "") if org else ""
+                    if api_key and j.remaining and j.remaining != "[]":
+                        s.execute(
+                            _bulk_upd(_BulkEmailJob).where(_BulkEmailJob.id == j.id)
+                            .values(status="running", updated_at=datetime.utcnow())
+                        )
+                        s.commit()
+                        asyncio.create_task(_resume_bulk_job(job_id=str(j.id), api_key=api_key))
+                        logger.info(f"[{log_prefix}] Resumed stuck bulk email job {j.id} (org={j.organization_id})")
+                    else:
+                        _log_terminated_bulk_job(s, j, "Proceso de envío interrumpido y no se pudo reanudar")
+                        s.execute(
+                            _bulk_upd(_BulkEmailJob).where(_BulkEmailJob.id == j.id)
+                            .values(status="error", updated_at=datetime.utcnow())
+                        )
+                        s.commit()
+                        logger.warning(f"[{log_prefix}] Bulk email job {j.id} orphaned with no API key or nothing left to send — marked error")
+                except Exception as job_err:
+                    logger.error(f"[{log_prefix}] Failed to recover bulk email job {j.id}: {job_err}")
+    except Exception as e:
+        logger.error(f"[{log_prefix}] Failed to resume bulk email jobs: {e}")
+
+
 async def _campaign_scheduler():
-    """Poll every 30s: auto-start scheduled campaigns and fire scheduled email jobs."""
+    """Poll every 30s: auto-start scheduled campaigns, fire scheduled email jobs,
+    and recover any bulk-email send stuck since the last poll."""
     import asyncio as _asyncio
     from datetime import datetime as _dt, timezone as _tz
     from sqlmodel import Session as _S, select as _sel
@@ -287,6 +368,8 @@ async def _campaign_scheduler():
     while True:
         await _asyncio.sleep(30)
         now_utc = _dt.utcnow()
+
+        await _recover_stuck_bulk_jobs(log_prefix="Watchdog")
 
         # --- Call campaigns ---
         try:
@@ -399,76 +482,10 @@ async def lifespan(app: FastAPI):
         logger.warning("⚠️  SUPERADMIN_EMAIL/SUPERADMIN_PASSWORD not set — no superadmin account will be auto-created")
 
     # Resume bulk email sends that were running/paused/resuming when the backend
-    # last stopped. A claim based purely on status is NOT enough on Railway: during
-    # a rolling deploy the OLD instance can still be alive with a live in-process
-    # send task while the NEW instance runs this startup block — the job's row
-    # legitimately says status="running" because it genuinely still is. Claiming it
-    # anyway (as an earlier version of this fix did) launches a second sender over
-    # the same prospect list and double-sends, because the old instance's task has
-    # no way to know it's been "taken over".
-    #
-    # Instead we use updated_at as a heartbeat: the send loop touches it after
-    # every single prospect (routes/settings.py _run_bulk_send_job_inner). A row
-    # only counts as orphaned if it hasn't been touched in STALE_AFTER — long
-    # enough that a genuinely live process would have updated it again by now.
-    # Freshly-touched rows are left alone (a live process — this instance's
-    # predecessor or a still-running replica — owns them). This also self-heals a
-    # job that gets stuck in the transient "resuming" marker below if a crash
-    # lands between its two commits: it simply looks orphaned on a later restart.
-    try:
-        from datetime import timedelta as _timedelta
-        from sqlmodel import Session as _S2, select as _sel2
-        from sqlalchemy import update as _bulk_upd
-        from models import BulkEmailJob as _BulkEmailJob, Organization as _Org
-        from routes.email_marketing import _run_bulk_send_job as _resume_bulk_job
-        STALE_AFTER = _timedelta(seconds=120)
-        with _S2(engine) as s:
-            cutoff = datetime.utcnow() - STALE_AFTER
-            candidate_statuses = ["running", "paused", "resuming"]
-            stuck_jobs = s.exec(
-                _sel2(_BulkEmailJob).where(_BulkEmailJob.status.in_(candidate_statuses))
-            ).all()
-            for j in stuck_jobs:
-                if j.updated_at and j.updated_at > cutoff:
-                    logger.info(f"[Startup] Bulk email job {j.id} updated recently ({j.updated_at}); assuming a live process still owns it, not claiming")
-                    continue
-                try:
-                    # Re-check staleness inside the WHERE clause itself so a job
-                    # touched between the read above and this UPDATE loses the
-                    # claim instead of being stolen from its live owner.
-                    claim = s.execute(
-                        _bulk_upd(_BulkEmailJob)
-                        .where(
-                            _BulkEmailJob.id == j.id,
-                            _BulkEmailJob.status.in_(candidate_statuses),
-                            _BulkEmailJob.updated_at <= cutoff,
-                        )
-                        .values(status="resuming", updated_at=datetime.utcnow())
-                    )
-                    s.commit()
-                    if claim.rowcount == 0:
-                        logger.info(f"[Startup] Bulk email job {j.id} claimed or touched by another process, skipping")
-                        continue
-                    org = s.get(_Org, j.organization_id)
-                    api_key = (org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", "") if org else ""
-                    if api_key and j.remaining and j.remaining != "[]":
-                        s.execute(
-                            _bulk_upd(_BulkEmailJob).where(_BulkEmailJob.id == j.id)
-                            .values(status="running", updated_at=datetime.utcnow())
-                        )
-                        s.commit()
-                        asyncio.create_task(_resume_bulk_job(job_id=str(j.id), api_key=api_key))
-                        logger.info(f"[Startup] Resumed bulk email job {j.id} (org={j.organization_id})")
-                    else:
-                        s.execute(
-                            _bulk_upd(_BulkEmailJob).where(_BulkEmailJob.id == j.id)
-                            .values(status="error", updated_at=datetime.utcnow())
-                        )
-                        s.commit()
-                except Exception as job_err:
-                    logger.error(f"[Startup] Failed to recover bulk email job {j.id}: {job_err}")
-    except Exception as e:
-        logger.error(f"[Startup] Failed to resume bulk email jobs: {e}")
+    # last stopped (see _recover_stuck_bulk_jobs for the full heartbeat/claim logic).
+    # The same check also runs on every scheduler poll below, so a job whose task
+    # died without a restart in between still gets picked back up.
+    await _recover_stuck_bulk_jobs(log_prefix="Startup")
 
     # Recover scheduled-email jobs left in "running" by a crash/restart mid-send
     # — reset to "pending" so the next scheduler poll re-claims and re-runs

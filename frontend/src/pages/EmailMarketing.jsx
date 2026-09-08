@@ -27,7 +27,7 @@ import {
   CheckCircleIcon, EnvelopeIcon, PaperClipIcon, ChevronDownIcon,
   PencilSquareIcon, SparklesIcon, PlusIcon, TrashIcon, EyeIcon,
   ClockIcon, UserMinusIcon, ListBulletIcon, Cog6ToothIcon, PaperAirplaneIcon,
-  ArrowDownTrayIcon, ChartBarIcon, CheckIcon, XMarkIcon,
+  ArrowDownTrayIcon, ChartBarIcon, CheckIcon, XMarkIcon, ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import {
   getEmailSettings, saveEmailSettings, uploadEmailAttachment, deleteEmailAttachment, deleteEmailTemplate,
@@ -1486,12 +1486,17 @@ export default function EmailMarketing() {
                   {!bulkLoading && bulkJobProgress?.status === 'done' && (
                     <CheckCircleIcon className="w-4 h-4 text-green-400 flex-shrink-0" />
                   )}
-                  <span className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
+                  {!bulkLoading && bulkJobProgress?.status === 'error' && (
+                    <ExclamationTriangleIcon className="w-4 h-4 text-red-400 flex-shrink-0" />
+                  )}
+                  <span className={`text-xs font-semibold uppercase tracking-wide ${bulkJobProgress?.status === 'error' ? 'text-red-400' : 'text-slate-300'}`}>
                     {bulkJobProgress?.status === 'paused'
                       ? t('emailMarketing.bulk.pausedStatus')
-                      : bulkLoading
-                        ? (batchNumber > 1 ? t('emailMarketing.bulk.sendingBatch', { n: batchNumber }) : t('emailMarketing.bulk.sendingInProgress'))
-                        : t('emailMarketing.bulk.batchCompleted', { n: batchNumber })}
+                      : bulkJobProgress?.status === 'error'
+                        ? t('emailMarketing.bulk.errorSending')
+                        : bulkLoading
+                          ? (batchNumber > 1 ? t('emailMarketing.bulk.sendingBatch', { n: batchNumber }) : t('emailMarketing.bulk.sendingInProgress'))
+                          : t('emailMarketing.bulk.batchCompleted', { n: batchNumber })}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">
@@ -1571,9 +1576,9 @@ export default function EmailMarketing() {
                 </>
               )}
 
-              {!bulkLoading && bulkJobProgress?.status === 'done' && (
+              {!bulkLoading && (bulkJobProgress?.status === 'done' || bulkJobProgress?.status === 'error') && (
                 <div className="px-4 py-3 border-t border-z-border flex items-center gap-4 flex-wrap">
-                  {bulkBatchSize && recipientStats?.will_receive_this_batch > 0 && (
+                  {bulkJobProgress.status === 'done' && bulkBatchSize && recipientStats?.will_receive_this_batch > 0 && (
                     <button onClick={sendNextBatch}
                       className="px-4 py-1.5 text-sm font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors">
                       {t('emailMarketing.bulk.nextBatch', { count: recipientStats.will_receive_this_batch })}
