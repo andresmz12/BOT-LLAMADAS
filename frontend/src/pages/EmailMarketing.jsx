@@ -320,6 +320,7 @@ export default function EmailMarketing() {
   const [bulkJobId, setBulkJobId] = useState(null)
   const [bulkJobProgress, setBulkJobProgress] = useState(null) // live job status
   const [batchNumber, setBatchNumber] = useState(1)
+  const [advancedSendOpen, setAdvancedSendOpen] = useState(false)
   const bulkPollRef = useRef(null)
 
   // Test send
@@ -327,6 +328,7 @@ export default function EmailMarketing() {
   const [testTmpl, setTestTmpl] = useState('general')
   const [testLoading, setTestLoading] = useState(false)
   const [testMsg, setTestMsg] = useState(null)
+  const [testOpen, setTestOpen] = useState(false)
 
   // History error detail modal
   const [errorDetailLog, setErrorDetailLog] = useState(null) // {template_subject, error_details:[]}
@@ -1405,21 +1407,37 @@ export default function EmailMarketing() {
             </div>
           </div>
 
-          {/* Batch size */}
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-white/5 border border-z-border">
-            <div className="flex-1">
-              <p className="text-xs font-medium text-slate-300">{t('emailMarketing.bulk.batchTitle')}</p>
-              <p className="text-xs text-slate-500 mt-0.5">{t('emailMarketing.bulk.batchHint')}</p>
-            </div>
-            <select value={bulkBatchSize} onChange={e => { setBulkBatchSize(e.target.value); setConfirmStep(false); setBulkResult(null) }}
-              className="z-input-light text-sm w-36 flex-shrink-0">
-              <option value="">{t('emailMarketing.bulk.noLimit')}</option>
-              <option value="50">{t('emailMarketing.bulk.perBatch', { n: 50 })}</option>
-              <option value="100">{t('emailMarketing.bulk.perBatch', { n: 100 })}</option>
-              <option value="200">{t('emailMarketing.bulk.perBatch', { n: 200 })}</option>
-              <option value="500">{t('emailMarketing.bulk.perBatch', { n: 500 })}</option>
-              <option value="1000">{t('emailMarketing.bulk.perBatch', { n: 1000 })}</option>
-            </select>
+          {/* Advanced options — batch size is rarely touched, so keep it
+              out of the way until someone actually needs it. */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setAdvancedSendOpen(o => !o)}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${advancedSendOpen ? 'rotate-180' : ''}`} />
+              {t('emailMarketing.bulk.advancedOptions')}
+              {bulkBatchSize && !advancedSendOpen && (
+                <span className="text-blue-400">({t('emailMarketing.bulk.perBatch', { n: bulkBatchSize })})</span>
+              )}
+            </button>
+            {advancedSendOpen && (
+              <div className="flex items-center gap-3 p-3 mt-2 rounded-lg bg-white/5 border border-z-border">
+                <div className="flex-1">
+                  <p className="text-xs font-medium text-slate-300">{t('emailMarketing.bulk.batchTitle')}</p>
+                  <p className="text-xs text-slate-500 mt-0.5">{t('emailMarketing.bulk.batchHint')}</p>
+                </div>
+                <select value={bulkBatchSize} onChange={e => { setBulkBatchSize(e.target.value); setConfirmStep(false); setBulkResult(null) }}
+                  className="z-input-light text-sm w-36 flex-shrink-0">
+                  <option value="">{t('emailMarketing.bulk.noLimit')}</option>
+                  <option value="50">{t('emailMarketing.bulk.perBatch', { n: 50 })}</option>
+                  <option value="100">{t('emailMarketing.bulk.perBatch', { n: 100 })}</option>
+                  <option value="200">{t('emailMarketing.bulk.perBatch', { n: 200 })}</option>
+                  <option value="500">{t('emailMarketing.bulk.perBatch', { n: 500 })}</option>
+                  <option value="1000">{t('emailMarketing.bulk.perBatch', { n: 1000 })}</option>
+                </select>
+              </div>
+            )}
           </div>
 
           {(() => {
@@ -1442,6 +1460,52 @@ export default function EmailMarketing() {
               {t('emailMarketing.bulk.sendgridWarning')}
             </p>
           )}
+
+          {/* Test send — folded into the main flow instead of its own section,
+              since it's just a quick sanity check before the real send. */}
+          <div>
+            <button
+              type="button"
+              onClick={() => setTestOpen(o => !o)}
+              className="flex items-center gap-1.5 text-xs text-slate-400 hover:text-slate-200 transition-colors"
+            >
+              <ChevronDownIcon className={`w-3.5 h-3.5 transition-transform ${testOpen ? 'rotate-180' : ''}`} />
+              {t('emailMarketing.test.title')}
+            </button>
+            {testOpen && (
+              <div className="p-3 mt-2 rounded-lg bg-white/5 border border-z-border space-y-3">
+                <p className="text-xs text-slate-500">{t('emailMarketing.test.intro')}</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.test.yourEmail')}</label>
+                    <input type="email" value={testAddr} onChange={e => setTestAddr(e.target.value)}
+                      placeholder="mi@correo.com" className="z-input-light text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.test.templateToTest')}</label>
+                    <select value={testTmpl} onChange={e => setTestTmpl(e.target.value)} className="z-input-light text-sm">
+                      {allTemplates.map(tp => <option key={tp.key} value={tp.key}>{tp.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {(() => {
+                  const subj = cfg.email_templates[testTmpl]?.subject
+                  return subj
+                    ? <p className="text-xs text-slate-400">{t('emailMarketing.test.subjectLabel')} <span className="italic">"{subj}"</span></p>
+                    : <p className="text-xs text-amber-400">{t('emailMarketing.test.noSubject')}</p>
+                })()}
+                <button onClick={sendTest} disabled={testLoading || !testAddr || !cfg.sendgrid_configured}
+                  className="z-btn-primary disabled:opacity-50">
+                  {testLoading ? t('emailMarketing.test.sending') : t('emailMarketing.test.send')}
+                </button>
+                {testMsg && (
+                  <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
+                    {testMsg.ok ? '✓' : '✗'} {testMsg.text}
+                  </p>
+                )}
+              </div>
+            )}
+          </div>
 
           {!confirmStep && !bulkResult && (
             <button onClick={prepareSend} disabled={!cfg.sendgrid_configured} className="z-btn-primary w-full disabled:opacity-40">
@@ -2090,41 +2154,6 @@ export default function EmailMarketing() {
 
       {/* ── TAB: ENVIAR (continuación) ── */}
       {activeTab === 'enviar' && (<>
-
-      {/* ── 5. ENVÍO DE PRUEBA ── */}
-      <Section id="prueba" label={t('emailMarketing.test.title')} icon={EnvelopeIcon} openSections={openSections} toggle={toggle}>
-        <div className="p-5 space-y-3">
-          <p className="text-xs text-slate-500">{t('emailMarketing.test.intro')}</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.test.yourEmail')}</label>
-              <input type="email" value={testAddr} onChange={e => setTestAddr(e.target.value)}
-                placeholder="mi@correo.com" className="z-input-light text-sm" />
-            </div>
-            <div>
-              <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.test.templateToTest')}</label>
-              <select value={testTmpl} onChange={e => setTestTmpl(e.target.value)} className="z-input-light text-sm">
-                {allTemplates.map(tp => <option key={tp.key} value={tp.key}>{tp.label}</option>)}
-              </select>
-            </div>
-          </div>
-          {(() => {
-            const subj = cfg.email_templates[testTmpl]?.subject
-            return subj
-              ? <p className="text-xs text-slate-400">{t('emailMarketing.test.subjectLabel')} <span className="italic">"{subj}"</span></p>
-              : <p className="text-xs text-amber-400">{t('emailMarketing.test.noSubject')}</p>
-          })()}
-          <button onClick={sendTest} disabled={testLoading || !testAddr || !cfg.sendgrid_configured}
-            className="z-btn-primary disabled:opacity-50">
-            {testLoading ? t('emailMarketing.test.sending') : t('emailMarketing.test.send')}
-          </button>
-          {testMsg && (
-            <p className={`text-xs ${testMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
-              {testMsg.ok ? '✓' : '✗'} {testMsg.text}
-            </p>
-          )}
-        </div>
-      </Section>
 
       {/* ── Envíos programados ── */}
       {scheduledJobs.length > 0 && (

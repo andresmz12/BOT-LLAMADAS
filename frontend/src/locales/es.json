@@ -1505,6 +1505,7 @@
       "listsGroup": "── Listas de email ──",
       "listOption": "{{name}} ({{count}} contactos)",
       "template": "Plantilla",
+      "advancedOptions": "Opciones avanzadas",
       "batchTitle": "Envío por tandas",
       "batchHint": "Limita cuántos emails se envían por ejecución para evitar filtros de spam. Los no contactados van siempre primero.",
       "noLimit": "Sin límite",
