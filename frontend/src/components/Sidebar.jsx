@@ -78,8 +78,16 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
   const role = user.role || 'viewer'
   const plan = user.plan || 'pro'
   const marketingEnabled = user.marketing_enabled || false
+  // Modules a superadmin can turn off per organization — hide the nav entry
+  // whenever the flag is explicitly false. Strict `=== false` (not `!value`)
+  // so a stale cached `user` object from before these flags existed (value
+  // undefined) still shows everything, matching what that org already had.
+  const moduleOff = (field) => role !== 'superadmin' && user[field] === false
   const baseItems = (NAV_BY_ROLE[role] || NAV_BY_ROLE.viewer)
     .filter(item => item.to !== '/marketing' || role === 'superadmin' || marketingEnabled)
+    .filter(item => item.to !== '/email-marketing' || !moduleOff('email_marketing_enabled'))
+    .filter(item => item.to !== '/lead-hunter' || !moduleOff('lead_hunter_enabled'))
+    .filter(item => item.to !== '/chatbot' || !moduleOff('whatsapp_module_enabled'))
   const isLimitedPlan = plan === 'free' || plan === 'starter'
   const navItems = (role === 'admin' || role === 'agent')
     ? isLimitedPlan

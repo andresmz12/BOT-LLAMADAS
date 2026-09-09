@@ -58,6 +58,9 @@ class OrgCreate(BaseModel):
     minutes_limit: Optional[int] = None
     email_limit_month: Optional[int] = None
     accent_color: Optional[str] = None
+    email_marketing_enabled: bool = True
+    lead_hunter_enabled: bool = True
+    whatsapp_module_enabled: bool = True
 
 
 class UserCreate(BaseModel):

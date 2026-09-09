@@ -3,9 +3,12 @@ import { useTranslation } from 'react-i18next'
 import { Cog6ToothIcon, MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 import { Link } from 'react-router-dom'
 import { getLeadHunterConfig, saveLeadHunterConfig } from '../api/client'
+import ModuleDisabled from '../components/ModuleDisabled'
 
 export default function LeadHunterConfig() {
   const { t } = useTranslation()
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const moduleDisabled = user.role !== 'superadmin' && user.lead_hunter_enabled === false
   const [form, setForm] = useState({
     lh_target_description: '',
     lh_offer_description: '',
@@ -19,11 +22,16 @@ export default function LeadHunterConfig() {
   const [msg, setMsg] = useState(null)
 
   useEffect(() => {
+    if (moduleDisabled) { setLoading(false); return }
     getLeadHunterConfig()
       .then(data => setForm(prev => ({ ...prev, ...data })))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  if (moduleDisabled) {
+    return <ModuleDisabled icon={MagnifyingGlassIcon} title={t('leadHunter.notEnabledTitle')} hint={t('leadHunter.notEnabledHint')} />
+  }
 
   const handleSave = async () => {
     setSaving(true); setMsg(null)

@@ -148,6 +148,32 @@ def require_pro_plan(
     return current_user
 
 
+def _require_module(field_name: str, module_label: str):
+    """Factory for a per-organization module gate — superadmin always passes,
+    everyone else needs their org's `field_name` flag on. Mirrors
+    require_pro_plan above, one per toggleable module (Email Marketing,
+    Lead Hunter, Chatbot/WhatsApp) instead of one per plan tier."""
+    def _dep(
+        current_user: User = Depends(get_current_user),
+        session: Session = Depends(get_session),
+    ) -> User:
+        if current_user.role == "superadmin":
+            return current_user
+        org = session.get(Organization, current_user.organization_id) if current_user.organization_id else None
+        if not org or not getattr(org, field_name, True):
+            raise HTTPException(
+                status_code=403,
+                detail=f"MODULE_DISABLED: {module_label} no está disponible para tu organización. Contacta a tu administrador."
+            )
+        return current_user
+    return _dep
+
+
+require_email_marketing_module = _require_module("email_marketing_enabled", "Email Marketing")
+require_lead_hunter_module = _require_module("lead_hunter_enabled", "Lead Hunter")
+require_whatsapp_module = _require_module("whatsapp_module_enabled", "Chatbot / WhatsApp")
+
+
 @router.post("/register")
 def register(data: RegisterRequest, request: Request, session: Session = Depends(get_session)):
     _check_rate_limit(_get_client_ip(request))
@@ -225,6 +251,9 @@ def me(
     result["marketing_enabled"] = org.marketing_enabled if org else False
     result["logo_url"] = org.logo_url if org else None
     result["accent_color"] = org.accent_color if org else None
+    result["email_marketing_enabled"] = org.email_marketing_enabled if org else True
+    result["lead_hunter_enabled"] = org.lead_hunter_enabled if org else True
+    result["whatsapp_module_enabled"] = org.whatsapp_module_enabled if org else True
     return result
 
 

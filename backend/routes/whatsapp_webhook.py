@@ -77,6 +77,7 @@ async def receive_whatsapp_message(
         select(Organization).where(
             Organization.whatsapp_phone_number_id == phone_number_id,
             Organization.whatsapp_enabled == True,  # noqa: E712
+            Organization.whatsapp_module_enabled == True,  # noqa: E712
         )
     ).first()
     if not org:

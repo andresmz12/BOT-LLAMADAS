@@ -11,6 +11,7 @@ import {
   ArrowPathIcon,
 } from '@heroicons/react/24/outline'
 import { generateImage, generateVideo, generateCopy, generateCalendar } from '../api/client'
+import ModuleDisabled from '../components/ModuleDisabled'
 
 export default function Marketing() {
   const { t } = useTranslation()
@@ -26,17 +27,7 @@ export default function Marketing() {
 
   const user = JSON.parse(localStorage.getItem('user') || '{}')
   if (user.role !== 'superadmin' && !user.marketing_enabled) {
-    return (
-      <div className="p-6 flex flex-col items-center justify-center min-h-[60vh] text-center space-y-4">
-        <div className="p-4 rounded-full bg-slate-800 border border-z-border">
-          <SparklesIcon className="w-10 h-10 text-slate-500" />
-        </div>
-        <h2 className="text-xl font-bold text-slate-200">{t('marketing.notEnabledTitle')}</h2>
-        <p className="text-slate-500 max-w-sm">
-          {t('marketing.notEnabledHint')}
-        </p>
-      </div>
-    )
+    return <ModuleDisabled icon={SparklesIcon} title={t('marketing.notEnabledTitle')} hint={t('marketing.notEnabledHint')} />
   }
 
   const goToCopy = (prefill) => {

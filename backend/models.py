@@ -26,6 +26,14 @@ class Organization(SQLModel, table=True):
     whatsapp_access_token: Optional[str] = None
     whatsapp_verify_token: Optional[str] = None
     whatsapp_enabled: bool = Field(default=False)
+    # Module access — controlled by superadmin per organization, independent
+    # of each module's own operational settings above/below (e.g. an org can
+    # have whatsapp_module_enabled=False and never see the Chatbot page at
+    # all, regardless of whatsapp_enabled which only matters once they do).
+    # Default True so every existing organization keeps what it already had.
+    email_marketing_enabled: bool = Field(default=True)
+    lead_hunter_enabled: bool = Field(default=True)
+    whatsapp_module_enabled: bool = Field(default=True)
     # Email marketing
     email_enabled: bool = Field(default=False)
     sendgrid_api_key: Optional[str] = None

@@ -15,7 +15,7 @@ from sqlmodel import Session, select
 from sqlalchemy import desc, func
 from database import get_session
 from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, EmailSequence, BulkEmailJob
-from routes.auth import get_current_user, require_write_access, require_superadmin
+from routes.auth import get_current_user, require_write_access, require_superadmin, require_email_marketing_module, require_whatsapp_module
 from services.audit_log import log_action
 
 logger = logging.getLogger(__name__)
@@ -164,6 +164,7 @@ def get_whatsapp_settings(
 def save_whatsapp_settings(
     data: WhatsAppSettingsRequest,
     current_user: User = Depends(require_write_access),
+    _module: User = Depends(require_whatsapp_module),
     session: Session = Depends(get_session),
 ):
     if not current_user.organization_id:
@@ -255,6 +256,7 @@ def get_email_settings(
 def save_email_settings(
     data: EmailSettingsRequest,
     current_user: User = Depends(require_write_access),
+    _module: User = Depends(require_email_marketing_module),
     session: Session = Depends(get_session),
 ):
     if not current_user.organization_id:

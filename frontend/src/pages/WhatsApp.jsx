@@ -4,11 +4,14 @@ import { ChatBubbleLeftRightIcon, CheckCircleIcon, ClipboardDocumentIcon, XMarkI
 import SecretInput from '../components/SecretInput'
 import { getWhatsappSettings, saveWhatsappSettings, getWaConversations, getWaMessages } from '../api/client'
 import { fmtDate } from '../utils/date'
+import ModuleDisabled from '../components/ModuleDisabled'
 
 export default function WhatsApp() {
   const { t } = useTranslation()
-  const userRole = JSON.parse(localStorage.getItem('user') || '{}').role || 'agent'
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const userRole = user.role || 'agent'
   const canConfig = userRole === 'admin' || userRole === 'superadmin'
+  const moduleDisabled = userRole !== 'superadmin' && user.whatsapp_module_enabled === false
 
   const [config, setConfig] = useState({ whatsapp_enabled: false, whatsapp_phone_number_id: '', whatsapp_access_token: '', whatsapp_verify_token: '' })
   const [webhookUrl, setWebhookUrl] = useState('')
@@ -55,6 +58,10 @@ export default function WhatsApp() {
   }
 
   const set = (k, v) => setConfig(f => ({ ...f, [k]: v }))
+
+  if (moduleDisabled) {
+    return <ModuleDisabled icon={ChatBubbleLeftRightIcon} title={t('whatsapp.notEnabledTitle')} hint={t('whatsapp.notEnabledHint')} />
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-6">

@@ -72,6 +72,32 @@ function UsageBar({ label, used, limit }) {
   )
 }
 
+// One row of the "Módulos activos" list in OrgModal — a labeled on/off
+// switch, or a fixed "always on" pill for modules every plan includes.
+function ModuleToggle({ label, desc, checked, onChange, always }) {
+  return (
+    <div className="flex items-center justify-between gap-4 px-4 py-3 bg-z-card">
+      <div className="min-w-0">
+        <div className="text-sm font-medium text-slate-200">{label}</div>
+        <div className="text-xs text-slate-500 mt-0.5">{desc}</div>
+      </div>
+      {always ? (
+        <span className="flex-shrink-0 px-2.5 py-1 text-[11px] font-semibold rounded-full bg-slate-700/60 text-slate-400 whitespace-nowrap">
+          {always}
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => onChange(!checked)}
+          className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ${checked ? 'bg-blue-600' : 'bg-slate-700'}`}
+        >
+          <span className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ${checked ? 'translate-x-5' : 'translate-x-0'}`} />
+        </button>
+      )}
+    </div>
+  )
+}
+
 export default function Admin() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -516,6 +542,9 @@ function OrgModal({ org, onClose, onSaved }) {
     email_limit_month: null,
     logo_url: '',
     accent_color: '',
+    email_marketing_enabled: true,
+    lead_hunter_enabled: true,
+    whatsapp_module_enabled: true,
   })
   const [loading, setLoading] = useState(false)
   const [crmAccordionOpen, setCrmAccordionOpen] = useState(false)
@@ -644,14 +673,32 @@ function OrgModal({ org, onClose, onSaved }) {
             <span className="text-sm text-slate-300">{t('admin.orgModal.active')}</span>
           </label>
 
-          {/* ── Marketing IA ────────────────────────────────────────────────── */}
-          <div className="border-t border-z-border pt-4 space-y-2">
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{t('admin.orgModal.marketingTitle')}</h3>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input type="checkbox" checked={!!form.marketing_enabled} onChange={e => set('marketing_enabled', e.target.checked)} className="w-4 h-4 accent-blue-500" />
-              <span className="text-sm text-slate-300">{t('admin.orgModal.marketingEnable')}</span>
-            </label>
-            <p className="text-xs text-slate-600">{t('admin.orgModal.marketingHint')}</p>
+          {/* ── Módulos activos ──────────────────────────────────────────────── */}
+          <div className="border-t border-z-border pt-4">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide mb-1">{t('admin.orgModal.modulesTitle')}</h3>
+            <p className="text-xs text-slate-600 mb-3">{t('admin.orgModal.modulesHint')}</p>
+            <div className="rounded-xl border border-z-border divide-y divide-z-border overflow-hidden">
+              <ModuleToggle
+                label={t('admin.orgModal.moduleCalls')} desc={t('admin.orgModal.moduleCallsHint')}
+                always={t('admin.orgModal.moduleAlwaysOn')}
+              />
+              <ModuleToggle
+                label={t('admin.orgModal.moduleEmailMarketing')} desc={t('admin.orgModal.moduleEmailMarketingHint')}
+                checked={!!form.email_marketing_enabled} onChange={v => set('email_marketing_enabled', v)}
+              />
+              <ModuleToggle
+                label={t('admin.orgModal.moduleLeadHunter')} desc={t('admin.orgModal.moduleLeadHunterHint')}
+                checked={!!form.lead_hunter_enabled} onChange={v => set('lead_hunter_enabled', v)}
+              />
+              <ModuleToggle
+                label={t('admin.orgModal.moduleWhatsapp')} desc={t('admin.orgModal.moduleWhatsappHint')}
+                checked={!!form.whatsapp_module_enabled} onChange={v => set('whatsapp_module_enabled', v)}
+              />
+              <ModuleToggle
+                label={t('admin.orgModal.moduleMarketing')} desc={t('admin.orgModal.moduleMarketingHint')}
+                checked={!!form.marketing_enabled} onChange={v => set('marketing_enabled', v)}
+              />
+            </div>
           </div>
 
           {/* ── WhatsApp Bot ─────────────────────────────────────────────────── */}

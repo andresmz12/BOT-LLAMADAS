@@ -9,7 +9,7 @@ from sqlmodel import Session, select
 
 from database import get_session
 from models import LeadHunt, Organization, User
-from routes.auth import get_current_user, require_write_access, require_pro_plan
+from routes.auth import get_current_user, require_write_access, require_pro_plan, require_lead_hunter_module
 
 router = APIRouter(prefix="/lead-hunter", tags=["lead-hunter"])
 logger = logging.getLogger(__name__)
@@ -121,6 +121,7 @@ def get_lh_config(
 def save_lh_config(
     data: LHConfigRequest,
     current_user: User = Depends(require_write_access),
+    _module: User = Depends(require_lead_hunter_module),
     session: Session = Depends(get_session),
 ):
     """Save Lead Hunter config for the current org."""
@@ -141,6 +142,7 @@ def save_lh_config(
 def scout_leads(
     data: ScoutRequest,
     current_user: User = Depends(require_pro_plan),
+    _module: User = Depends(require_lead_hunter_module),
     session: Session = Depends(get_session),
 ):
     """Search Google Maps via Google Places and store matching businesses as LeadHunt records."""

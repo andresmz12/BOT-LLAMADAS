@@ -189,6 +189,9 @@ def run_migrations():
                 "email_sent_month": "INTEGER DEFAULT 0",
                 "email_reset_at": "TIMESTAMP",
                 "accent_color": "VARCHAR(20)",
+                "email_marketing_enabled": "BOOLEAN DEFAULT TRUE",
+                "lead_hunter_enabled": "BOOLEAN DEFAULT TRUE",
+                "whatsapp_module_enabled": "BOOLEAN DEFAULT TRUE",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():

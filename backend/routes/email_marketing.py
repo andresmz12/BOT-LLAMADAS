@@ -15,7 +15,7 @@ from sqlmodel import Session, select
 from sqlalchemy import desc, func
 from database import get_session
 from models import User, Organization, WebhookLog, Prospect, Campaign, EmailSendLog, EmailEvent, EmailList, ScheduledEmailSend, EmailSequence, BulkEmailJob
-from routes.auth import get_current_user, require_write_access, require_superadmin
+from routes.auth import get_current_user, require_write_access, require_superadmin, require_email_marketing_module
 
 logger = logging.getLogger(__name__)
 
@@ -300,6 +300,7 @@ async def bulk_send_email(
     data: BulkEmailRequest,
     background_tasks: BackgroundTasks,
     current_user: User = Depends(require_write_access),
+    _module: User = Depends(require_email_marketing_module),
     session: Session = Depends(get_session),
 ):
     if not current_user.organization_id:

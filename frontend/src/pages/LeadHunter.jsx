@@ -14,6 +14,7 @@ import {
 } from '../api/client'
 import { Link } from 'react-router-dom'
 import { exportToCsv } from '../utils/exportCsv'
+import ModuleDisabled from '../components/ModuleDisabled'
 
 const INTENT_COLORS = {
   positivo: 'bg-green-500/15 text-green-400',
@@ -54,6 +55,8 @@ function IntentLabel({ intent }) {
 
 export default function LeadHunter() {
   const { t } = useTranslation()
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const moduleDisabled = user.role !== 'superadmin' && user.lead_hunter_enabled === false
   const FILTER_TABS = [
     { key: 'all',     label: t('leadHunter.tabAll') },
     { key: 'checked', label: t('leadHunter.tabChecked') },
@@ -88,8 +91,12 @@ export default function LeadHunter() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(() => { loadLeads(filter) }, [filter])
-  useEffect(() => { getLeadHunterConfig().then(setLhConfig).catch(() => {}) }, [])
+  useEffect(() => { if (!moduleDisabled) loadLeads(filter) }, [filter])
+  useEffect(() => { if (!moduleDisabled) getLeadHunterConfig().then(setLhConfig).catch(() => {}) }, [])
+
+  if (moduleDisabled) {
+    return <ModuleDisabled icon={MagnifyingGlassIcon} title={t('leadHunter.notEnabledTitle')} hint={t('leadHunter.notEnabledHint')} />
+  }
 
   const handleScout = async () => {
     const { limit } = scoutForm

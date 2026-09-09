@@ -41,6 +41,7 @@ import {
   generateEmailSequence, createEmailSequence, getEmailSequences, updateSequenceStep, deleteEmailSequence,
 } from '../api/client'
 import { errText } from '../utils/errText'
+import ModuleDisabled from '../components/ModuleDisabled'
 
 const FIXED_KEYS_LIST = ['general', 'interested', 'callback_requested', 'voicemail', 'not_interested']
 const FIXED_KEYS = new Set(FIXED_KEYS_LIST)
@@ -189,6 +190,8 @@ function Section({ id, label, icon: Icon, badge, openSections, toggle, children 
 
 export default function EmailMarketing() {
   const { t, i18n } = useTranslation()
+  const user = JSON.parse(localStorage.getItem('user') || '{}')
+  const moduleDisabled = user.role !== 'superadmin' && user.email_marketing_enabled === false
   const dateLocale = i18n.resolvedLanguage?.startsWith('en') ? 'en' : 'es'
   const isEn = dateLocale === 'en'
   const PRO_TEMPLATES = isEn ? PRO_TEMPLATES_EN : PRO_TEMPLATES_ES
@@ -952,6 +955,10 @@ export default function EmailMarketing() {
   const editingMeta = editingTmpl ? allTemplates.find(t => t.key === editingTmpl) : null
 
   const totalListContacts = emailLists.reduce((s, l) => s + l.with_email, 0)
+
+  if (moduleDisabled) {
+    return <ModuleDisabled icon={EnvelopeIcon} title={t('emailMarketing.notEnabledTitle')} hint={t('emailMarketing.notEnabledHint')} />
+  }
 
   return (
     <div className="p-6 space-y-3 max-w-2xl">
