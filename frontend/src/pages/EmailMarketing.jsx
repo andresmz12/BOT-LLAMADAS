@@ -30,7 +30,7 @@ import {
   ArrowDownTrayIcon, ChartBarIcon, CheckIcon, XMarkIcon, ExclamationTriangleIcon,
 } from '@heroicons/react/24/outline'
 import {
-  getEmailSettings, saveEmailSettings, uploadEmailAttachment, deleteEmailAttachment, deleteEmailTemplate,
+  getEmailSettings, saveEmailSettings, deleteEmailTemplate,
   sendTestEmail, bulkSendEmail, getBulkSendStatus, getActiveBulkSend, pauseBulkSend, resumeBulkSend, cancelBulkSend, getCampaigns,
   getEmailHistory, validateEmailRecipients, uploadTemplateAttachment,
   getEmailContactsCount, importEmailContacts, getEmailRecipientsDetail,
@@ -38,7 +38,6 @@ import {
   getEmailListContacts, deleteEmailListContact, addEmailListContact, importEmailContactsToList, deleteTemplateAttachment,
   getScheduledEmails, cancelScheduledEmail, rescheduleEmail, toggleContactUnsubscribe, blockContactEmail, getEmailEvents, labelContact,
   updateProspect,
-  generateEmailSequence, createEmailSequence, getEmailSequences, updateSequenceStep, deleteEmailSequence,
 } from '../api/client'
 import { errText } from '../utils/errText'
 import ModuleDisabled from '../components/ModuleDisabled'
@@ -323,6 +322,14 @@ export default function EmailMarketing() {
   const [advancedSendOpen, setAdvancedSendOpen] = useState(false)
   const bulkPollRef = useRef(null)
 
+  // Bulk sends only ever target an email list now — auto-pick the first one
+  // once lists are loaded so there's always a valid selection by default.
+  useEffect(() => {
+    if (!bulkCampaign && emailLists.length > 0) {
+      setBulkCampaign(`list:${emailLists[0].id}`)
+    }
+  }, [emailLists])
+
   // Test send
   const [testAddr, setTestAddr] = useState('')
   const [testTmpl, setTestTmpl] = useState('general')
@@ -342,8 +349,6 @@ export default function EmailMarketing() {
   const [previewProKey, setPreviewProKey] = useState(null)
 
   // Attachments
-  const [attachLoading, setAttachLoading] = useState(false)
-  const [attachMsg, setAttachMsg] = useState(null)
   const [tmplAttachLoading, setTmplAttachLoading] = useState(false)
   const [tmplAttachMsg, setTmplAttachMsg] = useState(null)
 
@@ -357,15 +362,6 @@ export default function EmailMarketing() {
   const [scheduledJobs, setScheduledJobs] = useState([])
   const [rescheduleModal, setRescheduleModal] = useState(null) // { id, scheduled_at }
   const [scheduleMode, setScheduleMode] = useState(false)
-
-  // Email sequences (drip campaigns)
-  const [sequences, setSequences] = useState([])
-  const [seqForm, setSeqForm] = useState({ name: '', email_list_id: '', objective: '', tone: 'Profesional', language: 'Español' })
-  const [seqDates, setSeqDates] = useState([''])
-  const [seqGenerating, setSeqGenerating] = useState(false)
-  const [seqGenerated, setSeqGenerated] = useState(null) // [{date, subject, body}]
-  const [seqCreating, setSeqCreating] = useState(false)
-  const [seqError, setSeqError] = useState(null)
 
   // Quick-start guide banner (dismissible, remembered per browser)
   const [guideOpen, setGuideOpen] = useState(() => {
@@ -382,8 +378,6 @@ export default function EmailMarketing() {
   const [trackingLoading, setTrackingLoading] = useState(false)
   const [scheduleAt, setScheduleAt] = useState('')
   const fileRef = useRef(null)
-  const attachRef = useRef(null)
-  const attach2Ref = useRef(null)
   const tmplAttachRef = useRef(null)
   const tmplAttach2Ref = useRef(null)
   const emailImportRef = useRef(null)
@@ -419,7 +413,6 @@ export default function EmailMarketing() {
     })
   }
   const loadScheduled = () => getScheduledEmails().then(setScheduledJobs).catch(() => {})
-  const loadSequences = () => getEmailSequences().then(setSequences).catch(() => {})
   const loadEmailContactsCount = () => getEmailContactsCount().then(setEmailContactsCount).catch(() => {})
   const loadEmailLists = () => getEmailLists().then(setEmailLists).catch(() => {})
 
@@ -442,7 +435,6 @@ export default function EmailMarketing() {
     loadEmailContactsCount()
     loadEmailLists()
     loadScheduled()
-    loadSequences()
     // Reattach to an in-progress bulk send if one exists (survives page refresh)
     getActiveBulkSend().then(status => {
       if (status.job_id) {
@@ -875,84 +867,6 @@ export default function EmailMarketing() {
     finally { setTestLoading(false) }
   }
 
-  const uploadAttach = async (e, slot = 1) => {
-    const f = e.target.files?.[0]; if (!f) return
-    if (f.size > 5 * 1024 * 1024) { setAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.attachmentTooBig') }); return }
-    setAttachLoading(true); setAttachMsg(null)
-    const field = slot === 1 ? 'email_attachment_name' : 'email_attachment_2_name'
-    try {
-      const r = await uploadEmailAttachment(f, slot)
-      setCfg(p => ({ ...p, [field]: r.filename }))
-      setAttachMsg({ ok: true, text: r.filename })
-    } catch (e) { setAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.errorUploadAttachment') }) }
-    finally { setAttachLoading(false) }
-  }
-
-  const removeAttach = async (slot = 1) => {
-    setAttachLoading(true); setAttachMsg(null)
-    const field = slot === 1 ? 'email_attachment_name' : 'email_attachment_2_name'
-    try {
-      await deleteEmailAttachment(slot)
-      setCfg(p => ({ ...p, [field]: null }))
-      setAttachMsg({ ok: true, text: t('emailMarketing.config.globalAttachmentRemoved') })
-    } catch (e) { setAttachMsg({ ok: false, text: t('emailMarketing.myTemplates.errorDeleteAttachment') }) }
-    finally { setAttachLoading(false) }
-  }
-
-  const addSeqDate = () => setSeqDates(p => [...p, ''])
-  const removeSeqDate = (i) => setSeqDates(p => p.filter((_, idx) => idx !== i))
-  const updateSeqDate = (i, v) => setSeqDates(p => p.map((d, idx) => idx === i ? v : d))
-
-  // Date-only pickers are interpreted as 9am local (UTC-5), matching the rest
-  // of the scheduling UI — without this, a bare "YYYY-MM-DD" parses as
-  // midnight UTC, which is 7pm the day before in UTC-5.
-  const dateOnlyToUTC5ISO = (d) => fromUTC5ToISO(`${d}T09:00`)
-
-  const handleGenerateSequence = async () => {
-    const dates = seqDates.filter(Boolean).map(dateOnlyToUTC5ISO)
-    if (!seqForm.email_list_id || !seqForm.objective || dates.length === 0) {
-      setSeqError(t('emailMarketing.sequences.errorMissingFields')); return
-    }
-    setSeqError(null); setSeqGenerating(true)
-    try {
-      const r = await generateEmailSequence({
-        email_list_id: Number(seqForm.email_list_id), objective: seqForm.objective,
-        tone: seqForm.tone, language: seqForm.language, dates,
-      })
-      setSeqGenerated(r.emails)
-    } catch (e) { setSeqError(e.response?.data?.detail || t('emailMarketing.sequences.errorGenerating')) }
-    finally { setSeqGenerating(false) }
-  }
-
-  const updateGeneratedEmail = (i, field, value) =>
-    setSeqGenerated(p => p.map((e, idx) => idx === i ? { ...e, [field]: value } : e))
-
-  const handleConfirmSequence = async () => {
-    if (!seqForm.name || !seqGenerated?.length) return
-    setSeqCreating(true); setSeqError(null)
-    try {
-      await createEmailSequence({
-        name: seqForm.name, email_list_id: Number(seqForm.email_list_id),
-        objective: seqForm.objective, tone: seqForm.tone, language: seqForm.language,
-        emails: seqGenerated,
-      })
-      setSeqGenerated(null); setSeqForm({ name: '', email_list_id: '', objective: '', tone: 'Profesional', language: 'Español' }); setSeqDates([''])
-      loadSequences()
-    } catch (e) { setSeqError(e.response?.data?.detail || t('emailMarketing.sequences.errorScheduling')) }
-    finally { setSeqCreating(false) }
-  }
-
-  const handleCancelSequence = async (id) => {
-    if (!confirm(t('emailMarketing.sequences.confirmCancelSequence'))) return
-    await deleteEmailSequence(id)
-    loadSequences()
-  }
-
-  const handleUpdateSequenceStep = async (seqId, jobId, field, value) => {
-    await updateSequenceStep(seqId, jobId, { [field]: value })
-    loadSequences()
-  }
-
   const editingData = editingTmpl ? getTmpl(editingTmpl) : null
   const editingMeta = editingTmpl ? allTemplates.find(t => t.key === editingTmpl) : null
 
@@ -1380,23 +1294,18 @@ export default function EmailMarketing() {
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.bulk.recipients')}</label>
-              <select value={bulkCampaign} onChange={e => { setBulkCampaign(e.target.value); setConfirmStep(false); setBulkResult(null) }}
-                className="z-input-light text-sm">
-                <option value="">{t('emailMarketing.bulk.allOption')}</option>
-                {campaigns.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                <option value="email_only">
-                  {t('emailMarketing.bulk.emailContactsOption', { count: emailContactsCount ? `(${emailContactsCount.with_email})` : '' })}
-                </option>
-                {emailLists.length > 0 && (
-                  <optgroup label={t('emailMarketing.bulk.listsGroup')}>
-                    {emailLists.map(l => (
-                      <option key={`list:${l.id}`} value={`list:${l.id}`}>
-                        {t('emailMarketing.bulk.listOption', { name: l.name, count: l.with_email })}
-                      </option>
-                    ))}
-                  </optgroup>
-                )}
-              </select>
+              {emailLists.length > 0 ? (
+                <select value={bulkCampaign} onChange={e => { setBulkCampaign(e.target.value); setConfirmStep(false); setBulkResult(null) }}
+                  className="z-input-light text-sm">
+                  {emailLists.map(l => (
+                    <option key={`list:${l.id}`} value={`list:${l.id}`}>
+                      {t('emailMarketing.bulk.listOption', { name: l.name, count: l.with_email })}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="text-xs text-amber-400">{t('emailMarketing.bulk.noListsYet')}</p>
+              )}
             </div>
             <div>
               <label className="text-xs text-slate-400 mb-1 block">{t('emailMarketing.bulk.template')}</label>
@@ -1508,7 +1417,7 @@ export default function EmailMarketing() {
           </div>
 
           {!confirmStep && !bulkResult && (
-            <button onClick={prepareSend} disabled={!cfg.sendgrid_configured} className="z-btn-primary w-full disabled:opacity-40">
+            <button onClick={prepareSend} disabled={!cfg.sendgrid_configured || !bulkCampaign.startsWith('list:')} className="z-btn-primary w-full disabled:opacity-40">
               {t('emailMarketing.bulk.prepareSend')}
             </button>
           )}
@@ -2044,66 +1953,6 @@ export default function EmailMarketing() {
             </div>
           </div>
           <div className="border-t border-z-border pt-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
-                  <PaperClipIcon className="w-3.5 h-3.5" /> {t('emailMarketing.config.globalAttachmentLabel')}
-                </label>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <input ref={attachRef} type="file" accept=".pdf,image/*" className="hidden" onChange={e => uploadAttach(e, 1)} />
-                  <button onClick={() => attachRef.current?.click()} disabled={attachLoading}
-                    className="z-btn-ghost border border-z-border text-xs disabled:opacity-50">
-                    {attachLoading ? t('emailMarketing.myTemplates.uploading') : cfg.email_attachment_name ? t('emailMarketing.myTemplates.replaceAttachment') : t('emailMarketing.myTemplates.uploadAttachment')}
-                  </button>
-                  {cfg.email_attachment_name && (
-                    <>
-                      <span className="text-xs font-mono text-slate-400 truncate max-w-[140px]">
-                        ✓ {cfg.email_attachment_name}
-                      </span>
-                      <button onClick={() => removeAttach(1)} disabled={attachLoading}
-                        className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
-                        {t('emailMarketing.myTemplates.remove')}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div>
-                <label className="text-xs text-slate-400 mb-1.5 flex items-center gap-1">
-                  <PaperClipIcon className="w-3.5 h-3.5" /> {t('emailMarketing.config.globalAttachmentLabel2')}
-                </label>
-                <div className="flex items-center gap-3 flex-wrap">
-                  <input ref={attach2Ref} type="file" accept=".pdf,image/*" className="hidden" onChange={e => uploadAttach(e, 2)} />
-                  <button onClick={() => attach2Ref.current?.click()} disabled={attachLoading}
-                    className="z-btn-ghost border border-z-border text-xs disabled:opacity-50">
-                    {attachLoading ? t('emailMarketing.myTemplates.uploading') : cfg.email_attachment_2_name ? t('emailMarketing.myTemplates.replaceAttachment') : t('emailMarketing.myTemplates.uploadAttachment')}
-                  </button>
-                  {cfg.email_attachment_2_name && (
-                    <>
-                      <span className="text-xs font-mono text-slate-400 truncate max-w-[140px]">
-                        ✓ {cfg.email_attachment_2_name}
-                      </span>
-                      <button onClick={() => removeAttach(2)} disabled={attachLoading}
-                        className="text-xs text-red-400 hover:text-red-300 disabled:opacity-50">
-                        {t('emailMarketing.myTemplates.remove')}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
-            {(cfg.email_attachment_name || cfg.email_attachment_2_name) && (
-              <p className="text-xs text-slate-500 mt-2">
-                {t('emailMarketing.config.globalAttachmentHint')}
-              </p>
-            )}
-            {attachMsg && (
-              <p className={`text-xs mt-1 ${attachMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
-                {attachMsg.ok ? `✓ ${attachMsg.text}` : attachMsg.text}
-              </p>
-            )}
-          </div>
-          <div className="border-t border-z-border pt-4">
             <label className="text-xs text-slate-400 mb-1.5 block">{t('emailMarketing.config.delayLabel')}</label>
             <select value={cfg.email_send_delay_ms} onChange={e => setCfg(p => ({ ...p, email_send_delay_ms: Number(e.target.value) }))}
               className="z-input-light text-sm w-full sm:w-auto">
@@ -2214,129 +2063,6 @@ export default function EmailMarketing() {
           </div>
         </div>
       )}
-
-      {/* ── Secuencias de correo (drip campaigns) ── */}
-      <Section id="secuencias" label={t('emailMarketing.sequences.title')} icon={SparklesIcon}
-        badge={sequences.length > 0 ? t('emailMarketing.sequences.badgeCount', { count: sequences.length, plural: sequences.length !== 1 ? 's' : '' }) : undefined}
-        openSections={openSections} toggle={toggle}>
-        <div className="p-5 space-y-5">
-          <p className="text-xs text-slate-500">
-            {t('emailMarketing.sequences.intro')}
-          </p>
-
-          {!seqGenerated && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <input type="text" placeholder={t('emailMarketing.sequences.namePlaceholder')} value={seqForm.name}
-                  onChange={e => setSeqForm(p => ({ ...p, name: e.target.value }))}
-                  className="z-input-light text-sm" />
-                <select value={seqForm.email_list_id}
-                  onChange={e => setSeqForm(p => ({ ...p, email_list_id: e.target.value }))}
-                  className="z-input-light text-sm">
-                  <option value="">{t('emailMarketing.sequences.selectList')}</option>
-                  {emailLists.map(l => <option key={l.id} value={l.id}>{l.name} ({l.with_email})</option>)}
-                </select>
-              </div>
-              <textarea placeholder={t('emailMarketing.sequences.objectivePlaceholder')}
-                value={seqForm.objective} onChange={e => setSeqForm(p => ({ ...p, objective: e.target.value }))}
-                rows={2} className="z-input-light text-sm w-full" />
-              <div className="grid grid-cols-2 gap-3">
-                <select value={seqForm.tone} onChange={e => setSeqForm(p => ({ ...p, tone: e.target.value }))} className="z-input-light text-sm">
-                  {['Profesional', 'Cercano', 'Persuasivo', 'Urgente'].map(tone =>
-                    <option key={tone} value={tone}>{t(`emailMarketing.sequences.tones.${tone}`)}</option>)}
-                </select>
-                <select value={seqForm.language} onChange={e => setSeqForm(p => ({ ...p, language: e.target.value }))} className="z-input-light text-sm">
-                  {['Español', 'Inglés', 'Spanglish'].map(l =>
-                    <option key={l} value={l}>{t(`emailMarketing.sequences.languages.${l}`)}</option>)}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs text-slate-400">{t('emailMarketing.sequences.sendDatesLabel')}</label>
-                {seqDates.map((d, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <input type="date" value={d} onChange={e => updateSeqDate(i, e.target.value)} className="z-input-light text-sm" />
-                    {seqDates.length > 1 && (
-                      <button onClick={() => removeSeqDate(i)} className="text-red-400 hover:text-red-300">
-                        <TrashIcon className="w-4 h-4" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-                <button onClick={addSeqDate} className="flex items-center gap-1.5 text-xs text-blue-400 hover:text-blue-300">
-                  <PlusIcon className="w-3.5 h-3.5" /> {t('emailMarketing.sequences.addDate')}
-                </button>
-              </div>
-
-              {seqError && <p className="text-xs text-red-400">{seqError}</p>}
-              <button onClick={handleGenerateSequence} disabled={seqGenerating}
-                className="z-btn-primary disabled:opacity-50 flex items-center gap-1.5">
-                <SparklesIcon className="w-4 h-4" /> {seqGenerating ? t('emailMarketing.sequences.generating') : t('emailMarketing.sequences.generate')}
-              </button>
-            </div>
-          )}
-
-          {seqGenerated && (
-            <div className="space-y-3">
-              <p className="text-xs text-slate-400">{t('emailMarketing.sequences.reviewHint')}</p>
-              {seqGenerated.map((em, i) => (
-                <div key={i} className="border border-z-border rounded-lg p-3 space-y-2">
-                  <p className="text-xs text-blue-300">{t('emailMarketing.sequences.emailN', { n: i + 1 })} · {displayUTC5(em.date, dateLocale)} <span className="text-slate-600">(UTC-5)</span></p>
-                  <input type="text" value={em.subject} onChange={e => updateGeneratedEmail(i, 'subject', e.target.value)}
-                    className="z-input-light text-sm w-full" placeholder={t('emailMarketing.sequences.subjectPlaceholder')} />
-                  <textarea value={em.body} onChange={e => updateGeneratedEmail(i, 'body', e.target.value)}
-                    rows={4} className="z-input-light text-sm w-full" placeholder={t('emailMarketing.sequences.bodyPlaceholder')} />
-                </div>
-              ))}
-              {seqError && <p className="text-xs text-red-400">{seqError}</p>}
-              <div className="flex gap-2">
-                <button onClick={handleConfirmSequence} disabled={seqCreating || !seqForm.name}
-                  className="z-btn-primary disabled:opacity-50">
-                  {seqCreating ? t('emailMarketing.sequences.scheduling') : t('emailMarketing.sequences.confirmAndSchedule')}
-                </button>
-                <button onClick={() => setSeqGenerated(null)} className="z-btn-ghost text-xs">{t('emailMarketing.sequences.discard')}</button>
-              </div>
-            </div>
-          )}
-
-          {sequences.length > 0 && (
-            <div className="space-y-3 pt-3 border-t border-z-border">
-              {sequences.map(seq => (
-                <div key={seq.id} className="border border-z-border rounded-lg overflow-hidden">
-                  <div className="px-4 py-3 flex items-center justify-between bg-white/5">
-                    <div>
-                      <p className="text-sm text-slate-200 font-medium">{seq.name}</p>
-                      <p className="text-xs text-slate-500">{t('emailMarketing.sequences.emailsCount', { count: seq.steps.length, plural: seq.steps.length !== 1 ? 's' : '', status: seq.status })}</p>
-                    </div>
-                    {seq.status === 'scheduled' && (
-                      <button onClick={() => handleCancelSequence(seq.id)}
-                        className="text-xs text-red-400 hover:text-red-300 border border-red-500/30 hover:bg-red-500/10 px-3 py-1 rounded-lg transition-colors">
-                        {t('emailMarketing.sequences.cancelSequence')}
-                      </button>
-                    )}
-                  </div>
-                  <div className="divide-y divide-z-border">
-                    {seq.steps.map(s => (
-                      <div key={s.job_id} className="px-4 py-2.5 flex items-center justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="text-sm text-slate-300 truncate">{t('emailMarketing.sequences.stepLabel', { n: s.step, subject: s.subject })}</p>
-                          <p className="text-xs text-slate-500">{displayUTC5(s.scheduled_at, dateLocale)} <span className="text-slate-600">(UTC-5)</span></p>
-                        </div>
-                        <span className={`text-xs px-2 py-0.5 rounded-full flex-shrink-0 ${
-                          s.status === 'done' ? 'bg-green-500/15 text-green-400' :
-                          s.status === 'failed' ? 'bg-red-500/15 text-red-400' :
-                          s.status === 'cancelled' ? 'bg-slate-500/15 text-slate-400' :
-                          'bg-blue-500/15 text-blue-400'
-                        }`}>{s.status}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </Section>
 
       </>)}
 

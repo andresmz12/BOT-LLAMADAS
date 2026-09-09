@@ -134,13 +134,6 @@ export const saveSettings = (data) => api.post('/settings', data).then(r => r.da
 // Email marketing settings
 export const getEmailSettings = () => api.get('/settings/email').then(r => r.data)
 export const saveEmailSettings = (data) => api.post('/settings/email', data).then(r => r.data)
-export const uploadEmailAttachment = (file, slot = 1) => {
-  const form = new FormData()
-  form.append('file', file)
-  form.append('slot', String(slot))
-  return api.post('/settings/email/attachment', form).then(r => r.data)
-}
-export const deleteEmailAttachment = (slot = 1) => api.delete('/settings/email/attachment', { params: { slot } }).then(r => r.data)
 export const deleteEmailTemplate = (key) => api.delete(`/settings/email/template/${key}`).then(r => r.data)
 export const sendTestEmail = (data) => api.post('/settings/email/test', data).then(r => r.data)
 export const bulkSendEmail = (data) => api.post('/settings/email/bulk-send', data).then(r => r.data)

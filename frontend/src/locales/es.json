@@ -1500,6 +1500,7 @@
       "quotaLabel": "Emails usados este mes",
       "quotaExhausted": "Alcanzaste el límite mensual de tu plan. Contacta a soporte para aumentarlo.",
       "recipients": "Destinatarios",
+      "noListsYet": "Todavía no tienes ninguna lista de email. Créala en la pestaña Contactos.",
       "allOption": "Todos (campañas + listas)",
       "emailContactsOption": "Contactos de email {{count}}",
       "listsGroup": "── Listas de email ──",

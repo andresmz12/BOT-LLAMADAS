@@ -1,5 +1,4 @@
 import os
-import base64
 import html
 import json
 import logging
@@ -112,23 +111,18 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
 
 
 def _build_attachments(tmpl: dict, org) -> list:
-    """Build up to two SendGrid Attachment objects: slot 1 (attachment_b64/
-    attachment_name) and slot 2 (attachment_b64_2/attachment_name_2), each
-    falling back to the org-wide default when the template has none of its
-    own in that slot."""
+    """Build up to two SendGrid Attachment objects from the template's own
+    attachment_b64/attachment_name (slot 1) and attachment_b64_2/
+    attachment_name_2 (slot 2). A template with no attachment of its own
+    sends none — there is no org-wide fallback attachment."""
     from sendgrid.helpers.mail import Attachment, FileContent, FileName, FileType, Disposition
 
     attachments = []
     slots = [
-        (tmpl.get("attachment_b64") or "", tmpl.get("attachment_name") or "",
-         org.email_attachment, org.email_attachment_name),
-        (tmpl.get("attachment_b64_2") or "", tmpl.get("attachment_name_2") or "",
-         org.email_attachment_2, org.email_attachment_2_name),
+        (tmpl.get("attachment_b64") or "", tmpl.get("attachment_name") or ""),
+        (tmpl.get("attachment_b64_2") or "", tmpl.get("attachment_name_2") or ""),
     ]
-    for att_b64, att_name, org_bytes, org_name in slots:
-        if not att_b64 and org_bytes and org_name:
-            att_b64 = base64.b64encode(org_bytes).decode()
-            att_name = org_name
+    for att_b64, att_name in slots:
         if att_b64 and att_name:
             ext = att_name.rsplit(".", 1)[-1].lower()
             mime = "application/pdf" if ext == "pdf" else f"image/{ext}"

@@ -119,61 +119,6 @@ def delete_email_template(
     return {"ok": True}
 
 
-@router.post("/email/attachment")
-async def upload_email_attachment(
-    file: UploadFile = File(...),
-    slot: int = Form(default=1),
-    current_user: User = Depends(require_write_access),
-    session: Session = Depends(get_session),
-):
-    if not current_user.organization_id:
-        raise HTTPException(status_code=400, detail="Sin organización")
-    if slot not in (1, 2):
-        raise HTTPException(status_code=400, detail="Slot inválido")
-    org = session.get(Organization, current_user.organization_id)
-    if not org:
-        raise HTTPException(status_code=404, detail="Organización no encontrada")
-    contents = await file.read()
-    if len(contents) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="El archivo supera el límite de 5 MB")
-    if slot == 1:
-        org.email_attachment = contents
-        org.email_attachment_name = file.filename
-    else:
-        org.email_attachment_2 = contents
-        org.email_attachment_2_name = file.filename
-    session.add(org)
-    session.commit()
-    return {"ok": True, "filename": file.filename}
-
-
-@router.delete("/email/attachment")
-def delete_email_attachment(
-    slot: int = 1,
-    current_user: User = Depends(require_write_access),
-    session: Session = Depends(get_session),
-):
-    """Removes the organization's global fallback attachment (slot 1 or 2) —
-    every send that doesn't have its own per-template attachment in that slot
-    stops attaching anything there."""
-    if not current_user.organization_id:
-        raise HTTPException(status_code=400, detail="Sin organización")
-    if slot not in (1, 2):
-        raise HTTPException(status_code=400, detail="Slot inválido")
-    org = session.get(Organization, current_user.organization_id)
-    if not org:
-        raise HTTPException(status_code=404, detail="Organización no encontrada")
-    if slot == 1:
-        org.email_attachment = None
-        org.email_attachment_name = None
-    else:
-        org.email_attachment_2 = None
-        org.email_attachment_2_name = None
-    session.add(org)
-    session.commit()
-    return {"ok": True}
-
-
 class EmailTestRequest(BaseModel):
     to_email: str
     outcome: str = "interested"
