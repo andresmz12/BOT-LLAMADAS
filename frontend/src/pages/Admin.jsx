@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { PlusIcon, PencilIcon, TrashIcon, XMarkIcon, EyeIcon } from '@heroicons/react/24/outline'
@@ -42,6 +42,36 @@ const CRM_EVENTS_VALUES = [
   { value: 'campaign_email_sent' },
 ]
 
+// Usage-bar coloring shared by the minutes and email quota indicators —
+// amber at 80%+, red once the org is effectively out of allowance.
+function usageTone(used, limit) {
+  if (!limit) return 'ok'
+  const pct = (used || 0) / limit
+  if (pct >= 1) return 'crit'
+  if (pct >= 0.8) return 'warn'
+  return 'ok'
+}
+
+function UsageBar({ label, used, limit }) {
+  const { t } = useTranslation()
+  if (!limit) return <div className="text-[11px] text-slate-600">{label}: {t('admin.orgs.unlimited', { defaultValue: 'sin límite' })}</div>
+  const tone = usageTone(used, limit)
+  const pct = Math.min(100, Math.round(((used || 0) / limit) * 100))
+  const barColor = tone === 'crit' ? 'bg-red-500' : tone === 'warn' ? 'bg-amber-500' : 'bg-blue-500'
+  const textColor = tone === 'crit' ? 'text-red-400' : tone === 'warn' ? 'text-amber-400' : 'text-slate-400'
+  return (
+    <div className="min-w-[110px]">
+      <div className={`flex justify-between text-[11px] ${textColor}`}>
+        <span>{label}</span>
+        <span className="tabular-nums">{(used || 0).toLocaleString()}/{limit.toLocaleString()}</span>
+      </div>
+      <div className="h-1 rounded-full bg-white/10 overflow-hidden mt-0.5">
+        <div className={`h-full rounded-full ${barColor}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
+
 export default function Admin() {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -51,6 +81,40 @@ export default function Admin() {
   const [modal, setModal] = useState(null)
   const [dataMenuOrgId, setDataMenuOrgId] = useState(null)
   const [dataMenuPos, setDataMenuPos] = useState({ top: 0, left: 0 })
+  const [orgSearch, setOrgSearch] = useState('')
+  const [userSearch, setUserSearch] = useState('')
+
+  const filteredOrgs = useMemo(() => {
+    const q = orgSearch.trim().toLowerCase()
+    if (!q) return orgs
+    return orgs.filter(o =>
+      o.name.toLowerCase().includes(q) ||
+      String(o.id).includes(q) ||
+      (o.plan || '').toLowerCase().includes(q) ||
+      users.some(u => u.organization_id === o.id && (u.email.toLowerCase().includes(q) || u.full_name.toLowerCase().includes(q)))
+    )
+  }, [orgs, users, orgSearch])
+
+  const filteredUsers = useMemo(() => {
+    const q = userSearch.trim().toLowerCase()
+    if (!q) return users
+    return users.filter(u =>
+      u.full_name.toLowerCase().includes(q) ||
+      u.email.toLowerCase().includes(q) ||
+      (u.organization_name || '').toLowerCase().includes(q) ||
+      u.role.toLowerCase().includes(q)
+    )
+  }, [users, userSearch])
+
+  const orgStats = useMemo(() => ({
+    total: orgs.length,
+    active: orgs.filter(o => o.is_active).length,
+    paid: orgs.filter(o => o.plan && o.plan !== 'free').length,
+    nearLimit: orgs.filter(o =>
+      usageTone(o.minutes_used_month, o.minutes_limit) !== 'ok' ||
+      usageTone(o.email_sent_month, o.email_limit_month) !== 'ok'
+    ).length,
+  }), [orgs])
 
   const ORG_DATA_LINKS = [
     [t('agents.title'), '/agents'],
@@ -127,29 +191,60 @@ export default function Admin() {
 
       {tab === 'orgs' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              [t('admin.orgs.stats.total'), orgStats.total, 'text-slate-100'],
+              [t('admin.orgs.stats.active'), orgStats.active, 'text-green-400'],
+              [t('admin.orgs.stats.paid'), orgStats.paid, 'text-blue-400'],
+              [t('admin.orgs.stats.nearLimit'), orgStats.nearLimit, orgStats.nearLimit > 0 ? 'text-amber-400' : 'text-slate-100'],
+            ].map(([label, value, color]) => (
+              <div key={label} className="bg-z-card border border-z-border rounded-xl px-4 py-3">
+                <div className={`text-2xl font-bold tabular-nums ${color}`}>{value}</div>
+                <div className="text-xs text-slate-500 mt-0.5">{label}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="flex justify-between items-center gap-3 flex-wrap">
             <h2 className="text-lg font-semibold text-slate-200">{t('admin.orgs.title')}</h2>
-            <button onClick={() => setModal({ type: 'org', data: null })}
-              className="z-btn-primary flex items-center gap-2">
-              <PlusIcon className="w-4 h-4" /> {t('admin.orgs.new')}
-            </button>
+            <div className="flex items-center gap-2">
+              <input
+                value={orgSearch}
+                onChange={e => setOrgSearch(e.target.value)}
+                placeholder={t('admin.orgs.searchPlaceholder')}
+                className="z-input w-56 text-sm"
+              />
+              <button onClick={() => setModal({ type: 'org', data: null })}
+                className="z-btn-primary flex items-center gap-2 whitespace-nowrap">
+                <PlusIcon className="w-4 h-4" /> {t('admin.orgs.new')}
+              </button>
+            </div>
           </div>
           <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-black/20">
                 <tr>
-                  {[t('admin.orgs.headers.id'), t('admin.orgs.headers.name'), t('admin.orgs.headers.contact'), t('admin.orgs.headers.plan'), t('admin.orgs.headers.demos'), t('admin.orgs.headers.crm'), t('admin.orgs.headers.active'), t('admin.orgs.headers.actions')].map(h => (
+                  {[t('admin.orgs.headers.id'), t('admin.orgs.headers.name'), t('admin.orgs.headers.contact'), t('admin.orgs.headers.plan'), t('admin.orgs.headers.usage'), t('admin.orgs.headers.demos'), t('admin.orgs.headers.crm'), t('admin.orgs.headers.active'), t('admin.orgs.headers.actions')].map(h => (
                     <th key={h} className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-z-border">
-                {orgs.map(org => {
+                {filteredOrgs.map(org => {
                   const contact = users.find(u => u.organization_id === org.id)
                   return (
                   <tr key={org.id} className="hover:bg-white/[0.02]">
                     <td className="px-6 py-3 text-slate-500 text-xs">{org.id}</td>
-                    <td className="px-6 py-3 font-medium text-slate-200">{org.name}</td>
+                    <td className="px-6 py-3 font-medium text-slate-200">
+                      <div className="flex items-center gap-2">
+                        {org.logo_url ? (
+                          <img src={org.logo_url} alt="" className="w-5 h-5 rounded object-contain flex-shrink-0 bg-white/5" />
+                        ) : org.accent_color ? (
+                          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: org.accent_color }} />
+                        ) : null}
+                        {org.name}
+                      </div>
+                    </td>
                     <td className="px-6 py-3 text-xs">
                       {contact ? (
                         <div>
@@ -169,6 +264,11 @@ export default function Admin() {
                         : org.plan === 'enterprise' ? 'bg-purple-500/15 text-purple-400'
                         : 'bg-green-500/15 text-green-400'
                       }`}>{org.plan}</span>
+                    </td>
+                    <td className="px-6 py-3 space-y-1.5">
+                      {org.minutes_limit ? <UsageBar label={t('admin.orgs.usageMinutes')} used={org.minutes_used_month} limit={org.minutes_limit} /> : null}
+                      {org.email_limit_month ? <UsageBar label={t('admin.orgs.usageEmails')} used={org.email_sent_month} limit={org.email_limit_month} /> : null}
+                      {!org.minutes_limit && !org.email_limit_month && <span className="text-slate-600 text-xs">{t('admin.orgs.unlimited')}</span>}
                     </td>
                     <td className="px-6 py-3 text-slate-400 text-xs">
                       {org.plan === 'free' ? `${org.demo_calls_used ?? 0}/10` : '—'}
@@ -235,8 +335,8 @@ export default function Admin() {
                   </tr>
                   )
                 })}
-                {orgs.length === 0 && (
-                  <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-500">{t('admin.orgs.noOrgs')}</td></tr>
+                {filteredOrgs.length === 0 && (
+                  <tr><td colSpan={9} className="px-6 py-10 text-center text-slate-500">{orgs.length === 0 ? t('admin.orgs.noOrgs') : t('admin.orgs.noResults')}</td></tr>
                 )}
               </tbody>
             </table>
@@ -246,12 +346,20 @@ export default function Admin() {
 
       {tab === 'users' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
+          <div className="flex justify-between items-center gap-3 flex-wrap">
             <h2 className="text-lg font-semibold text-slate-200">{t('admin.users.title')}</h2>
-            <button onClick={() => setModal({ type: 'user', data: null })}
-              className="z-btn-primary flex items-center gap-2">
-              <PlusIcon className="w-4 h-4" /> {t('admin.users.new')}
-            </button>
+            <div className="flex items-center gap-2">
+              <input
+                value={userSearch}
+                onChange={e => setUserSearch(e.target.value)}
+                placeholder={t('admin.users.searchPlaceholder')}
+                className="z-input w-56 text-sm"
+              />
+              <button onClick={() => setModal({ type: 'user', data: null })}
+                className="z-btn-primary flex items-center gap-2 whitespace-nowrap">
+                <PlusIcon className="w-4 h-4" /> {t('admin.users.new')}
+              </button>
+            </div>
           </div>
           <div className="bg-z-card rounded-xl border border-z-border overflow-hidden">
             <table className="w-full text-sm">
@@ -263,7 +371,7 @@ export default function Admin() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-z-border">
-                {users.map(user => (
+                {filteredUsers.map(user => (
                   <tr key={user.id} className="hover:bg-white/[0.02]">
                     <td className="px-6 py-3 font-medium text-slate-200">{user.full_name}</td>
                     <td className="px-6 py-3 text-slate-400 text-xs">{user.email}</td>
@@ -292,8 +400,8 @@ export default function Admin() {
                     </td>
                   </tr>
                 ))}
-                {users.length === 0 && (
-                  <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-500">{t('admin.users.noUsers')}</td></tr>
+                {filteredUsers.length === 0 && (
+                  <tr><td colSpan={8} className="px-6 py-10 text-center text-slate-500">{users.length === 0 ? t('admin.users.noUsers') : t('admin.users.noResults')}</td></tr>
                 )}
               </tbody>
             </table>

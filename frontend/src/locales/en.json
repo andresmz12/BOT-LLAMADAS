@@ -516,11 +516,23 @@
     "orgs": {
       "title": "Organizations",
       "new": "New",
+      "searchPlaceholder": "Search by name, plan or contact...",
+      "noResults": "No results for that search",
+      "stats": {
+        "total": "Organizations",
+        "active": "Active",
+        "paid": "On a paid plan",
+        "nearLimit": "Near their limit"
+      },
+      "usageMinutes": "Minutes",
+      "usageEmails": "Emails",
+      "unlimited": "No limit",
       "headers": {
         "id": "ID",
         "name": "Name",
         "contact": "Contact",
         "plan": "Plan",
+        "usage": "Usage",
         "demos": "Demos",
         "crm": "CRM",
         "active": "Active",
@@ -539,6 +551,8 @@
     "users": {
       "title": "Users",
       "new": "New",
+      "searchPlaceholder": "Search by name, email or organization...",
+      "noResults": "No results for that search",
       "headers": {
         "name": "Name",
         "email": "Email",
