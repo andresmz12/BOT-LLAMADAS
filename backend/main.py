@@ -188,6 +188,13 @@ async def _run_scheduled_email(job_id: int):
                     seen_emails.add(key)
                     prospects.append(p)
 
+            from routes.email_marketing import email_remaining_this_month, _reset_email_usage_if_needed
+            email_remaining = email_remaining_this_month(org)
+            if email_remaining is not None:
+                prospects = prospects[:email_remaining]
+                s.add(org)
+                s.commit()
+
             templates = {}
             if org.email_templates:
                 try: templates = json.loads(org.email_templates)
@@ -211,7 +218,7 @@ async def _run_scheduled_email(job_id: int):
                         "fecha": _dt.utcnow().strftime("%d/%m/%Y"),
                     }
                     subject = _fill(job.subject_override or tmpl.get("subject") or DEFAULT_SUBJECT.get(job.template_key, "Mensaje de ZyraVoice"), tmpl_vars, escape=False)
-                    color = tmpl.get("color") or "#4F46E5"
+                    color = tmpl.get("color") or org.accent_color or "#4F46E5"
                     greeting = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
                     body_text = _fill(job.body_override or tmpl.get("body") or "", tmpl_vars)
                     signature = _fill(tmpl.get("signature") or f"El equipo de {from_name}", tmpl_vars)
@@ -225,6 +232,9 @@ async def _run_scheduled_email(job_id: int):
                     prospect.last_email_sent_at = _dt.utcnow()
                     prospect.email_send_count = (prospect.email_send_count or 0) + 1
                     s.add(prospect)
+                    _reset_email_usage_if_needed(org)
+                    org.email_sent_month = (org.email_sent_month or 0) + 1
+                    s.add(org)
                     sent += 1
                     if delay_s > 0:
                         await _asyncio.sleep(delay_s)

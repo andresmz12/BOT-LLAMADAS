@@ -213,8 +213,14 @@ def get_email_settings(
             "email_templates": {},
             "email_attachment_name": None,
             "email_attachment_2_name": None,
+            "email_limit_month": None,
+            "email_sent_month": 0,
         }
     sg_configured = bool((org.sendgrid_api_key or "").strip() or os.getenv("SENDGRID_API_KEY", ""))
+    from routes.email_marketing import _reset_email_usage_if_needed
+    _reset_email_usage_if_needed(org)
+    session.add(org)
+    session.commit()
     try:
         templates = json.loads(org.email_templates) if org.email_templates else {}
     except Exception:
@@ -240,6 +246,8 @@ def get_email_settings(
         "email_attachment_name": org.email_attachment_name,
         "email_attachment_2_name": org.email_attachment_2_name,
         "email_send_delay_ms": org.email_send_delay_ms or 0,
+        "email_limit_month": org.email_limit_month,
+        "email_sent_month": org.email_sent_month or 0,
     }
 
 

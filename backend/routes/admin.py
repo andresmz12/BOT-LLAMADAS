@@ -56,6 +56,8 @@ class OrgCreate(BaseModel):
     email_from_name: Optional[str] = None
     marketing_enabled: bool = False
     minutes_limit: Optional[int] = None
+    email_limit_month: Optional[int] = None
+    accent_color: Optional[str] = None
 
 
 class UserCreate(BaseModel):

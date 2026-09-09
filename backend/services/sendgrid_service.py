@@ -63,7 +63,7 @@ async def send_post_call_email(org, prospect, outcome: str, summary, agent_name:
         tmpl = templates.get(outcome, {})
 
         subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(outcome, "Seguimiento"), tmpl_vars, escape=False)
-        color     = tmpl.get("color") or "#4F46E5"
+        color     = tmpl.get("color") or org.accent_color or "#4F46E5"
         greeting  = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
         body_text = _fill(tmpl.get("body") or "", tmpl_vars)
         cta_text  = tmpl.get("cta_text") or ""

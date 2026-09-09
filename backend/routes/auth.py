@@ -223,6 +223,8 @@ def me(
     result["organization_name"] = org.name if org else ""
     result["plan"] = org.plan if org else "free"
     result["marketing_enabled"] = org.marketing_enabled if org else False
+    result["logo_url"] = org.logo_url if org else None
+    result["accent_color"] = org.accent_color if org else None
     return result
 
 

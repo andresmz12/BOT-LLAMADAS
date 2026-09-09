@@ -108,7 +108,11 @@ export default function Sidebar({ mobileOpen = false, onClose = () => {} }) {
       transition-transform md:transition-all duration-200 flex-shrink-0 border-r border-z-border
     `}>
       <div className={`flex items-center ${collapsed ? 'justify-center px-0' : 'gap-2.5 px-5'} py-4 border-b border-z-border min-h-[60px]`}>
-        <WaveformIcon className="w-7 h-7 text-z-blue flex-shrink-0" />
+        {user.logo_url ? (
+          <img src={user.logo_url} alt={orgName || 'Logo'} className="w-7 h-7 rounded object-contain flex-shrink-0" />
+        ) : (
+          <WaveformIcon className="w-7 h-7 text-z-blue flex-shrink-0" />
+        )}
         {!collapsed && (
           <>
             <div className="w-px h-6 bg-z-border mx-1 flex-shrink-0" />

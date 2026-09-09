@@ -245,6 +245,7 @@ export default function EmailMarketing() {
     email_send_on_voicemail: false, email_send_on_not_interested: false,
     email_templates: {}, email_attachment_name: null, email_attachment_2_name: null,
     email_send_delay_ms: 0,
+    email_limit_month: null, email_sent_month: 0,
   })
   const [campaigns, setCampaigns] = useState([])
   const [saving, setSaving] = useState(false)
@@ -420,6 +421,7 @@ export default function EmailMarketing() {
       email_templates: d.email_templates || {}, email_attachment_name: d.email_attachment_name || null,
       email_attachment_2_name: d.email_attachment_2_name || null,
       email_send_delay_ms: d.email_send_delay_ms ?? 0,
+      email_limit_month: d.email_limit_month ?? null, email_sent_month: d.email_sent_month ?? 0,
     })).catch(() => {})
     getCampaigns().then(setCampaigns).catch(() => {})
     loadHistory()
@@ -448,6 +450,7 @@ export default function EmailMarketing() {
         if (status.status === 'done' || status.status === 'error') {
           clearInterval(bulkPollRef.current); bulkPollRef.current = null
           setBulkLoading(false); loadHistory()
+          getEmailSettings().then(d => setCfg(p => ({ ...p, email_limit_month: d.email_limit_month ?? null, email_sent_month: d.email_sent_month ?? 0 }))).catch(() => {})
           if (status.status === 'done') {
             try {
               const freshStats = await validateEmailRecipients({ ...parseBulkTarget(), skip_labeled: true })
@@ -1305,6 +1308,31 @@ export default function EmailMarketing() {
       <Section id="envio" label={t('emailMarketing.bulk.title')} icon={PaperAirplaneIcon} openSections={openSections} toggle={toggle}>
         <div className="p-5 space-y-4">
           <p className="text-xs text-slate-500">{t('emailMarketing.bulk.intro')}</p>
+
+          {cfg.email_limit_month != null && (() => {
+            const used = cfg.email_sent_month || 0
+            const limit = cfg.email_limit_month
+            const pct = Math.min(100, Math.round((used / limit) * 100))
+            const exhausted = used >= limit
+            return (
+              <div className={`rounded-lg border p-3 ${exhausted ? 'bg-red-500/10 border-red-500/30' : 'bg-white/5 border-z-border'}`}>
+                <div className="flex items-center justify-between text-xs mb-1.5">
+                  <span className={exhausted ? 'text-red-400 font-medium' : 'text-slate-300'}>
+                    {t('emailMarketing.bulk.quotaLabel')}
+                  </span>
+                  <span className={`tabular-nums ${exhausted ? 'text-red-400 font-semibold' : 'text-slate-400'}`}>
+                    {used.toLocaleString()} / {limit.toLocaleString()}
+                  </span>
+                </div>
+                <div className="h-1.5 rounded-full bg-white/10 overflow-hidden">
+                  <div className={`h-full rounded-full ${exhausted ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${pct}%` }} />
+                </div>
+                {exhausted && (
+                  <p className="text-xs text-red-400 mt-1.5">{t('emailMarketing.bulk.quotaExhausted')}</p>
+                )}
+              </div>
+            )
+          })()}
 
           <div className="grid grid-cols-2 gap-3">
             <div>

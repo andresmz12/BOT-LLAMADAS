@@ -41,6 +41,11 @@ class Organization(SQLModel, table=True):
     email_attachment_2: Optional[bytes] = Field(default=None, sa_column=Column(LargeBinary))
     email_attachment_2_name: Optional[str] = None
     email_send_delay_ms: int = Field(default=0)
+    email_limit_month: Optional[int] = None        # None = unlimited
+    email_sent_month: int = Field(default=0)       # cumulative emails sent this billing month
+    email_reset_at: Optional[datetime] = None
+    # White-label branding (personalization per client)
+    accent_color: Optional[str] = None             # hex color used in dashboard UI + email templates
     # AI Marketing
     marketing_enabled: bool = Field(default=False)
     openai_api_key: Optional[str] = None

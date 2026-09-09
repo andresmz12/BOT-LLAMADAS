@@ -405,6 +405,9 @@ function OrgModal({ org, onClose, onSaved }) {
     email_from: '',
     email_from_name: '',
     minutes_limit: null,
+    email_limit_month: null,
+    logo_url: '',
+    accent_color: '',
   })
   const [loading, setLoading] = useState(false)
   const [crmAccordionOpen, setCrmAccordionOpen] = useState(false)
@@ -606,6 +609,50 @@ function OrgModal({ org, onClose, onSaved }) {
                 placeholder={t('admin.orgModal.senderNamePlaceholder')}
                 className="z-input"
               />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.emailLimitMonth')}</label>
+              <input
+                type="number"
+                min="0"
+                value={form.email_limit_month ?? ''}
+                onChange={e => set('email_limit_month', e.target.value ? parseInt(e.target.value) : null)}
+                placeholder={t('admin.orgModal.emailLimitMonthPlaceholder')}
+                className="z-input"
+              />
+              <p className="text-xs text-slate-500 mt-1">{t('admin.orgModal.emailLimitMonthHint')}</p>
+            </div>
+          </div>
+
+          {/* ── Marca (personalización por cliente) ─────────────────────────── */}
+          <div className="border-t border-z-border pt-4 space-y-3">
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wide">{t('admin.orgModal.brandingTitle')}</h3>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.logoUrl')}</label>
+              <input
+                value={form.logo_url || ''}
+                onChange={e => set('logo_url', e.target.value)}
+                placeholder="https://.../logo.png"
+                className="z-input"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-300 mb-1">{t('admin.orgModal.accentColor')}</label>
+              <div className="flex items-center gap-2">
+                <input
+                  type="color"
+                  value={form.accent_color || '#2563EB'}
+                  onChange={e => set('accent_color', e.target.value)}
+                  className="w-10 h-9 rounded-lg border border-z-border bg-transparent cursor-pointer"
+                />
+                <input
+                  value={form.accent_color || ''}
+                  onChange={e => set('accent_color', e.target.value)}
+                  placeholder="#2563EB"
+                  className="z-input font-mono"
+                />
+              </div>
+              <p className="text-xs text-slate-500 mt-1">{t('admin.orgModal.accentColorHint')}</p>
             </div>
           </div>
 

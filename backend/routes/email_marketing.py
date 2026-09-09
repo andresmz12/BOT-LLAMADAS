@@ -75,6 +75,23 @@ def _last_send_set(key, ts: float) -> None:
     _last_send[key] = ts
 
 
+def _reset_email_usage_if_needed(org: Organization) -> None:
+    """Roll email_sent_month back to 0 at the start of a new calendar month —
+    mirrors the minutes_used_month reset in routes/webhook.py."""
+    now = datetime.utcnow()
+    if not org.email_reset_at or org.email_reset_at.month != now.month or org.email_reset_at.year != now.year:
+        org.email_sent_month = 0
+        org.email_reset_at = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+
+
+def email_remaining_this_month(org: Organization) -> Optional[int]:
+    """None = unlimited (no email_limit_month set on the org's plan)."""
+    if not org.email_limit_month:
+        return None
+    _reset_email_usage_if_needed(org)
+    return max(0, org.email_limit_month - (org.email_sent_month or 0))
+
+
 @router.delete("/email/template/{template_key}")
 def delete_email_template(
     template_key: str,
@@ -220,7 +237,7 @@ async def test_email(
         "fecha": _dt.utcnow().strftime("%d/%m/%Y"),
     }
     subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(data.outcome, "Email de prueba"), tmpl_vars, escape=False)
-    color     = tmpl.get("color") or "#4F46E5"
+    color     = tmpl.get("color") or org.accent_color or "#4F46E5"
     greeting  = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
     body_text = _fill(tmpl.get("body") or "Este es un email de prueba enviado desde ZyraVoice.", tmpl_vars)
     cta_text  = tmpl.get("cta_text") or ""
@@ -302,6 +319,18 @@ async def bulk_send_email(
         raise HTTPException(status_code=429, detail="Envío duplicado detectado. Espera unos segundos antes de intentar de nuevo.")
     _last_send_set(_send_key, _now)
 
+    # Monthly email quota for this org's plan — reject up front if already exhausted.
+    email_remaining = email_remaining_this_month(org)
+    if email_remaining is not None and email_remaining <= 0:
+        session.add(org)
+        session.commit()
+        raise HTTPException(
+            status_code=429,
+            detail=f"Alcanzaste el límite mensual de {org.email_limit_month} emails de tu plan. Contacta a soporte para aumentarlo.",
+        )
+    session.add(org)
+    session.commit()
+
     # If scheduled for the future, store the job and return early
     if data.scheduled_at:
         try:
@@ -355,6 +384,8 @@ async def bulk_send_email(
     if not all_prospects:
         raise HTTPException(status_code=400, detail="No hay prospectos con email válido en esta selección")
     prospects_slice = all_prospects[:data.batch_size] if data.batch_size and data.batch_size > 0 else all_prospects
+    if email_remaining is not None:
+        prospects_slice = prospects_slice[:email_remaining]
 
     from_email = (org.email_from or "").strip() or os.getenv("SENDGRID_FROM_EMAIL", "noreply@example.com")
     from_name  = (org.email_from_name or "").strip() or "ZyraVoice"
@@ -430,7 +461,7 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
 
     sg = SendGridAPIClient(api_key)
 
-    def _load_template_and_attachment() -> tuple[dict, list]:
+    def _load_template_and_attachment() -> tuple[dict, list, str | None]:
         """Fetch org template + attachments once; called at job start and after resume."""
         from services.sendgrid_service import _build_attachments
         with Session(_engine) as s_tmpl:
@@ -443,9 +474,10 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
                     pass
             t = templates_fresh.get(template_key, {})
             atts = _build_attachments(t, org_fresh) if org_fresh else []
-        return t, atts
+            accent = org_fresh.accent_color if org_fresh else None
+        return t, atts, accent
 
-    tmpl, attachments = _load_template_and_attachment()
+    tmpl, attachments, org_accent_color = _load_template_and_attachment()
 
     # Resolve campaign name once (used both for the per-recipient CRM webhooks
     # fired during the loop below and for the final EmailSendLog entry)
@@ -473,7 +505,7 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
 
         # Reload template/attachments once after a pause (settings may have changed)
         if was_paused:
-            tmpl, attachments = _load_template_and_attachment()
+            tmpl, attachments, org_accent_color = _load_template_and_attachment()
 
         pdata = prospects_data[0]
         try:
@@ -498,7 +530,7 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
                 "fecha":    datetime.utcnow().strftime("%d/%m/%Y"),
             }
             subject   = _fill(tmpl.get("subject") or DEFAULT_SUBJECT.get(template_key, "Mensaje"), tmpl_vars, escape=False)
-            color     = tmpl.get("color") or "#4F46E5"
+            color     = tmpl.get("color") or org_accent_color or "#4F46E5"
             greeting  = _fill(tmpl.get("greeting") or f"Estimado/a {tmpl_vars['nombre']},", tmpl_vars)
             body_text = _fill(tmpl.get("body") or "", tmpl_vars)
             cta_text  = tmpl.get("cta_text") or ""
@@ -525,14 +557,19 @@ async def _run_bulk_send_job_inner(job_id: str, api_key: str):
             # Run sync SDK call in thread pool so event loop stays unblocked
             await asyncio.to_thread(sg.send, message)
 
-            # Update prospect stats in own session
+            # Update prospect stats + org monthly email usage in own session
             with Session(_engine) as s:
                 p = s.get(Prospect, pdata["id"])
                 if p:
                     p.last_email_sent_at = datetime.utcnow()
                     p.email_send_count = (p.email_send_count or 0) + 1
                     s.add(p)
-                    s.commit()
+                org_usage = s.get(Organization, org_id)
+                if org_usage:
+                    _reset_email_usage_if_needed(org_usage)
+                    org_usage.email_sent_month = (org_usage.email_sent_month or 0) + 1
+                    s.add(org_usage)
+                s.commit()
 
             sent_count += 1
             sent_list.append({"name": pdata["name"], "email": pdata["email"]})

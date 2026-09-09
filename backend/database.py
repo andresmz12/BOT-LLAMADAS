@@ -185,6 +185,10 @@ def run_migrations():
                 "minutes_limit": "INTEGER",
                 "minutes_used_month": "INTEGER DEFAULT 0",
                 "minutes_reset_at": "TIMESTAMP",
+                "email_limit_month": "INTEGER",
+                "email_sent_month": "INTEGER DEFAULT 0",
+                "email_reset_at": "TIMESTAMP",
+                "accent_color": "VARCHAR(20)",
             }
             with engine.begin() as conn:
                 for col, col_type in org_new.items():
