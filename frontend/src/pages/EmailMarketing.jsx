@@ -362,6 +362,15 @@ export default function EmailMarketing() {
   const [seqCreating, setSeqCreating] = useState(false)
   const [seqError, setSeqError] = useState(null)
 
+  // Quick-start guide banner (dismissible, remembered per browser)
+  const [guideOpen, setGuideOpen] = useState(() => {
+    try { return localStorage.getItem('em_guide_dismissed') !== '1' } catch { return true }
+  })
+  const dismissGuide = () => {
+    setGuideOpen(false)
+    try { localStorage.setItem('em_guide_dismissed', '1') } catch { /* ignore */ }
+  }
+
   // Tracking events
   const [trackingTab, setTrackingTab] = useState('all')
   const [trackingEvents, setTrackingEvents] = useState(null) // null = not loaded
@@ -956,6 +965,31 @@ export default function EmailMarketing() {
           {cfg.sendgrid_configured ? t('emailMarketing.statusActive') : t('emailMarketing.statusNotConfigured')}
         </span>
       </div>
+
+      {/* Quick-start guide */}
+      {guideOpen && (
+        <div className="relative rounded-xl border border-blue-500/25 bg-blue-500/[0.06] px-4 py-3 mb-1">
+          <button
+            onClick={dismissGuide}
+            aria-label={t('emailMarketing.guide.dismiss')}
+            className="absolute top-2.5 right-2.5 text-slate-500 hover:text-slate-300"
+          >
+            <XMarkIcon className="w-4 h-4" />
+          </button>
+          <p className="text-xs font-semibold text-blue-300 uppercase tracking-wide mb-2">{t('emailMarketing.guide.title')}</p>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pr-6">
+            {[1, 2, 3].map(n => (
+              <div key={n} className="flex items-start gap-2">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-blue-500/20 text-blue-300 text-[11px] font-bold flex items-center justify-center mt-0.5">{n}</span>
+                <div>
+                  <p className="text-xs font-medium text-slate-200">{t(`emailMarketing.guide.step${n}Title`)}</p>
+                  <p className="text-xs text-slate-500">{t(`emailMarketing.guide.step${n}Desc`)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-z-border mb-1">

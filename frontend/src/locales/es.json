@@ -1331,6 +1331,16 @@
     "tabTemplates": "Plantillas",
     "tabAnalytics": "Analítica",
     "genericError": "Error",
+    "guide": {
+      "title": "Guía rápida — 3 pasos para tu primer envío",
+      "dismiss": "Cerrar guía",
+      "step1Title": "1. Importa tus contactos",
+      "step1Desc": "Crea una lista y sube un CSV o Excel con nombre, email y empresa.",
+      "step2Title": "2. Elige una plantilla",
+      "step2Desc": "Usa una de las plantillas listas para usar o crea la tuya.",
+      "step3Title": "3. Envía",
+      "step3Desc": "Selecciona destinatarios y plantilla, revisa el resumen y confirma."
+    },
     "fixedTemplates": {
       "general": {
         "label": "General",

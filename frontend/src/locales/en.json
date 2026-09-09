@@ -1331,6 +1331,16 @@
     "tabTemplates": "Templates",
     "tabAnalytics": "Analytics",
     "genericError": "Error",
+    "guide": {
+      "title": "Quick start — 3 steps to your first send",
+      "dismiss": "Dismiss guide",
+      "step1Title": "1. Import your contacts",
+      "step1Desc": "Create a list and upload a CSV or Excel file with name, email and company.",
+      "step2Title": "2. Choose a template",
+      "step2Desc": "Use one of the ready-made templates or create your own.",
+      "step3Title": "3. Send",
+      "step3Desc": "Pick recipients and template, review the summary, and confirm."
+    },
     "fixedTemplates": {
       "general": {
         "label": "General",
