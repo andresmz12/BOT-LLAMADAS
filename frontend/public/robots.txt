@@ -1,0 +1,20 @@
+User-agent: *
+Allow: /
+Disallow: /dashboard
+Disallow: /admin
+Disallow: /settings
+Disallow: /calls
+Disallow: /campaigns
+Disallow: /prospects
+Disallow: /leads
+Disallow: /lead-hunter
+Disallow: /agents
+Disallow: /email-marketing
+Disallow: /marketing
+Disallow: /chatbot
+Disallow: /team
+Disallow: /users
+Disallow: /whatsapp
+Disallow: /demo
+
+Sitemap: https://zyravoice.com/sitemap.xml
