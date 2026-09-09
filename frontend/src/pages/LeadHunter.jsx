@@ -10,7 +10,7 @@ import {
   scoutLeads, getLeadHunterLeads, checkLead, checkAllLeads,
   craftLeadMessage, craftAllLeads, sendLeadMessage,
   updateLeadHunt, deleteLeadHunt, deleteAllLeadHunts,
-  getLeadHunterConfig, findEmailByName, findEmailForLead,
+  getLeadHunterConfig, findEmailForLead,
 } from '../api/client'
 import { Link } from 'react-router-dom'
 import { exportToCsv } from '../utils/exportCsv'
@@ -77,10 +77,6 @@ export default function LeadHunter() {
   const [bulkMsg, setBulkMsg] = useState(null)
   const [sendModal, setSendModal] = useState(null)  // lead for send confirmation
   const [replyModal, setReplyModal] = useState(null) // lead for logging reply
-  const [emailSearchForm, setEmailSearchForm] = useState({ name: '', city: '' })
-  const [emailSearching, setEmailSearching] = useState(false)
-  const [emailSearchResult, setEmailSearchResult] = useState(null)
-  const [emailSearchError, setEmailSearchError] = useState(null)
 
   const loadLeads = (f = filter) => {
     setLoading(true)
@@ -109,17 +105,6 @@ export default function LeadHunter() {
     } catch (e) {
       setScoutMsg({ ok: false, text: e.response?.data?.detail || t('leadHunter.scoutError') })
     } finally { setScouting(false) }
-  }
-
-  const handleFindEmailByName = async () => {
-    if (!emailSearchForm.name.trim()) return
-    setEmailSearching(true); setEmailSearchError(null); setEmailSearchResult(null)
-    try {
-      const r = await findEmailByName(emailSearchForm.name.trim(), emailSearchForm.city.trim())
-      setEmailSearchResult(r)
-    } catch (e) {
-      setEmailSearchError(e.response?.data?.detail || t('leadHunter.genericError'))
-    } finally { setEmailSearching(false) }
   }
 
   const handleFindEmailForLead = async (lead) => {
@@ -322,96 +307,6 @@ export default function LeadHunter() {
         <p className="text-xs text-slate-600">
           {t('leadHunter.aiSearchHint')}
         </p>
-      </div>
-
-      {/* Find email by company name */}
-      <div className="bg-z-card rounded-xl border border-z-border p-5 space-y-4">
-        <h2 className="text-sm font-semibold text-slate-200 flex items-center gap-2">
-          <EnvelopeIcon className="w-4 h-4 text-blue-400" /> {t('leadHunter.findEmailTitle')}
-        </h2>
-        <p className="text-xs text-slate-600">{t('leadHunter.findEmailHint')}</p>
-        <div className="flex items-end gap-3 flex-wrap">
-          <div className="max-w-xs flex-1 min-w-[180px]">
-            <input
-              type="text" value={emailSearchForm.name}
-              onChange={e => setEmailSearchForm(p => ({ ...p, name: e.target.value }))}
-              placeholder={t('leadHunter.findEmailNamePlaceholder')}
-              className="z-input w-full text-sm"
-            />
-          </div>
-          <div className="max-w-[200px] flex-1 min-w-[140px]">
-            <input
-              type="text" value={emailSearchForm.city}
-              onChange={e => setEmailSearchForm(p => ({ ...p, city: e.target.value }))}
-              placeholder={t('leadHunter.findEmailCityPlaceholder')}
-              className="z-input w-full text-sm"
-            />
-          </div>
-          <button
-            onClick={handleFindEmailByName}
-            disabled={emailSearching || !emailSearchForm.name.trim()}
-            className="z-btn-primary flex items-center gap-2 disabled:opacity-50"
-          >
-            {emailSearching
-              ? <><span className="animate-spin text-base">⟳</span> {t('leadHunter.findEmailSearching')}</>
-              : <><EnvelopeIcon className="w-4 h-4" /> {t('leadHunter.findEmailBtn')}</>
-            }
-          </button>
-        </div>
-
-        {emailSearchError && (
-          <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{emailSearchError}</p>
-        )}
-
-        {emailSearchResult && (
-          <div className="border border-z-border rounded-lg p-4 text-xs space-y-2">
-            {emailSearchResult.matched_name && (
-              <p className="text-slate-300 font-medium">{emailSearchResult.matched_name}</p>
-            )}
-            {emailSearchResult.website && (
-              <a href={emailSearchResult.website} target="_blank" rel="noreferrer"
-                className="flex items-center gap-1 text-blue-400 hover:underline w-fit">
-                <GlobeAltIcon className="w-3.5 h-3.5" /> {emailSearchResult.website}
-              </a>
-            )}
-            {emailSearchResult.email ? (
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-slate-200">{emailSearchResult.email}</span>
-                <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold ${
-                  emailSearchResult.source === 'scraped' ? 'bg-green-500/15 text-green-400' : 'bg-amber-500/15 text-amber-400'
-                }`}>
-                  {emailSearchResult.source === 'scraped' ? t('leadHunter.findEmailScraped') : t('leadHunter.findEmailGuessed')}
-                </span>
-              </div>
-            ) : emailSearchResult.website ? (
-              <p className="text-amber-400">{t('leadHunter.findEmailNoDomainMail')}</p>
-            ) : (
-              <p className="text-slate-500">{t('leadHunter.findEmailNotFoundAtAll')}</p>
-            )}
-            {emailSearchResult.candidates?.length > 1 && (
-              <div>
-                <p className="text-slate-500 uppercase font-medium mt-2 mb-1">{t('leadHunter.findEmailOtherCandidates')}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {emailSearchResult.candidates.slice(1).map(c => (
-                    <span key={c} className="font-mono text-slate-400 bg-black/20 rounded px-1.5 py-0.5">{c}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-            {/* Algorithmic guesses shown alongside a real scraped email, so
-                there's always more than one address to try. */}
-            {emailSearchResult.source === 'scraped' && emailSearchResult.guessed_candidates?.length > 0 && (
-              <div>
-                <p className="text-amber-400/80 uppercase font-medium mt-2 mb-1">{t('leadHunter.findEmailAlgoSuggestions')}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {emailSearchResult.guessed_candidates.map(c => (
-                    <span key={c} className="font-mono text-amber-300/80 bg-amber-500/10 rounded px-1.5 py-0.5">{c}</span>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Stats bar */}

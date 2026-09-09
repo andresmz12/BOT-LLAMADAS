@@ -167,21 +167,28 @@ def global_stats(
         for h in range(24)
     ]
 
-    # Recent interested prospects (last 10)
+    # Recent interested prospects (last 10) — overfetch since some calls may
+    # reference a prospect that's since been deleted (e.g. removed from a
+    # list); those are skipped rather than shown as a blank "—" row with
+    # nothing actionable behind it.
     recent_interested = []
     interested_calls = session.exec(
         select(Call).where(base & (Call.outcome == "interested"))
         .order_by(Call.started_at.desc())
-        .limit(10)
+        .limit(30)
     ).all()
     for c in interested_calls:
+        if len(recent_interested) >= 10:
+            break
         prospect = session.get(Prospect, c.prospect_id) if c.prospect_id else None
+        if not prospect:
+            continue
         campaign = session.get(Campaign, c.campaign_id) if c.campaign_id else None
         recent_interested.append({
             "call_id": c.id,
-            "prospect_name": prospect.name if prospect else "—",
-            "prospect_company": prospect.company or "—" if prospect else "—",
-            "prospect_phone": prospect.phone if prospect else "—",
+            "prospect_name": prospect.name,
+            "prospect_company": prospect.company or "—",
+            "prospect_phone": prospect.phone or "—",
             "campaign_name": campaign.name if campaign else "—",
             "started_at": c.started_at.isoformat() if c.started_at else None,
         })
